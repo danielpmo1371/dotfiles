@@ -1,0 +1,42 @@
+call plug#begin()
+  Plug 'hashivim/vim-terraform'
+  Plug 'mg979/vim-visual-multi', {'branch': 'master'}
+
+" AVANTE SETUP 
+  " Deps
+  " Also use this for telescope
+  Plug 'nvim-lua/plenary.nvim'
+  Plug 'MunifTanjim/nui.nvim'
+  Plug 'MeanderingProgrammer/render-markdown.nvim'
+  
+  " Optional deps
+  Plug 'hrsh7th/nvim-cmp'
+  " Also use this for telescope
+  Plug 'nvim-tree/nvim-web-devicons' "or Plug 'echasnovski/mini.icons'
+  Plug 'HakonHarnes/img-clip.nvim'
+  Plug 'zbirenbaum/copilot.lua'
+  Plug 'stevearc/dressing.nvim' " for enhanced input UI
+  Plug 'folke/snacks.nvim' " for modern input UI
+  
+  " Yay, pass source=true if you want to build from source
+  Plug 'yetone/avante.nvim', { 'branch': 'main', 'do': 'make' }
+" End OF AVENTE SETUP
+
+  Plug 'nvim-telescope/telescope.nvim', { 'branch': '0.1.x' }
+
+call plug#end()
+
+autocmd! User avante.nvim
+lua << EOF
+require('avante').setup({})
+EOFall plug#end()
+
+" Find files using Telescope command-line sugar.
+nnoremap ff <cmd>Telescope find_files<cr>
+nnoremap <leader>fg <cmd>Telescope live_grep<cr>
+nnoremap <leader>fb <cmd>Telescope buffers<cr>
+nnoremap <leader>fh <cmd>Telescope help_tags<cr>
+
+set number
+set relativenumber
+set clipboard=unnamedplus
