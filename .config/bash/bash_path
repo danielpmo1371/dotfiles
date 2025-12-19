@@ -1,0 +1,9 @@
+# Managed PATH additions - created by add-to-path.sh
+# This file is sourced by .bashrc
+# Note: DOTFILES_DIR is already defined in .bashrc
+
+export PATH="/opt/nvim:$PATH"
+export PATH="$DOTFILES_DIR/azcli-scripts:$PATH"
+export PATH="/home/daniel/.dotnet/tools:$PATH"
+export PATH="/home/daniel/.cargo/bin:$PATH"
+

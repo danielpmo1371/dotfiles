@@ -1,0 +1,58 @@
+
+# Custom Aliases
+alias setup="nvim ~/.bashrc"
+alias root="cd /c/repos/"
+alias reterm="source ~/.bashrc"
+alias setupclaude="vim /mnt/c/Users/daniel.paiva/.claude/settings.json"
+alias cc="claude -p"
+alias xclip="xclip -selection clipboard"
+alias setup-vim="nvim ~/.config/nvim/init.lua"
+alias setup-tmux="nvim ~/.tmux.conf"
+alias re-tmux="tmux source-file ~/.tmux.conf"
+alias gg="gemini -p"
+alias conf-devops-mbie=' az devops configure --defaults organization="https://dev.azure.com/mbie- immigrationnz-prod" project="Travel Declaration"'
+alias tf="terraform"
+alias rgv='rg --line-number --color=always "$1" | fzf --ansi --delimiter : --preview "bat --color=always {1} --highlight-line {2}" | awk -F: '"'"'{ print "+"$2" "$1 }'"'"' | xargs nvim'
+
+alias run-init-terra-pipeline=' az pipelines run --id 824 --parameters serviceConnection=INZ_TDS_DEV environment=dev location=ase --debug'
+alias git-showfiles-changed=' git log --name-status'
+alias get-last-pipeline-run=' RUN_ID=$(az pipelines runs list --pipeline-ids 824 --top 1 --query "[0].id" -o tsv) && echo $RUN_ID'
+alias setuptail=' tail ~/.bashrc'
+alias timer-with-alarm=' read -t 5 || speaker-test -t sine -f 500'
+alias timer-echo=' timeout 300s cat - ; echo "done"'
+
+alias todo=' nvim /c/repos/todos.md '
+alias lessons=' nvim /c/repos/lessons.md'
+alias stacks=' cd /repos/terraform-stacks/'
+alias terra=' cd /repos/iac/terraform/travellerdirectives/'
+alias set-danCommit=' lastDanCommit="2619c8b935b3499affdcff479e40a9941806dd60"'
+alias gsh=' git show head'
+alias chat=' cd /c/repos/claude-chat/ && claude'
+alias start=' tmux new-session -A -n dan'
+alias lg=' git log --pretty'
+alias update-claude=' sudo npm i -g @anthropic-ai/claude-code'
+alias myip=' curl ifconfig.me | xclip'
+alias api=' cd /repos/api/'
+alias nz=' nvim $(fzf)'
+
+alias remove-ansi-all-files-current-dir=' find . -maxdepth 1 -type f \( -name "*.log" -o -name "*.log.remote" -o -name "*.md" -o -name "*.sh" \) -exec sed -i "s/\x1b\[[0-9]*m//g" {} \;'
+alias az-set-tds-uat=' az account set -n inz_tds_uat'
+alias az-set-shared-npe=' az account set -n inz_shared_infra_npe'
+alias az-role-assgn-data=' az role assignment list --query "[?contains(roleDefinitionName,'"'"'Data'"'"')]"'
+alias az-set-pass-uat=' az account set -n inz_paas_shared_uat'
+alias cls=' clear'
+alias cm=' git cm'
+
+alias psh=' git push'
+alias clean-from-trav=' (cd ./temp && ./clean-latest-plan.sh )'
+alias az-show=' az account show'
+alias azl=' az account list | grep name'
+alias az-list=' az account list | grep name'
+alias flg=" git log --oneline | fzf --ansi --preview 'git show --color=always {1}' | awk '{print \$1}' | xargs git show "
+alias cc-key=' export AVANTE_ANTHROPIC_API_KEY="bdL5bNqHLb3k9pQMykLXYlgHKRToPzvfM6K8DfFOaXONF7el#0KSTBeu2xzyF8vCeENBdtXzSzxpwCs2nnZJtEQGPAyM"'
+
+alias arch=' docker exec -it -u dev claude-dev-env zsh'
+alias trop=' nvim /repos/mind-context/tropheys.md'
+alias pomo='isw --intervals 1500,300 --colours 2,1 --shell "notify-send isw '\''pomodoro interval complete \(cycle %c\)'\''" --pause --descending --show-cycle'
+alias download-virus=' wget "https://secure.eicar.org/eicar.com.txt"'
+alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history|tail -n1|sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'
