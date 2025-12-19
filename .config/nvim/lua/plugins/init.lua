@@ -9,6 +9,21 @@ return {
     },
   },
 
+  -- Treesitter for syntax highlighting
+  {
+    "nvim-treesitter/nvim-treesitter",
+    build = ":TSUpdate",
+    config = function()
+      require("nvim-treesitter.configs").setup({
+        ensure_installed = { "lua", "vim", "vimdoc", "bash", "python", "javascript", "typescript" },
+        auto_install = true,
+        highlight = {
+          enable = true,
+        },
+      })
+    end,
+  },
+
   -- Avante and related deps
   {
     "yetone/avante.nvim",
