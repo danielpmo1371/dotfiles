@@ -1,0 +1,740 @@
+#!/usr/bin/env bash
+# ado-task - Query Azure DevOps work items and manage PAT authentication
+# Usage: ado-task <work-item-id> [options] | ado-task login [PAT]
+
+set -euo pipefail
+
+readonly DEFAULT_ORG="https://dev.azure.com/mbie-immigrationnz-prod"
+readonly PAT_FILE="${HOME}/.ado-pat"
+readonly DEFAULT_OUTPUT_DIR="${ADO_OUTPUT_DIR:-/repos/user_stories}"
+
+usage() {
+    cat <<EOF
+Usage: ado-task <command|work-item-id> [options]
+
+Query Azure DevOps work items and manage PAT authentication.
+
+Commands:
+    login [PAT]     Set PAT for authentication. If PAT not provided, prompts for it.
+    logout          Remove stored PAT
+    status          Check authentication status
+
+Options:
+    --comments      Show work item comments/discussion history
+    --history       Show revision history
+    --full          Full extraction: all fields, comments, relations, custom fields
+    --tree [DEPTH]  Traverse relations tree (default depth: 2)
+    --summary       Generate markdown requirements summary (implies --full)
+    --save [DIR]    Save output to file (default: $DEFAULT_OUTPUT_DIR)
+    --json          Output raw JSON instead of formatted text
+    --help          Show this help message
+
+Examples:
+    ado-task login                    # Prompt for PAT and store it
+    ado-task 170517                   # Show formatted work item details
+    ado-task 170517 --full            # Full extraction with all data
+    ado-task 170517 --tree            # Traverse parent/child/related items
+    ado-task 170517 --summary --save  # Generate and save requirements summary
+    ado-task 170517 --comments --json # Show comments as raw JSON
+
+Environment:
+    AZURE_DEVOPS_EXT_PAT    Personal Access Token (can also use 'login' command)
+    ADO_ORG                 Organization URL (default: $DEFAULT_ORG)
+    ADO_OUTPUT_DIR          Default output directory (default: $DEFAULT_OUTPUT_DIR)
+EOF
+    exit 0
+}
+
+error() {
+    echo "Error: $1" >&2
+    exit 1
+}
+
+info() {
+    echo "→ $1" >&2
+}
+
+# Load PAT from file if not set in environment
+load_pat() {
+    if [[ -z "${AZURE_DEVOPS_EXT_PAT:-}" && -f "$PAT_FILE" ]]; then
+        AZURE_DEVOPS_EXT_PAT=$(cat "$PAT_FILE")
+        export AZURE_DEVOPS_EXT_PAT
+    fi
+}
+
+# Login command - store PAT
+cmd_login() {
+    local pat="${1:-}"
+
+    if [[ -z "$pat" ]]; then
+        echo -n "Enter Azure DevOps PAT: "
+        read -rs pat
+        echo
+    fi
+
+    [[ -z "$pat" ]] && error "PAT cannot be empty."
+
+    echo "$pat" > "$PAT_FILE"
+    chmod 600 "$PAT_FILE"
+    export AZURE_DEVOPS_EXT_PAT="$pat"
+
+    echo "Testing PAT..."
+    if az devops project list --org "$DEFAULT_ORG" --top 1 &>/dev/null; then
+        echo "PAT stored and verified successfully."
+    else
+        echo "Warning: PAT stored but verification failed. It may still work for work items."
+    fi
+}
+
+# Logout command - remove stored PAT
+cmd_logout() {
+    if [[ -f "$PAT_FILE" ]]; then
+        rm -f "$PAT_FILE"
+        echo "PAT removed from $PAT_FILE"
+    else
+        echo "No stored PAT found."
+    fi
+    echo "Note: AZURE_DEVOPS_EXT_PAT environment variable may still be set in your shell."
+}
+
+# Status command - check authentication
+cmd_status() {
+    load_pat
+    echo "Organization: $DEFAULT_ORG"
+    echo
+    [[ -f "$PAT_FILE" ]] && echo "PAT file: $PAT_FILE (exists)" || echo "PAT file: $PAT_FILE (not found)"
+
+    if [[ -n "${AZURE_DEVOPS_EXT_PAT:-}" ]]; then
+        echo "AZURE_DEVOPS_EXT_PAT: set (${#AZURE_DEVOPS_EXT_PAT} chars)"
+        echo
+        echo "Testing connection..."
+        if az devops project list --org "$DEFAULT_ORG" --top 1 &>/dev/null; then
+            echo "Status: Authenticated"
+        else
+            echo "Status: PAT may be expired or invalid"
+        fi
+    else
+        echo "AZURE_DEVOPS_EXT_PAT: not set"
+        echo "Status: Not authenticated"
+        echo
+        echo "Run 'ado-task login' to authenticate."
+    fi
+}
+
+# ============================================================================
+# API Functions
+# ============================================================================
+
+api_call() {
+    local endpoint="$1"
+    local project="${2:-}"
+    local base_url="${ORG}"
+    [[ -n "$project" ]] && base_url="${ORG}/${project}"
+    local auth
+    auth=$(printf ":%s" "${AZURE_DEVOPS_EXT_PAT}" | base64 -w0)
+    curl -s -H "Authorization: Basic ${auth}" "${base_url}/_apis/${endpoint}"
+}
+
+fetch_work_item() {
+    local id="$1"
+    local expand="${2:-all}"
+    az boards work-item show --id "$id" --org "$ORG" --expand "$expand" --output json 2>/dev/null
+}
+
+# Get project from work item (cache it for efficiency)
+get_project_from_workitem() {
+    local id="$1"
+    local json
+    json=$(fetch_work_item "$id" "none") || return 1
+    echo "$json" | jq -r '.fields["System.TeamProject"] // "NZTD BAU"'
+}
+
+fetch_comments() {
+    local id="$1"
+    local project="${2:-NZTD BAU}"
+    # URL encode the project name
+    local encoded_project
+    encoded_project=$(printf '%s' "$project" | jq -sRr @uri)
+    api_call "wit/workItems/${id}/comments?api-version=7.1-preview.3" "$encoded_project"
+}
+
+fetch_revisions() {
+    local id="$1"
+    local project="${2:-NZTD BAU}"
+    local encoded_project
+    encoded_project=$(printf '%s' "$project" | jq -sRr @uri)
+    api_call "wit/workItems/${id}/revisions?api-version=7.1" "$encoded_project"
+}
+
+fetch_batch() {
+    local ids="$1"
+    local fields="${2:-System.Title,System.WorkItemType,System.State,System.Description}"
+    api_call "wit/workitems?ids=${ids}&fields=${fields}&api-version=7.1"
+}
+
+# ============================================================================
+# HTML Cleaning
+# ============================================================================
+
+clean_html() {
+    sed -e 's/<[^>]*>//g' \
+        -e 's/&nbsp;/ /g' \
+        -e 's/&lt;/</g' \
+        -e 's/&gt;/>/g' \
+        -e 's/&amp;/&/g' \
+        -e 's/&quot;/"/g' | tr -s ' \n' | sed 's/^ //;s/ $//'
+}
+
+# ============================================================================
+# Display Functions
+# ============================================================================
+
+display_basic() {
+    local json="$1"
+    local id type title state sp assigned iteration area created_by created desc parent
+
+    id=$(echo "$json" | jq -r '.id')
+    type=$(echo "$json" | jq -r '.fields["System.WorkItemType"] // "N/A"')
+    title=$(echo "$json" | jq -r '.fields["System.Title"] // "N/A"')
+    state=$(echo "$json" | jq -r '.fields["System.State"] // "N/A"')
+    sp=$(echo "$json" | jq -r '.fields["Microsoft.VSTS.Scheduling.StoryPoints"] // "N/A"')
+    assigned=$(echo "$json" | jq -r '.fields["System.AssignedTo"].displayName // "Unassigned"')
+    iteration=$(echo "$json" | jq -r '.fields["System.IterationPath"] // "N/A"')
+    area=$(echo "$json" | jq -r '.fields["System.AreaPath"] // "N/A"')
+    created_by=$(echo "$json" | jq -r '.fields["System.CreatedBy"].displayName // "N/A"')
+    created=$(echo "$json" | jq -r '.fields["System.CreatedDate"] // "N/A"')
+    desc=$(echo "$json" | jq -r '.fields["System.Description"] // "No description"' | clean_html | head -c 500)
+    parent=$(echo "$json" | jq -r '.fields["System.Parent"] // "None"')
+
+    cat <<EOF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+$type #$id
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Title:        $title
+State:        $state
+Story Points: $sp
+Assigned To:  $assigned
+Iteration:    $iteration
+Area:         $area
+Created By:   $created_by
+Created:      $created
+Parent:       #$parent
+
+Description:
+$desc
+
+URL: $ORG/_workitems/edit/$id
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+}
+
+display_comments() {
+    local json="$1"
+    local count
+    count=$(echo "$json" | jq -r '.count // 0')
+
+    if [[ "$count" -eq 0 ]]; then
+        echo "No comments found."
+        return
+    fi
+
+    cat <<EOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Comments ($count)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+
+    echo "$json" | jq -r '.comments[] |
+        "\n────────────────────────────────────────────────────────────────────────────\n[\(.createdDate | split("T")[0])] \(.createdBy.displayName // "Unknown")\n────────────────────────────────────────────────────────────────────────────\n\(.text)"' | clean_html
+}
+
+display_history() {
+    local json="$1"
+    local count
+    count=$(echo "$json" | jq -r '.count // 0')
+
+    cat <<EOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Revision History ($count revisions)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+
+    echo "$json" | jq -r '.value[] | "Rev \(.rev): [\(.fields["System.ChangedDate"] | split("T")[0])] \(.fields["System.ChangedBy"].displayName // "Unknown") - \(.fields["System.State"] // "N/A")"'
+}
+
+display_relations() {
+    local json="$1"
+    local relations
+    relations=$(echo "$json" | jq -r '.relations // []')
+
+    if [[ $(echo "$relations" | jq 'length') -eq 0 ]]; then
+        echo "No relations found."
+        return
+    fi
+
+    cat <<EOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Relations
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+
+    echo "$relations" | jq -r '.[] | "\(.attributes.name // .rel): \(.url | split("/") | last)"'
+}
+
+display_custom_fields() {
+    local json="$1"
+
+    cat <<EOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Custom & Rich Fields
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+
+    # Acceptance Criteria
+    local ac
+    ac=$(echo "$json" | jq -r '.fields["Microsoft.VSTS.Common.AcceptanceCriteria"] // empty')
+    if [[ -n "$ac" ]]; then
+        echo -e "\n## Acceptance Criteria\n"
+        echo "$ac" | clean_html
+    fi
+
+    # Design Approach
+    local da
+    da=$(echo "$json" | jq -r '.fields["Custom.DesignApproach"] // empty')
+    if [[ -n "$da" ]]; then
+        echo -e "\n## Design Approach\n"
+        echo "$da" | clean_html
+    fi
+
+    # Design Change Considerations
+    local dcc
+    dcc=$(echo "$json" | jq -r '.fields["Custom.DesignChangeConsiderations"] // empty')
+    if [[ -n "$dcc" ]]; then
+        echo -e "\n## Design Change Considerations\n"
+        echo "$dcc" | clean_html
+    fi
+
+    # Any other Custom.* fields
+    echo "$json" | jq -r '.fields | to_entries[] | select(.key | startswith("Custom.")) | select(.key | IN("Custom.DesignApproach", "Custom.DesignChangeConsiderations") | not) | "\n## \(.key | sub("Custom."; ""))\n\(.value)"' 2>/dev/null | clean_html
+}
+
+# ============================================================================
+# Tree Traversal
+# ============================================================================
+
+declare -A VISITED_IDS
+
+traverse_tree() {
+    local id="$1"
+    local depth="${2:-2}"
+    local current_depth="${3:-0}"
+    local indent=""
+
+    for ((i=0; i<current_depth; i++)); do indent+="  "; done
+
+    # Skip if already visited
+    [[ -n "${VISITED_IDS[$id]:-}" ]] && return
+    VISITED_IDS[$id]=1
+
+    info "${indent}Fetching #$id (depth $current_depth/$depth)..."
+
+    local json
+    json=$(fetch_work_item "$id" "all") || { echo "${indent}Failed to fetch #$id" >&2; return; }
+
+    local type title state
+    type=$(echo "$json" | jq -r '.fields["System.WorkItemType"] // "Unknown"')
+    title=$(echo "$json" | jq -r '.fields["System.Title"] // "No title"')
+    state=$(echo "$json" | jq -r '.fields["System.State"] // "Unknown"')
+
+    echo "${indent}[$type] #$id: $title ($state)"
+
+    # Store for summary generation
+    echo "$json" > "${TREE_OUTPUT_DIR:-/tmp}/wi_${id}.json"
+
+    # Recurse if not at max depth
+    if [[ $current_depth -lt $depth ]]; then
+        local relations
+        relations=$(echo "$json" | jq -r '.relations[]? | "\(.rel)|\(.url | split("/") | last)"' 2>/dev/null)
+
+        while IFS='|' read -r rel related_id; do
+            [[ -z "$rel" || -z "$related_id" ]] && continue
+            [[ ! "$related_id" =~ ^[0-9]+$ ]] && continue
+
+            case "$rel" in
+                System.LinkTypes.Hierarchy-Reverse)  # Parent
+                    echo "${indent}  ↑ Parent:"
+                    traverse_tree "$related_id" "$depth" $((current_depth + 1))
+                    ;;
+                System.LinkTypes.Hierarchy-Forward)  # Child
+                    echo "${indent}  ↓ Child:"
+                    traverse_tree "$related_id" "$depth" $((current_depth + 1))
+                    ;;
+                System.LinkTypes.Related)  # Related
+                    echo "${indent}  ↔ Related:"
+                    traverse_tree "$related_id" "$depth" $((current_depth + 1))
+                    ;;
+            esac
+        done <<< "$relations"
+    fi
+}
+
+# ============================================================================
+# Summary Generation
+# ============================================================================
+
+generate_summary() {
+    local id="$1"
+    local output_dir="$2"
+
+    info "Generating requirements summary for #$id..."
+
+    # Ensure output directory exists
+    mkdir -p "$output_dir"
+    TREE_OUTPUT_DIR="$output_dir"
+
+    # Traverse tree first to collect all data
+    info "Traversing work item tree..."
+    traverse_tree "$id" "${TREE_DEPTH:-2}" 0
+
+    # Generate markdown summary
+    local summary_file="${output_dir}/${id}_REQUIREMENTS_SUMMARY.md"
+    local main_json="${output_dir}/wi_${id}.json"
+
+    if [[ ! -f "$main_json" ]]; then
+        error "Failed to fetch main work item"
+    fi
+
+    local title type state sp assigned
+    title=$(jq -r '.fields["System.Title"] // "N/A"' "$main_json")
+    type=$(jq -r '.fields["System.WorkItemType"] // "N/A"' "$main_json")
+    state=$(jq -r '.fields["System.State"] // "N/A"' "$main_json")
+    sp=$(jq -r '.fields["Microsoft.VSTS.Scheduling.StoryPoints"] // "N/A"' "$main_json")
+    assigned=$(jq -r '.fields["System.AssignedTo"].displayName // "Unassigned"' "$main_json")
+
+    cat > "$summary_file" <<EOF
+# Requirements Summary: $type #$id
+
+## $title
+
+| Field | Value |
+|-------|-------|
+| **Type** | $type |
+| **State** | $state |
+| **Story Points** | $sp |
+| **Assigned To** | $assigned |
+
+---
+
+## Description
+
+$(jq -r '.fields["System.Description"] // "No description"' "$main_json" | clean_html)
+
+EOF
+
+    # Add acceptance criteria if present
+    local ac
+    ac=$(jq -r '.fields["Microsoft.VSTS.Common.AcceptanceCriteria"] // empty' "$main_json")
+    if [[ -n "$ac" ]]; then
+        cat >> "$summary_file" <<EOF
+---
+
+## Acceptance Criteria
+
+$(echo "$ac" | clean_html)
+
+EOF
+    fi
+
+    # Add design approach if present
+    local da
+    da=$(jq -r '.fields["Custom.DesignApproach"] // empty' "$main_json")
+    if [[ -n "$da" ]]; then
+        cat >> "$summary_file" <<EOF
+---
+
+## Design Approach
+
+$(echo "$da" | clean_html)
+
+EOF
+    fi
+
+    # Add comments
+    info "Fetching comments..."
+    local comments_json
+    comments_json=$(fetch_comments "$id")
+    local comment_count
+    comment_count=$(echo "$comments_json" | jq -r '.count // 0')
+
+    if [[ "$comment_count" -gt 0 ]]; then
+        cat >> "$summary_file" <<EOF
+---
+
+## Comments ($comment_count)
+
+EOF
+        echo "$comments_json" | jq -r '.comments[] | "### [\(.createdDate | split("T")[0])] \(.createdBy.displayName // "Unknown")\n\n\(.text)\n"' | clean_html >> "$summary_file"
+    fi
+
+    # Add related work items
+    local relations
+    relations=$(jq -r '.relations[]? | "\(.attributes.name // .rel)|\(.url | split("/") | last)"' "$main_json" 2>/dev/null)
+
+    if [[ -n "$relations" ]]; then
+        cat >> "$summary_file" <<EOF
+---
+
+## Related Work Items
+
+| Relationship | ID | Title |
+|--------------|-----|-------|
+EOF
+
+        while IFS='|' read -r rel related_id; do
+            [[ -z "$rel" || -z "$related_id" ]] && continue
+            [[ ! "$related_id" =~ ^[0-9]+$ ]] && continue
+
+            local related_file="${output_dir}/wi_${related_id}.json"
+            if [[ -f "$related_file" ]]; then
+                local related_title
+                related_title=$(jq -r '.fields["System.Title"] // "N/A"' "$related_file")
+                echo "| $rel | #$related_id | $related_title |" >> "$summary_file"
+            else
+                echo "| $rel | #$related_id | (not fetched) |" >> "$summary_file"
+            fi
+        done <<< "$relations"
+    fi
+
+    # Add parent story details if available
+    local parent_id
+    parent_id=$(jq -r '.fields["System.Parent"] // empty' "$main_json")
+    if [[ -n "$parent_id" ]]; then
+        local parent_file="${output_dir}/wi_${parent_id}.json"
+        if [[ -f "$parent_file" ]]; then
+            local parent_title parent_ac parent_da
+            parent_title=$(jq -r '.fields["System.Title"] // "N/A"' "$parent_file")
+            parent_ac=$(jq -r '.fields["Microsoft.VSTS.Common.AcceptanceCriteria"] // empty' "$parent_file")
+            parent_da=$(jq -r '.fields["Custom.DesignApproach"] // empty' "$parent_file")
+
+            cat >> "$summary_file" <<EOF
+
+---
+
+## Parent Story #$parent_id: $parent_title
+
+EOF
+
+            if [[ -n "$parent_ac" ]]; then
+                cat >> "$summary_file" <<EOF
+### Acceptance Criteria (from parent)
+
+$(echo "$parent_ac" | clean_html)
+
+EOF
+            fi
+
+            if [[ -n "$parent_da" ]]; then
+                cat >> "$summary_file" <<EOF
+### Design Approach (from parent)
+
+$(echo "$parent_da" | clean_html)
+
+EOF
+            fi
+        fi
+    fi
+
+    # Footer
+    cat >> "$summary_file" <<EOF
+
+---
+
+*Generated by ado-task on $(date -Iseconds)*
+*Source: $ORG/_workitems/edit/$id*
+EOF
+
+    echo
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Summary saved to: $summary_file"
+    echo "Work item data saved to: $output_dir/wi_*.json"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
+# ============================================================================
+# Main
+# ============================================================================
+
+# Parse arguments
+WORK_ITEM_ID=""
+OUTPUT_JSON=false
+SHOW_COMMENTS=false
+SHOW_HISTORY=false
+SHOW_FULL=false
+SHOW_TREE=false
+TREE_DEPTH=2
+GENERATE_SUMMARY=false
+SAVE_OUTPUT=false
+OUTPUT_DIR="$DEFAULT_OUTPUT_DIR"
+
+# Handle commands first
+case "${1:-}" in
+    login)
+        cmd_login "${2:-}"
+        exit 0
+        ;;
+    logout)
+        cmd_logout
+        exit 0
+        ;;
+    status)
+        cmd_status
+        exit 0
+        ;;
+esac
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --json)
+            OUTPUT_JSON=true
+            shift
+            ;;
+        --comments)
+            SHOW_COMMENTS=true
+            shift
+            ;;
+        --history)
+            SHOW_HISTORY=true
+            shift
+            ;;
+        --full)
+            SHOW_FULL=true
+            shift
+            ;;
+        --tree)
+            SHOW_TREE=true
+            shift
+            # Check if next arg is a number (depth)
+            if [[ "${1:-}" =~ ^[0-9]+$ ]]; then
+                TREE_DEPTH="$1"
+                shift
+            fi
+            ;;
+        --summary)
+            GENERATE_SUMMARY=true
+            SHOW_FULL=true
+            shift
+            ;;
+        --save)
+            SAVE_OUTPUT=true
+            shift
+            # Check if next arg is a directory
+            if [[ -n "${1:-}" && ! "$1" =~ ^-- && -d "$1" ]]; then
+                OUTPUT_DIR="$1"
+                shift
+            fi
+            ;;
+        --help|-h)
+            usage
+            ;;
+        -*)
+            error "Unknown option: $1"
+            ;;
+        *)
+            if [[ -z "$WORK_ITEM_ID" ]]; then
+                WORK_ITEM_ID="$1"
+            else
+                error "Unknown argument: $1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Validate input
+[[ -z "$WORK_ITEM_ID" ]] && error "Work item ID is required. Use --help for usage."
+[[ ! "$WORK_ITEM_ID" =~ ^[0-9]+$ ]] && error "Work item ID must be a number."
+
+# Load PAT
+load_pat
+[[ -z "${AZURE_DEVOPS_EXT_PAT:-}" ]] && error "Not authenticated. Run 'ado-task login' or set AZURE_DEVOPS_EXT_PAT."
+
+# Get organization
+ORG="${ADO_ORG:-$DEFAULT_ORG}"
+
+# Handle summary generation (special mode)
+if $GENERATE_SUMMARY; then
+    generate_summary "$WORK_ITEM_ID" "$OUTPUT_DIR"
+    exit 0
+fi
+
+# Handle tree traversal
+if $SHOW_TREE; then
+    TREE_OUTPUT_DIR="${OUTPUT_DIR}"
+    mkdir -p "$TREE_OUTPUT_DIR"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Work Item Tree (depth: $TREE_DEPTH)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    traverse_tree "$WORK_ITEM_ID" "$TREE_DEPTH" 0
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    if $SAVE_OUTPUT; then
+        echo "Data saved to: $TREE_OUTPUT_DIR/wi_*.json"
+    fi
+    exit 0
+fi
+
+# Fetch main work item
+info "Fetching work item #$WORK_ITEM_ID..."
+JSON_OUTPUT=$(fetch_work_item "$WORK_ITEM_ID" "all") || error "Failed to fetch work item"
+
+# Save if requested
+if $SAVE_OUTPUT; then
+    mkdir -p "$OUTPUT_DIR"
+    echo "$JSON_OUTPUT" > "${OUTPUT_DIR}/${WORK_ITEM_ID}.json"
+    info "Saved to ${OUTPUT_DIR}/${WORK_ITEM_ID}.json"
+fi
+
+# JSON output mode
+if $OUTPUT_JSON; then
+    if $SHOW_FULL; then
+        # Build full JSON object
+        COMMENTS_JSON=$(fetch_comments "$WORK_ITEM_ID")
+        HISTORY_JSON=$(fetch_revisions "$WORK_ITEM_ID")
+        jq -n \
+            --argjson workitem "$JSON_OUTPUT" \
+            --argjson comments "$COMMENTS_JSON" \
+            --argjson history "$HISTORY_JSON" \
+            '{workitem: $workitem, comments: $comments, history: $history}'
+    elif $SHOW_COMMENTS; then
+        fetch_comments "$WORK_ITEM_ID"
+    elif $SHOW_HISTORY; then
+        fetch_revisions "$WORK_ITEM_ID"
+    else
+        echo "$JSON_OUTPUT"
+    fi
+    exit 0
+fi
+
+# Display formatted output
+display_basic "$JSON_OUTPUT"
+
+if $SHOW_FULL; then
+    display_relations "$JSON_OUTPUT"
+    display_custom_fields "$JSON_OUTPUT"
+
+    COMMENTS_JSON=$(fetch_comments "$WORK_ITEM_ID")
+    display_comments "$COMMENTS_JSON"
+
+    HISTORY_JSON=$(fetch_revisions "$WORK_ITEM_ID")
+    display_history "$HISTORY_JSON"
+elif $SHOW_COMMENTS; then
+    COMMENTS_JSON=$(fetch_comments "$WORK_ITEM_ID")
+    display_comments "$COMMENTS_JSON"
+elif $SHOW_HISTORY; then
+    HISTORY_JSON=$(fetch_revisions "$WORK_ITEM_ID")
+    display_history "$HISTORY_JSON"
+fi
