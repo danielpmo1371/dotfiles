@@ -49,7 +49,8 @@ alias az-show=' az account show'
 alias azl=' az account list | grep name'
 alias az-list=' az account list | grep name'
 alias flg=" git log --oneline | fzf --ansi --preview 'git show --color=always {1}' | awk '{print \$1}' | xargs git show "
-alias cc-key=' export AVANTE_ANTHROPIC_API_KEY="REDACTED_ANTHROPIC_KEY"'
+# API keys should be stored in ~/.accessTokens, not in aliases
+# alias cc-key=' export AVANTE_ANTHROPIC_API_KEY="your-key-here"'
 
 alias arch=' docker exec -it -u dev claude-dev-env zsh'
 alias trop=' nvim /repos/mind-context/tropheys.md'
