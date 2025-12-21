@@ -1,203 +1,108 @@
-# ~/.bashrc: executed by bash(1) for non-login shells.
-# see /usr/share/doc/bash/examples/startup-files (in the package bash-doc)
-# for examples
+# ~/.bashrc - Bash configuration
+# Modular design: sources shared configs from dotfiles
 
-# INIT: Set vi mode:
-set -o vi
-
+# ─────────────────────────────────────────────────────────────────────────────
+#   Early exits
+# ─────────────────────────────────────────────────────────────────────────────
 # If not running interactively, don't do anything
 case $- in
-*i*) ;;
-*) return ;;
+    *i*) ;;
+    *) return ;;
 esac
 
-# Dotfiles directory location - must be set early as it's used throughout
-export DOTFILES_DIR="${DOTFILES_DIR:-/mnt/c/repos/dotfiles}"
+# ─────────────────────────────────────────────────────────────────────────────
+#   Dotfiles location
+# ─────────────────────────────────────────────────────────────────────────────
+export DOTFILES_DIR="${DOTFILES_DIR:-$HOME/repos/dotfiles}"
 
-# don't put duplicate lines or lines starting with space in the history.
-# See bash(1) for more options
-HISTCONTROL=ignoreboth
+# ─────────────────────────────────────────────────────────────────────────────
+#   Bash options
+# ─────────────────────────────────────────────────────────────────────────────
+set -o vi                  # Vi mode
+shopt -s histappend        # Append to history file
+shopt -s checkwinsize      # Update LINES and COLUMNS after each command
+shopt -s cdspell           # Correct minor cd spelling errors
+shopt -s dirspell          # Correct directory spelling during completion
 
-# append to the history file, don't overwrite it
-shopt -s histappend
+# ─────────────────────────────────────────────────────────────────────────────
+#   History
+# ─────────────────────────────────────────────────────────────────────────────
+HISTCONTROL=ignoreboth     # Ignore duplicates and lines starting with space
+HISTSIZE=10000
+HISTFILESIZE=20000
 
-# for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
-HISTSIZE=1000
-HISTFILESIZE=2000
-
-# check the window size after each command and, if necessary,
-# update the values of LINES and COLUMNS.
-shopt -s checkwinsize
-
-# If set, the pattern "**" used in a pathname expansion context will
-# match all files and zero or more directories and subdirectories.
-#shopt -s globstar
-
-# make less more friendly for non-text input files, see lesspipe(1)
-[ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
-
-# set variable identifying the chroot you work in (used in the prompt below)
-if [ -z "${debian_chroot:-}" ] && [ -r /etc/debian_chroot ]; then
-  debian_chroot=$(cat /etc/debian_chroot)
-fi
-
-# set a fancy prompt (non-color, unless we know we "want" color)
+# ─────────────────────────────────────────────────────────────────────────────
+#   Prompt
+# ─────────────────────────────────────────────────────────────────────────────
+# Detect color support
 case "$TERM" in
-xterm-color | *-256color) color_prompt=yes ;;
+    xterm-color|*-256color) color_prompt=yes ;;
 esac
-
-# uncomment for a colored prompt, if the terminal has the capability; turned
-# off by default to not distract the user: the focus in a terminal window
-# should be on the output of commands, not on the prompt
-#force_color_prompt=yes
-
-if [ -n "$force_color_prompt" ]; then
-  if [ -x /usr/bin/tput ] && tput setaf 1 >&/dev/null; then
-    # We have color support; assume it's compliant with Ecma-48
-    # (ISO/IEC-6429). (Lack of such support is extremely rare, and such
-    # a case would tend to support setf rather than setaf.)
-    color_prompt=yes
-  else
-    color_prompt=
-  fi
-fi
 
 if [ "$color_prompt" = yes ]; then
-  PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]λ '
+    PS1='\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]λ '
 else
-  PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
+    PS1='\u@\h:\w\$ '
 fi
-unset color_prompt force_color_prompt
+unset color_prompt
 
-# If this is an xterm set the title to user@host:dir
+# Set terminal title
 case "$TERM" in
-xterm* | rxvt*)
-  PS1="\[\e]0;${debian_chroot:+($debian_chroot)}\u@\h: \w\a\]$PS1"
-  ;;
-*) ;;
+    xterm*|rxvt*)
+        PS1="\[\e]0;\u@\h: \w\a\]$PS1"
+        ;;
 esac
 
-# enable color support of ls and also add handy aliases
+# ─────────────────────────────────────────────────────────────────────────────
+#   Colors
+# ─────────────────────────────────────────────────────────────────────────────
 if [ -x /usr/bin/dircolors ]; then
-  test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
-  alias ls='ls --color=auto'
-  #alias dir='dir --color=auto'
-  #alias vdir='vdir --color=auto'
-
-  alias grep='grep --color=auto'
-  alias fgrep='fgrep --color=auto'
-  alias egrep='egrep --color=auto'
+    test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
+    alias grep='grep --color=auto'
+    alias fgrep='fgrep --color=auto'
+    alias egrep='egrep --color=auto'
 fi
 
-# colored GCC warnings and errors
-#export GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
-
-# Add an "alert" alias for long running commands.  Use like so:
-#   sleep 10; alert
-
-# Alias definitions.
-# You may want to put all your additions into a separate file like
-# ~/.bash_aliases, instead of adding them here directly.
-# See /usr/share/doc/bash-doc/examples in the bash-doc package.
-if [ -f ~/.bash_aliases ]; then
-  . ~/.bash_aliases
-fi
-
-# enable programmable completion features (you don't need to enable
-# this, if it's already enabled in /etc/bash.bashrc and /etc/profile
-# sources /etc/bash.bashrc).
+# ─────────────────────────────────────────────────────────────────────────────
+#   Completion
+# ─────────────────────────────────────────────────────────────────────────────
 if ! shopt -oq posix; then
-  if [ -f /usr/share/bash-completion/bash_completion ]; then
-    . /usr/share/bash-completion/bash_completion
-  elif [ -f /etc/bash_completion ]; then
-    . /etc/bash_completion
-  fi
+    if [ -f /usr/share/bash-completion/bash_completion ]; then
+        . /usr/share/bash-completion/bash_completion
+    elif [ -f /etc/bash_completion ]; then
+        . /etc/bash_completion
+    fi
 fi
 
-# ---- prompt marker for tmux scraping ----
-# prints a unique marker line each time a prompt is shown (for tmux-only)
-PROMPT_MARKER='😎💻🧑‍💻🤖'
-# Only enable inside tmux and ensure it's added to PROMPT_COMMAND once
-if [[ -n "${TMUX:-}" ]]; then
-  __print_prompt_marker() {
-    printf "\n%s%s\n" "${PROMPT_MARKER}" "$(date '+%b %d %H:%M:%S')"
-  }
-  case ";${PROMPT_COMMAND:-};" in
-  *";__print_prompt_marker;"*) ;;
-  *) PROMPT_COMMAND="__print_prompt_marker;${PROMPT_COMMAND:-}" ;;
-  esac
+# ─────────────────────────────────────────────────────────────────────────────
+#   Source shared configurations
+# ─────────────────────────────────────────────────────────────────────────────
+[[ -f "$DOTFILES_DIR/config/shell/env.sh" ]] && source "$DOTFILES_DIR/config/shell/env.sh"
+[[ -f "$DOTFILES_DIR/config/shell/path.sh" ]] && source "$DOTFILES_DIR/config/shell/path.sh"
+[[ -f "$DOTFILES_DIR/config/shell/aliases.sh" ]] && source "$DOTFILES_DIR/config/shell/aliases.sh"
+[[ -f "$DOTFILES_DIR/config/shell/git.sh" ]] && source "$DOTFILES_DIR/config/shell/git.sh"
+[[ -f "$DOTFILES_DIR/config/shell/tmux.sh" ]] && source "$DOTFILES_DIR/config/shell/tmux.sh"
+
+# ─────────────────────────────────────────────────────────────────────────────
+#   Bash-specific aliases
+# ─────────────────────────────────────────────────────────────────────────────
+alias setup='nvim ~/.bashrc'
+alias reterm='source ~/.bashrc'
+
+# ─────────────────────────────────────────────────────────────────────────────
+#   Tools initialization
+# ─────────────────────────────────────────────────────────────────────────────
+# Zoxide (smart cd)
+if command -v zoxide &> /dev/null; then
+    eval "$(zoxide init bash)"
 fi
-
-# Load Angular CLI autocompletion.
-source <(ng completion script)
-
-# Custom PATH additions
-export PATH="$HOME/.dotnet:$PATH"
-export PATH="$DOTFILES_DIR/util-scripts:$PATH"
-
-# Load custom PATH additions from dotfiles/.bash_path (managed by add-to-path.sh)
-if [ -f "$DOTFILES_DIR/.bash_path" ]; then
-  source "$DOTFILES_DIR/.bash_path"
-fi
-
-# Custom environmental variables (non-secret)
-export GEMINI_MODEL="gemini-2.5-flash-lite"
-export EDITOR="nvim"
-
-# Local secrets (never commit). Load only valid KEY=VALUE lines.
-# Prefer user home, fall back to repo path for convenience on WSL.
-__load_access_tokens() {
-  local f="$1"
-  [ -f "$f" ] || return 0
-  while IFS= read -r __line; do
-    case "$__line" in
-    '' | \#*) continue ;;
-    *=*)
-      # Only accept VAR=VALUE with a valid shell var name
-      if [[ "$__line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
-        export "$__line"
-      fi
-      ;;
-    *) ;;
-    esac
-  done <"$f"
-}
-__load_access_tokens "$HOME/.accessTokens"
-__load_access_tokens "$DOTFILES_DIR/.accessTokens"
 
 # FZF
-# Example for Bash/Zsh (usually added automatically by fzf's install script)
-[ -f ~/.fzf.bash ] && source ~/.fzf.bash
+[[ -f ~/.fzf.bash ]] && source ~/.fzf.bash
 
-export PATH="$PATH:/opt/nvim/"
-eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-eval "$(zoxide init bash)"
-
-# >>> add-shortcut (util-scripts) >>>
-if [ -f "$DOTFILES_DIR/util-scripts/add-shortcut.function.sh" ]; then
-  source "$DOTFILES_DIR/util-scripts/add-shortcut.function.sh"
+# ─────────────────────────────────────────────────────────────────────────────
+#   Startup display
+# ─────────────────────────────────────────────────────────────────────────────
+if command -v chafa &> /dev/null && [[ -f ~/linux.png ]]; then
+    chafa -f symbols ~/linux.png
 fi
-# <<< add-shortcut (util-scripts) <<<
-
-# Configure git aliases
-git config --global alias.co checkout
-git config --global alias.s status
-git config --global alias.ds "diff --staged"
-git config --global alias.rs "restore --staged"
-git config --global alias.r "restore"
-
-# In WSL, set Git to convert CRLF to LF on commit
-git config --global core.autocrlf input
-
-# Azure DevOps PAT (updated 2025-12-11)
-export AZURE_GIT_PAT="CgOw7cLnZ7bnLVrt1gwRY7FFMreWVo0p2ueaVigS3peJ04LQ9MJhJQQJ99BKACAAAAAqqHZeAAASAZDO4UmA"
-export AZURE_DEVOPS_EXT_PAT="D1oCi7zXqGv8Fr1wKDsMG2nbdDZH3d8HCL4ftXN0olcTsi81MsEyJQQJ99BLACAAAAAqqHZeAAASAZDO39vQ"
-export AZURE_DEVOPS_PAT="$AZURE_DEVOPS_EXT_PAT"
-export CLAUDE_CODE_OAUTH_TOKEN='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'
-# echo 'Claude-token: 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'
-
-# Initialize zoxide
-eval "$(zoxide init bash)"
-
-# export DISPLAY=:0
-# chafa -f symbols ~/linux.png
