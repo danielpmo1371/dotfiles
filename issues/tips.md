@@ -1,0 +1,3 @@
+- generate a text file with tips from alias, completions, scripts(in dotfiles) and tools ensured/introduced by the dotfiles.
+- create script to print it along with the start up prompt
+- configure it in shell configuration
