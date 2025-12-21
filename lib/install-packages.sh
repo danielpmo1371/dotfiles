@@ -44,28 +44,12 @@ ensure_brew_in_path() {
     return 0
 }
 
-# Install Homebrew if not present
-# Returns 0 if brew is available (installed or already present)
-# Returns 1 if user declined or installation failed
+# Install Homebrew (called only when user selects it)
 install_homebrew() {
     if find_brew &> /dev/null; then
         ensure_brew_in_path
-        log_info "Homebrew already installed"
         return 0
     fi
-
-    echo ""
-    log_info "Homebrew is not installed."
-    echo "Homebrew is the recommended package manager for this dotfiles setup."
-    echo ""
-    read -p "Install Homebrew? [Y/n]: " choice
-
-    case "$choice" in
-        [nN]|[nN][oO])
-            log_info "Skipping Homebrew installation"
-            return 1
-            ;;
-    esac
 
     log_info "Installing Homebrew..."
 
@@ -78,54 +62,106 @@ install_homebrew() {
     log_success "Homebrew installed"
 }
 
-# Detect available package managers
+# Detect available package managers (including brew even if not installed)
 detect_package_managers() {
     local managers=()
-    find_brew &> /dev/null && managers+=("brew")
+
+    # Always offer brew as an option (can be installed)
+    managers+=("brew")
+
+    # Detect system package managers
     command -v apt &> /dev/null && managers+=("apt")
     command -v dnf &> /dev/null && managers+=("dnf")
     command -v pacman &> /dev/null && managers+=("pacman")
     command -v choco &> /dev/null && managers+=("choco")
+
     echo "${managers[@]}"
+}
+
+# Check if a package manager is available (installed)
+is_manager_installed() {
+    local manager="$1"
+    case "$manager" in
+        brew) find_brew &> /dev/null ;;
+        *) command -v "$manager" &> /dev/null ;;
+    esac
 }
 
 # Get preferred package manager (cached choice)
 get_preferred_manager() {
     local cache_file="$HOME/.dotfiles_pkg_manager"
 
+    # Check cached choice
     if [[ -f "$cache_file" ]]; then
-        cat "$cache_file"
-        return
+        local cached
+        cached=$(cat "$cache_file")
+        # Validate cached choice is still available/installable
+        if [[ "$cached" == "brew" ]] || command -v "$cached" &> /dev/null; then
+            # If brew was chosen, ensure it's installed
+            if [[ "$cached" == "brew" ]]; then
+                if ! find_brew &> /dev/null; then
+                    install_homebrew
+                fi
+                ensure_brew_in_path
+            fi
+            echo "$cached"
+            return 0
+        fi
+        # Cached choice no longer valid, remove it
+        rm -f "$cache_file"
     fi
 
     local managers=($(detect_package_managers))
 
     if [[ ${#managers[@]} -eq 0 ]]; then
-        echo ""
+        log_error "No package managers available"
         return 1
-    elif [[ ${#managers[@]} -eq 1 ]]; then
-        echo "${managers[0]}"
-        return
     fi
 
-    # Multiple managers available - ask user
-    echo "Multiple package managers detected:" >&2
+    # Show available package managers
+    echo "" >&2
+    echo "Available package managers:" >&2
     local i=1
     for mgr in "${managers[@]}"; do
-        echo "  $i) $mgr" >&2
+        if is_manager_installed "$mgr"; then
+            echo "  $i) $mgr" >&2
+        else
+            echo "  $i) $mgr (will be installed)" >&2
+        fi
         ((i++))
     done
+    echo "" >&2
 
-    read -p "Choose default package manager [1-${#managers[@]}]: " choice >&2
+    read -p "Choose package manager [1-${#managers[@]}] (default: 1): " choice >&2
+
+    # Default to first option if empty
+    if [[ -z "$choice" ]]; then
+        choice=1
+    fi
 
     if [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 ]] && [[ "$choice" -le ${#managers[@]} ]]; then
         local selected="${managers[$((choice-1))]}"
+
+        # Install if needed
+        if ! is_manager_installed "$selected"; then
+            if [[ "$selected" == "brew" ]]; then
+                install_homebrew || return 1
+            else
+                log_error "Cannot install $selected automatically"
+                return 1
+            fi
+        fi
+
+        # Ensure brew is in PATH if selected
+        if [[ "$selected" == "brew" ]]; then
+            ensure_brew_in_path
+        fi
+
         echo "$selected" > "$cache_file"
         echo "$selected"
     else
-        # Default to first available
-        echo "${managers[0]}" > "$cache_file"
-        echo "${managers[0]}"
+        log_error "Invalid choice"
+        return 1
     fi
 }
 
