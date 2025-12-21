@@ -14,6 +14,7 @@ source "$DOTFILES_ROOT/lib/install-common.sh"
 # Directories to symlink to ~/.config/
 CONFIG_DIRS=(
   "nvim"
+  "ghostty"
 )
 
 install_config_dirs() {
