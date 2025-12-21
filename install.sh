@@ -4,12 +4,12 @@
 # Main entry point for installing all dotfiles configurations
 #
 # Installation Order & Dependencies:
-#   1. tools.sh      - Base dev tools (git, nvim, node, etc.) - no dependencies
-#   2. shell.sh      - Shared shell config (chafa, .accessTokens) - no dependencies
+#   1. tools.sh      - Base dev tools (git, nvim, chafa, etc.) - no dependencies
+#   2. secrets.sh    - Create ~/.accessTokens template - no dependencies
 #   3. tmux.sh       - Tmux + TPM + plugins - requires: git
 #   4. bash.sh       - Bash configuration - no dependencies
-#   5. zsh.sh        - Zsh configuration + Zap - requires: git, zsh
-#   6. config-dirs.sh - Symlink nvim, ghostty configs - requires: nvim, ghostty
+#   5. zsh.sh        - Zsh configuration + Zap - requires: git, zsh, curl
+#   6. config-dirs.sh - Symlink nvim, ghostty configs - no dependencies
 #   7. claude.sh     - Claude Code CLI + settings - requires: node, npm
 
 set -e
@@ -26,11 +26,11 @@ show_help() {
     echo ""
     echo "Options:"
     echo "  --all          Install everything (default)"
-    echo "  --tools        Install common dev tools (nvim, ripgrep, fd, etc.)"
-    echo "  --shell        Install shared shell config (chafa, .accessTokens)"
+    echo "  --tools        Install common dev tools (git, nvim, chafa, ripgrep, etc.)"
+    echo "  --secrets      Create ~/.accessTokens template"
     echo "  --tmux         Install tmux and plugins (requires: git)"
     echo "  --bash         Install bash configuration"
-    echo "  --zsh          Install zsh configuration (requires: git, zsh)"
+    echo "  --zsh          Install zsh configuration (requires: git, zsh, curl)"
     echo "  --nushell      Install nushell configuration (includes starship)"
     echo "  --config-dirs  Symlink config directories (nvim, ghostty)"
     echo "  --claude       Install Claude Code settings (requires: node, npm)"
@@ -80,8 +80,8 @@ install_all() {
     # Install tools first
     run_installer "tools.sh" "install_tools"
 
-    # Install shared shell config
-    run_installer "shell.sh" "install_shell_config"
+    # Create secrets template
+    run_installer "secrets.sh" "install_secrets"
 
     # Install tmux
     run_installer "tmux.sh" "install_tmux"
@@ -117,8 +117,8 @@ main() {
         --tools)
             run_installer "tools.sh" "install_tools"
             ;;
-        --shell)
-            run_installer "shell.sh" "install_shell_config"
+        --secrets)
+            run_installer "secrets.sh" "install_secrets"
             ;;
         --tmux)
             run_installer "tmux.sh" "install_tmux"
