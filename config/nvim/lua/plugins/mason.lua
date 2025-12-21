@@ -1,6 +1,6 @@
 return {
 	{
-		"mason/mason.nvim",
+		"williamboman/mason.nvim",
 		opts = {
 			ensure_installed = {
 				-- LSP servers
