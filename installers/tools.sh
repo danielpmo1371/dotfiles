@@ -1,7 +1,9 @@
 #!/bin/bash
 
 # Common development tools installer
-# Installs CLI tools using preferred package manager
+# Installs Homebrew (if needed) and CLI tools
+#
+# Dependencies: curl (for Homebrew installation)
 
 set -e
 
@@ -14,6 +16,13 @@ source "$DOTFILES_ROOT/lib/install-packages.sh"
 
 install_tools() {
     log_header "Common Development Tools"
+
+    # Install Homebrew if not present (macOS and Linux)
+    # This is the preferred package manager for this dotfiles setup
+    install_homebrew
+
+    # Ensure brew is in PATH for this session
+    ensure_brew_in_path
 
     # Let user choose package manager if multiple available
     local manager=$(get_preferred_manager)
