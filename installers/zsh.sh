@@ -38,4 +38,6 @@ install_zsh_config() {
     echo "  2. Run 'p10k configure' to setup prompt"
 }
 
-[[ "${BASH_SOURCE[0]}" == "${0}" ]] && install_zsh_config
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    install_zsh_config
+fi
