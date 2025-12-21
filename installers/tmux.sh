@@ -2,6 +2,8 @@
 
 # Tmux configuration installer
 # Installs: tmux, TPM (plugin manager), plugins, and config
+#
+# Dependencies: git (for cloning TPM)
 
 set -e
 
@@ -13,6 +15,12 @@ source "$DOTFILES_ROOT/lib/install-packages.sh"
 
 install_tmux() {
     log_header "Tmux Configuration"
+
+    # Check dependencies
+    if ! command -v git &> /dev/null; then
+        log_warn "git not found - required to install TPM"
+        log_info "Run './install.sh --tools' first, or install git manually"
+    fi
 
     # Install tmux
     install_package "tmux" "tmux" "tmux"

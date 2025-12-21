@@ -2,6 +2,15 @@
 
 # Dotfiles Installation Script
 # Main entry point for installing all dotfiles configurations
+#
+# Installation Order & Dependencies:
+#   1. tools.sh      - Base dev tools (git, nvim, node, etc.) - no dependencies
+#   2. shell.sh      - Shared shell config (chafa, .accessTokens) - no dependencies
+#   3. tmux.sh       - Tmux + TPM + plugins - requires: git
+#   4. bash.sh       - Bash configuration - no dependencies
+#   5. zsh.sh        - Zsh configuration + Zap - requires: git, zsh
+#   6. config-dirs.sh - Symlink nvim, ghostty configs - requires: nvim, ghostty
+#   7. claude.sh     - Claude Code CLI + settings - requires: node, npm
 
 set -e
 
@@ -17,20 +26,36 @@ show_help() {
     echo ""
     echo "Options:"
     echo "  --all          Install everything (default)"
-    echo "  --tools        Install common dev tools (tmux, nvim, ripgrep, etc.)"
-    echo "  --shell        Install shared shell config (tmux, chafa, .accessTokens)"
+    echo "  --tools        Install common dev tools (nvim, ripgrep, fd, etc.)"
+    echo "  --shell        Install shared shell config (chafa, .accessTokens)"
+    echo "  --tmux         Install tmux and plugins (requires: git)"
     echo "  --bash         Install bash configuration"
-    echo "  --zsh          Install zsh configuration (includes Zap)"
+    echo "  --zsh          Install zsh configuration (requires: git, zsh)"
     echo "  --nushell      Install nushell configuration (includes starship)"
     echo "  --config-dirs  Symlink config directories (nvim, ghostty)"
-    echo "  --claude       Install Claude Code settings"
+    echo "  --claude       Install Claude Code settings (requires: node, npm)"
     echo "  --help         Show this help message"
     echo ""
     echo "Examples:"
-    echo "  ./install.sh              # Install everything"
+    echo "  ./install.sh              # Install everything (recommended)"
     echo "  ./install.sh --zsh        # Install only zsh config"
     echo "  ./install.sh --tools      # Install only dev tools"
     echo ""
+    echo "Note: Running --all ensures correct installation order."
+    echo "      Individual installers may warn about missing dependencies."
+    echo ""
+}
+
+# Check if a command exists
+check_dependency() {
+    local cmd="$1"
+    local installer="$2"
+    if ! command -v "$cmd" &> /dev/null; then
+        log_warn "Missing dependency: $cmd (needed for $installer)"
+        log_info "Run './install.sh --tools' first, or './install.sh --all'"
+        return 1
+    fi
+    return 0
 }
 
 run_installer() {
@@ -57,6 +82,9 @@ install_all() {
 
     # Install shared shell config
     run_installer "shell.sh" "install_shell_config"
+
+    # Install tmux
+    run_installer "tmux.sh" "install_tmux"
 
     # Install shell-specific configs
     run_installer "bash.sh" "install_bash_config"
@@ -91,6 +119,9 @@ main() {
             ;;
         --shell)
             run_installer "shell.sh" "install_shell_config"
+            ;;
+        --tmux)
+            run_installer "tmux.sh" "install_tmux"
             ;;
         --bash)
             run_installer "bash.sh" "install_bash_config"

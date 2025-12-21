@@ -2,6 +2,8 @@
 
 # Claude Code installer
 # Installs: Claude Code CLI, CLAUDE.md, settings.json, commands/
+#
+# Dependencies: node, npm (for Claude Code CLI)
 
 set -e
 
