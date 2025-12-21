@@ -45,12 +45,27 @@ ensure_brew_in_path() {
 }
 
 # Install Homebrew if not present
+# Returns 0 if brew is available (installed or already present)
+# Returns 1 if user declined or installation failed
 install_homebrew() {
     if find_brew &> /dev/null; then
         ensure_brew_in_path
         log_info "Homebrew already installed"
         return 0
     fi
+
+    echo ""
+    log_info "Homebrew is not installed."
+    echo "Homebrew is the recommended package manager for this dotfiles setup."
+    echo ""
+    read -p "Install Homebrew? [Y/n]: " choice
+
+    case "$choice" in
+        [nN]|[nN][oO])
+            log_info "Skipping Homebrew installation"
+            return 1
+            ;;
+    esac
 
     log_info "Installing Homebrew..."
 
