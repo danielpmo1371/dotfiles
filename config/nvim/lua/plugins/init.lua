@@ -14,13 +14,13 @@ return {
     "nvim-treesitter/nvim-treesitter",
     build = ":TSUpdate",
     config = function()
-      require("nvim-treesitter.configs").setup({
+      local ts = require("nvim-treesitter")
+      ts.setup({
         ensure_installed = { "lua", "vim", "vimdoc", "bash", "python", "javascript", "typescript" },
         auto_install = true,
-        highlight = {
-          enable = true,
-        },
       })
+      -- Enable highlighting via vim.treesitter (new API)
+      vim.treesitter.language.register("bash", "sh")
     end,
   },
 
