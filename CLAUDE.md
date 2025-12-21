@@ -13,12 +13,13 @@ Personal dotfiles repository with modular installation system. Supports macOS an
 ./install.sh
 
 # Individual components
-./install.sh --tools        # Dev tools (nvim, ripgrep, fd, bat, etc.)
-./install.sh --shell        # Shared shell config (chafa, .accessTokens)
+./install.sh --tools        # Dev tools (git, nvim, chafa, ripgrep, etc.)
+./install.sh --secrets      # Create ~/.accessTokens template
 ./install.sh --tmux         # Tmux + TPM + plugins (requires: git)
 ./install.sh --bash         # Bash configuration
-./install.sh --zsh          # Zsh configuration (requires: git, zsh)
-./install.sh --config-dirs  # Symlink nvim, ghostty to ~/.config/
+./install.sh --zsh          # Zsh configuration (requires: git, zsh, curl)
+./install.sh --terminals    # Terminal emulators (Ghostty, etc.)
+./install.sh --config-dirs  # Symlink nvim to ~/.config/
 ./install.sh --claude       # Claude Code CLI and settings (requires: node, npm)
 
 # After shell config changes
@@ -47,7 +48,7 @@ config/              # Configuration files organized by tool
 ### Key Patterns
 
 **Installation Flow**: `install.sh` dispatches to `installers/*.sh` scripts which source `lib/install-common.sh` for utilities. Order matters for `--all`:
-1. tools.sh → shell.sh → tmux.sh → bash.sh → zsh.sh → config-dirs.sh → claude.sh
+1. tools.sh → secrets.sh → terminals.sh → tmux.sh → bash.sh → zsh.sh → config-dirs.sh → claude.sh
 
 **Symlink Strategy**:
 - `config/` subdirs symlink to `~/.config/` via `link_config_dirs()`
