@@ -58,4 +58,6 @@ EOF
     echo "Next: run ./installers/zsh.sh or ./installers/bash.sh"
 }
 
-[[ "${BASH_SOURCE[0]}" == "${0}" ]] && install_shell_config
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    install_shell_config
+fi
