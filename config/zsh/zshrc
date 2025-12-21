@@ -115,7 +115,7 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 # Show a nice image on terminal startup (requires chafa)
 if command -v chafa &> /dev/null && [[ -f $DOTFILES_DIR/images/start.png ]]; then
-    chafa $DOTFILES_DIR/images/start.png
+    # chafa $DOTFILES_DIR/images/start.png
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
