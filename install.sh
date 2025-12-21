@@ -21,6 +21,7 @@ show_help() {
     echo "  --shell        Install shared shell config (tmux, chafa, .accessTokens)"
     echo "  --bash         Install bash configuration"
     echo "  --zsh          Install zsh configuration (includes Zap)"
+    echo "  --nushell      Install nushell configuration (includes starship)"
     echo "  --config-dirs  Symlink config directories (nvim, ghostty)"
     echo "  --claude       Install Claude Code settings"
     echo "  --help         Show this help message"
@@ -96,6 +97,9 @@ main() {
             ;;
         --zsh)
             run_installer "zsh.sh" "install_zsh_config"
+            ;;
+        --nushell)
+            run_installer "nushell.sh" "install_nushell_config"
             ;;
         --config-dirs)
             run_installer "config-dirs.sh" "install_config_dirs"
