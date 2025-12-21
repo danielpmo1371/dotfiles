@@ -11,16 +11,31 @@ DOTFILES_DIR="$HOME/repos/dotfiles"
 echo "=== Dotfiles Bootstrap ==="
 echo ""
 
+# Helper to run command with sudo if available, or as root
+run_privileged() {
+    if [[ $EUID -eq 0 ]]; then
+        "$@"
+    elif command -v sudo &> /dev/null; then
+        sudo "$@"
+    elif command -v doas &> /dev/null; then
+        doas "$@"
+    else
+        echo "Error: Need root privileges but sudo/doas not found."
+        echo "Run as root or install sudo: pacman -S sudo"
+        exit 1
+    fi
+}
+
 # Install git if not present
 install_git() {
     echo "Git not found. Attempting to install..."
 
     if command -v apt &> /dev/null; then
-        sudo apt update && sudo apt install -y git
+        run_privileged apt update && run_privileged apt install -y git
     elif command -v dnf &> /dev/null; then
-        sudo dnf install -y git
+        run_privileged dnf install -y git
     elif command -v pacman &> /dev/null; then
-        sudo pacman -S --noconfirm git
+        run_privileged pacman -S --noconfirm git
     elif command -v brew &> /dev/null; then
         brew install git
     elif [[ "$OSTYPE" == "darwin"* ]]; then
