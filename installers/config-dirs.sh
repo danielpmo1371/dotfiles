@@ -25,4 +25,6 @@ install_config_dirs() {
     log_info "Config directories installation complete"
 }
 
-[[ "${BASH_SOURCE[0]}" == "${0}" ]] && install_config_dirs
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    install_config_dirs
+fi
