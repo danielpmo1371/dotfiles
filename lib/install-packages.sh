@@ -3,16 +3,74 @@
 # Package installation library
 # Provides cross-platform package installation with user choice
 
+# Common Homebrew installation paths
+BREW_PATHS=(
+    "/opt/homebrew/bin/brew"        # macOS Apple Silicon
+    "/usr/local/bin/brew"           # macOS Intel
+    "/home/linuxbrew/.linuxbrew/bin/brew"  # Linux system-wide
+    "$HOME/.linuxbrew/bin/brew"     # Linux user install
+)
+
+# Find brew binary even if not in PATH
+find_brew() {
+    # First check if it's in PATH
+    if command -v brew &> /dev/null; then
+        command -v brew
+        return 0
+    fi
+
+    # Check common installation paths
+    for brew_path in "${BREW_PATHS[@]}"; do
+        if [[ -x "$brew_path" ]]; then
+            echo "$brew_path"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+# Ensure brew is in PATH for current session
+ensure_brew_in_path() {
+    if command -v brew &> /dev/null; then
+        return 0
+    fi
+
+    local brew_bin
+    brew_bin=$(find_brew) || return 1
+
+    # Add brew to PATH and set up environment
+    eval "$("$brew_bin" shellenv)"
+    return 0
+}
+
+# Install Homebrew if not present
+install_homebrew() {
+    if find_brew &> /dev/null; then
+        ensure_brew_in_path
+        log_info "Homebrew already installed"
+        return 0
+    fi
+
+    log_info "Installing Homebrew..."
+
+    # Homebrew's official install script
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+    # Set up PATH for current session
+    ensure_brew_in_path
+
+    log_success "Homebrew installed"
+}
+
 # Detect available package managers
 detect_package_managers() {
     local managers=()
-    command -v brew &> /dev/null && managers+=("brew")
+    find_brew &> /dev/null && managers+=("brew")
     command -v apt &> /dev/null && managers+=("apt")
     command -v dnf &> /dev/null && managers+=("dnf")
     command -v pacman &> /dev/null && managers+=("pacman")
     command -v choco &> /dev/null && managers+=("choco")
-    command -v npm &> /dev/null && managers+=("npm")
-    command -v cargo &> /dev/null && managers+=("cargo")
     echo "${managers[@]}"
 }
 
@@ -83,6 +141,7 @@ install_package() {
 
     case "$manager" in
         brew)
+            ensure_brew_in_path
             brew install "$brew_pkg"
             ;;
         apt)
