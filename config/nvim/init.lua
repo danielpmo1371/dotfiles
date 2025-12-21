@@ -28,4 +28,10 @@ vim.opt.rtp:prepend(lazypath)
 vim.opt.winfixbuf = false
 
 -- Setup plugins (defined in lua/plugins)
-require("lazy").setup("plugins")
+require("lazy").setup({
+	spec = {
+		{ "LazyVim/LazyVim", import = "lazyvim.plugins" },
+		{ import = "plugins" },
+	},
+	defaults = { lazy = true },
+})
