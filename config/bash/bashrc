@@ -6,28 +6,41 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # If not running interactively, don't do anything
 case $- in
-    *i*) ;;
-    *) return ;;
+*i*) ;;
+*) return ;;
 esac
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Dotfiles location
 # ─────────────────────────────────────────────────────────────────────────────
-export DOTFILES_DIR="${DOTFILES_DIR:-$HOME/repos/dotfiles}"
+# Dynamically determine dotfiles location from symlink
+if [ -L "$HOME/.bashrc" ]; then
+    # Get the symlink target (not fully resolved)
+    BASHRC_PATH="$(readlink "$HOME/.bashrc")"
+    # Go up from config/bash/bashrc to get dotfiles root
+    DOTFILES_DIR="$(dirname "$(dirname "$(dirname "$BASHRC_PATH")")")"
+    export DOTFILES_DIR
+else
+    # Fallback to default if not symlinked
+    export DOTFILES_DIR="${DOTFILES_DIR:-$HOME/repos/dotfiles}"
+fi
+
+# Debug output (remove after testing)
+echo "DEBUG: DOTFILES_DIR set to: $DOTFILES_DIR"
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Bash options
 # ─────────────────────────────────────────────────────────────────────────────
-set -o vi                  # Vi mode
-shopt -s histappend        # Append to history file
-shopt -s checkwinsize      # Update LINES and COLUMNS after each command
-shopt -s cdspell           # Correct minor cd spelling errors
-shopt -s dirspell          # Correct directory spelling during completion
+set -o vi             # Vi mode
+shopt -s histappend   # Append to history file
+shopt -s checkwinsize # Update LINES and COLUMNS after each command
+shopt -s cdspell      # Correct minor cd spelling errors
+shopt -s dirspell     # Correct directory spelling during completion
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   History
 # ─────────────────────────────────────────────────────────────────────────────
-HISTCONTROL=ignoreboth     # Ignore duplicates and lines starting with space
+HISTCONTROL=ignoreboth # Ignore duplicates and lines starting with space
 HISTSIZE=10000
 HISTFILESIZE=20000
 
@@ -36,49 +49,49 @@ HISTFILESIZE=20000
 # ─────────────────────────────────────────────────────────────────────────────
 # Detect color support
 case "$TERM" in
-    xterm-color|*-256color) color_prompt=yes ;;
+xterm-color | *-256color) color_prompt=yes ;;
 esac
 
 if [ "$color_prompt" = yes ]; then
-    PS1='\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]λ '
+  PS1='\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]λ '
 else
-    PS1='\u@\h:\w\$ '
+  PS1='\u@\h:\w\$ '
 fi
 unset color_prompt
 
 # Set terminal title
 case "$TERM" in
-    xterm*|rxvt*)
-        PS1="\[\e]0;\u@\h: \w\a\]$PS1"
-        ;;
+xterm* | rxvt*)
+  PS1="\[\e]0;\u@\h: \w\a\]$PS1"
+  ;;
 esac
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Colors
 # ─────────────────────────────────────────────────────────────────────────────
 if [ -x /usr/bin/dircolors ]; then
-    test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
-    alias grep='grep --color=auto'
-    alias fgrep='fgrep --color=auto'
-    alias egrep='egrep --color=auto'
+  test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
+  alias grep='grep --color=auto'
+  alias fgrep='fgrep --color=auto'
+  alias egrep='egrep --color=auto'
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Completion
 # ─────────────────────────────────────────────────────────────────────────────
 if ! shopt -oq posix; then
-    if [ -f /usr/share/bash-completion/bash_completion ]; then
-        . /usr/share/bash-completion/bash_completion
-    elif [ -f /etc/bash_completion ]; then
-        . /etc/bash_completion
-    fi
+  if [ -f /usr/share/bash-completion/bash_completion ]; then
+    . /usr/share/bash-completion/bash_completion
+  elif [ -f /etc/bash_completion ]; then
+    . /etc/bash_completion
+  fi
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Source shared configurations
 # ─────────────────────────────────────────────────────────────────────────────
 [[ -f "$DOTFILES_DIR/config/shell/env.sh" ]] && source "$DOTFILES_DIR/config/shell/env.sh"
-[[ -f "$DOTFILES_DIR/config/shell/path.sh" ]] && source "$DOTFILES_DIR/config/shell/path.sh"
+[[ -f "$DOTFILES_DIR/config/shell/path.sh" ]] && echo 'sourcing path' && source "$DOTFILES_DIR/config/shell/path.sh"
 [[ -f "$DOTFILES_DIR/config/shell/aliases.sh" ]] && source "$DOTFILES_DIR/config/shell/aliases.sh"
 [[ -f "$DOTFILES_DIR/config/shell/git.sh" ]] && source "$DOTFILES_DIR/config/shell/git.sh"
 [[ -f "$DOTFILES_DIR/config/shell/tmux.sh" ]] && source "$DOTFILES_DIR/config/shell/tmux.sh"
@@ -93,8 +106,8 @@ alias reterm='source ~/.bashrc'
 #   Tools initialization
 # ─────────────────────────────────────────────────────────────────────────────
 # Zoxide (smart cd)
-if command -v zoxide &> /dev/null; then
-    eval "$(zoxide init bash)"
+if command -v zoxide &>/dev/null; then
+  eval "$(zoxide init bash)"
 fi
 
 # FZF
@@ -103,6 +116,6 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 #   Startup display
 # ─────────────────────────────────────────────────────────────────────────────
-if command -v chafa &> /dev/null && [[ -f ~/linux.png ]]; then
-    chafa -f symbols ~/linux.png
+if command -v chafa &>/dev/null && [[ -f ~/linux.png ]]; then
+  chafa -f symbols ~/linux.png
 fi
