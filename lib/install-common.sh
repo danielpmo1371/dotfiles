@@ -125,3 +125,41 @@ ensure_dir() {
         log_info "Created directory: $dir"
     fi
 }
+
+# Link directories from config/ to ~/.config/
+# Usage: link_config_dirs "nvim" "ghostty" "kitty"
+link_config_dirs() {
+    local dotfiles_root="${DOTFILES_ROOT:-$(get_dotfiles_root)}"
+    ensure_dir "$HOME/.config"
+
+    for dir in "$@"; do
+        local source="$dotfiles_root/config/$dir"
+        local target="$HOME/.config/$dir"
+        create_symlink "$source" "$target"
+    done
+}
+
+# Link files from config/<subdir>/ to $HOME
+# Usage: link_home_files "bash" "bashrc:.bashrc" "bash_aliases:.bash_aliases"
+# Format: "source_name:target_name" where target is in $HOME
+link_home_files() {
+    local config_subdir="$1"
+    shift
+    local dotfiles_root="${DOTFILES_ROOT:-$(get_dotfiles_root)}"
+
+    for pair in "$@"; do
+        local source_name="${pair%%:*}"
+        local target_name="${pair##*:}"
+        local source="$dotfiles_root/config/$config_subdir/$source_name"
+        local target="$HOME/$target_name"
+        create_symlink "$source" "$target"
+    done
+}
+
+# Link a single file from dotfiles root to $HOME
+# Usage: link_dotfile ".tmux.conf"
+link_dotfile() {
+    local filename="$1"
+    local dotfiles_root="${DOTFILES_ROOT:-$(get_dotfiles_root)}"
+    create_symlink "$dotfiles_root/$filename" "$HOME/$filename"
+}
