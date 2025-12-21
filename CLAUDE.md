@@ -13,12 +13,13 @@ Personal dotfiles repository with modular installation system. Supports macOS an
 ./install.sh
 
 # Individual components
-./install.sh --tools        # Dev tools (tmux, nvim, ripgrep, fd, bat, etc.)
-./install.sh --shell        # Shared shell config (tmux, chafa, .accessTokens)
+./install.sh --tools        # Dev tools (nvim, ripgrep, fd, bat, etc.)
+./install.sh --shell        # Shared shell config (chafa, .accessTokens)
+./install.sh --tmux         # Tmux + TPM + plugins (requires: git)
 ./install.sh --bash         # Bash configuration
-./install.sh --zsh          # Zsh configuration (includes Zap plugin manager)
+./install.sh --zsh          # Zsh configuration (requires: git, zsh)
 ./install.sh --config-dirs  # Symlink nvim, ghostty to ~/.config/
-./install.sh --claude       # Claude Code CLI and settings
+./install.sh --claude       # Claude Code CLI and settings (requires: node, npm)
 
 # After shell config changes
 source ~/.zshrc  # or ~/.bashrc
@@ -37,6 +38,7 @@ config/              # Configuration files organized by tool
   shell/             # Shared configs sourced by both bash and zsh
   bash/              # Bash-specific (bashrc, bash_aliases, bash_path)
   zsh/               # Zsh-specific (zshrc)
+  tmux/              # Tmux configuration (tmux.conf)
   nvim/              # Neovim (LazyVim-based)
   claude/            # Claude Code settings, commands, skills
   ghostty/           # Ghostty terminal config
@@ -44,7 +46,8 @@ config/              # Configuration files organized by tool
 
 ### Key Patterns
 
-**Installation Flow**: `install.sh` dispatches to `installers/*.sh` scripts which source `lib/install-common.sh` for utilities.
+**Installation Flow**: `install.sh` dispatches to `installers/*.sh` scripts which source `lib/install-common.sh` for utilities. Order matters for `--all`:
+1. tools.sh → shell.sh → tmux.sh → bash.sh → zsh.sh → config-dirs.sh → claude.sh
 
 **Symlink Strategy**:
 - `config/` subdirs symlink to `~/.config/` via `link_config_dirs()`

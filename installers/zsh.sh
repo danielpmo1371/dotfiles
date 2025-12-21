@@ -1,6 +1,8 @@
 #!/bin/bash
 
 # Zsh configuration installer
+#
+# Dependencies: zsh, curl (for Zap installation)
 
 set -e
 
@@ -16,6 +18,15 @@ ZSH_FILES=(
 
 install_zsh_config() {
     log_header "Zsh Configuration"
+
+    # Check dependencies
+    if ! command -v zsh &> /dev/null; then
+        log_warn "zsh not found - install zsh first"
+        log_info "Run './install.sh --tools' or install zsh manually"
+    fi
+    if ! command -v curl &> /dev/null; then
+        log_warn "curl not found - required to install Zap plugin manager"
+    fi
 
     link_home_files "zsh" "${ZSH_FILES[@]}"
 
