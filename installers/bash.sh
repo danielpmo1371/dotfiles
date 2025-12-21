@@ -26,4 +26,6 @@ install_bash_config() {
     log_info "Run 'source ~/.bashrc' to apply changes"
 }
 
-[[ "${BASH_SOURCE[0]}" == "${0}" ]] && install_bash_config
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    install_bash_config
+fi
