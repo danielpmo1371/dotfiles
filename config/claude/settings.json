@@ -1,0 +1,72 @@
+{
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/.config/.claude/notification.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Fetch(*)",
+      "Read(*)",
+      "Edit(*)",
+      "MultiEdit(*)",
+      "Write(*)",
+      "Glob(*)",
+      "Grep(*)",
+      "Git(*)",
+      "LS(*)",
+      "NotebookRead(*)",
+      "NotebookEdit(*)",
+      "Bash(git:*)",
+      "Bash(npm:*)",
+      "Bash(yarn:*)",
+      "Bash(pnpm:*)",
+      "Bash(python:*)",
+      "Bash(pip:*)",
+      "Bash(node:*)",
+      "Bash(cargo:*)",
+      "Bash(go:*)",
+      "Bash(make:*)",
+      "Bash(cmake:*)",
+      "Bash(docker:*)",
+      "Bash(docker-compose:*)",
+      "Bash(kubectl:*)",
+      "Bash(helm:*)",
+      "Bash(ls:*)",
+      "Bash(cd:*)",
+      "Bash(pwd:*)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(which:*)",
+      "Bash(whoami:*)",
+      "Bash(echo:*)",
+      "Bash(chmod:*)",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)",
+      "Bash(cp:*)",
+      "Bash(rm:*)",
+      "Bash(touch:*)",
+      "Bash(ttalk:*)",
+      "Bash(az:*)",
+      "Bash(jq:*)",
+      "Bash(curl:*)"
+    ],
+    "deny": [],
+    "additionalDirectories": [],
+    "defaultMode": "acceptEdits",
+    "autoApprove": [
+      "git"
+    ]
+  },
+  "model": "opus",
+  "alwaysThinkingEnabled": false
+}
