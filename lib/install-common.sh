@@ -54,8 +54,7 @@ get_dotfiles_root() {
 # Returns: path to backup directory via echo
 create_backup_dir() {
     local component="${1:-general}"
-    local dotfiles_root="$(get_dotfiles_root)"
-    local backup_dir="$dotfiles_root/backup/${component}-$(date +%Y%m%d-%H%M%S)"
+    local backup_dir="$HOME/.dotfiles-backup/${component}-$(date +%Y%m%d-%H%M%S)"
 
     mkdir -p "$backup_dir"
     echo "$backup_dir"
@@ -162,4 +161,22 @@ link_dotfile() {
     local filename="$1"
     local dotfiles_root="${DOTFILES_ROOT:-$(get_dotfiles_root)}"
     create_symlink "$dotfiles_root/$filename" "$HOME/$filename"
+}
+
+# Link files from config/<subdir>/ to a target directory
+# Usage: link_target_files "claude" "$HOME/.claude" "CLAUDE.md" "settings.json" "commands"
+# Each file/dir in config/<subdir>/ is symlinked to target_dir/<name>
+link_target_files() {
+    local config_subdir="$1"
+    local target_dir="$2"
+    shift 2
+    local dotfiles_root="${DOTFILES_ROOT:-$(get_dotfiles_root)}"
+
+    ensure_dir "$target_dir"
+
+    for item in "$@"; do
+        local source="$dotfiles_root/config/$config_subdir/$item"
+        local target="$target_dir/$item"
+        create_symlink "$source" "$target"
+    done
 }
