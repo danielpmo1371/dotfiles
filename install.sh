@@ -35,10 +35,13 @@ show_help() {
 run_installer() {
     local installer="$1"
     local func="$2"
+    local install_root="$SCRIPT_DIR"
 
-    if [ -f "$SCRIPT_DIR/installers/$installer" ]; then
-        source "$SCRIPT_DIR/installers/$installer"
+    if [ -f "$install_root/installers/$installer" ]; then
+        source "$install_root/installers/$installer"
         $func
+        # Restore SCRIPT_DIR in case installer changed it
+        SCRIPT_DIR="$install_root"
     else
         log_error "Installer not found: $installer"
         return 1
