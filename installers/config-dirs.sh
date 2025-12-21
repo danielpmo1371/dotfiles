@@ -2,6 +2,8 @@
 
 # Configuration directories installer
 # Symlinks config folders from dotfiles/config/ to ~/.config/
+#
+# Note: Terminal emulators are handled by terminals.sh
 
 set -e
 
@@ -13,7 +15,6 @@ source "$DOTFILES_ROOT/lib/install-common.sh"
 # Directories to symlink to ~/.config/
 CONFIG_DIRS=(
     "nvim"
-    "ghostty"
 )
 
 install_config_dirs() {
@@ -22,7 +23,7 @@ install_config_dirs() {
     link_config_dirs "${CONFIG_DIRS[@]}"
 
     echo ""
-    log_info "Config directories installation complete"
+    log_success "Config directories installation complete"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then

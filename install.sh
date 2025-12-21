@@ -6,11 +6,12 @@
 # Installation Order & Dependencies:
 #   1. tools.sh      - Base dev tools (git, nvim, chafa, etc.) - no dependencies
 #   2. secrets.sh    - Create ~/.accessTokens template - no dependencies
-#   3. tmux.sh       - Tmux + TPM + plugins - requires: git
-#   4. bash.sh       - Bash configuration - no dependencies
-#   5. zsh.sh        - Zsh configuration + Zap - requires: git, zsh, curl
-#   6. config-dirs.sh - Symlink nvim, ghostty configs - no dependencies
-#   7. claude.sh     - Claude Code CLI + settings - requires: node, npm
+#   3. terminals.sh  - Terminal emulators (Ghostty, etc.) - no dependencies
+#   4. tmux.sh       - Tmux + TPM + plugins - requires: git, terminal config
+#   5. bash.sh       - Bash configuration - no dependencies
+#   6. zsh.sh        - Zsh configuration + Zap - requires: git, zsh, curl
+#   7. config-dirs.sh - Symlink config directories (nvim) - no dependencies
+#   8. claude.sh     - Claude Code CLI + settings - requires: node, npm
 
 set -e
 
@@ -32,7 +33,8 @@ show_help() {
     echo "  --bash         Install bash configuration"
     echo "  --zsh          Install zsh configuration (requires: git, zsh, curl)"
     echo "  --nushell      Install nushell configuration (includes starship)"
-    echo "  --config-dirs  Symlink config directories (nvim, ghostty)"
+    echo "  --terminals    Install terminal emulators config (Ghostty, etc.)"
+    echo "  --config-dirs  Symlink config directories (nvim)"
     echo "  --claude       Install Claude Code settings (requires: node, npm)"
     echo "  --help         Show this help message"
     echo ""
@@ -83,6 +85,9 @@ install_all() {
     # Create secrets template
     run_installer "secrets.sh" "install_secrets"
 
+    # Install terminal emulators config (before tmux - tmux needs terminal keybindings)
+    run_installer "terminals.sh" "install_terminals"
+
     # Install tmux
     run_installer "tmux.sh" "install_tmux"
 
@@ -131,6 +136,9 @@ main() {
             ;;
         --nushell)
             run_installer "nushell.sh" "install_nushell_config"
+            ;;
+        --terminals)
+            run_installer "terminals.sh" "install_terminals"
             ;;
         --config-dirs)
             run_installer "config-dirs.sh" "install_config_dirs"
