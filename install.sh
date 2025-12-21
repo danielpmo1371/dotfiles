@@ -16,30 +16,62 @@ show_help() {
     echo "Usage: ./install.sh [options]"
     echo ""
     echo "Options:"
-    echo "  --all        Install all configurations (default)"
-    echo "  --shell      Install shell config only (bash, tmux)"
-    echo "  --claude     Install Claude Code settings only"
-    echo "  --help       Show this help message"
+    echo "  --all          Install everything (default)"
+    echo "  --tools        Install common dev tools (tmux, nvim, ripgrep, etc.)"
+    echo "  --shell        Install shared shell config (tmux, chafa, .accessTokens)"
+    echo "  --bash         Install bash configuration"
+    echo "  --zsh          Install zsh configuration (includes Zap)"
+    echo "  --config-dirs  Symlink config directories (nvim, ghostty)"
+    echo "  --claude       Install Claude Code settings"
+    echo "  --help         Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  ./install.sh              # Install everything"
+    echo "  ./install.sh --zsh        # Install only zsh config"
+    echo "  ./install.sh --tools      # Install only dev tools"
     echo ""
 }
 
-install_all() {
-    log_header "Dotfiles Installation"
+run_installer() {
+    local installer="$1"
+    local func="$2"
 
-    # Install shell configuration
-    source "$SCRIPT_DIR/installers/shell.sh"
-    install_shell_config
+    if [ -f "$SCRIPT_DIR/installers/$installer" ]; then
+        source "$SCRIPT_DIR/installers/$installer"
+        $func
+    else
+        log_error "Installer not found: $installer"
+        return 1
+    fi
+}
+
+install_all() {
+    log_header "Full Dotfiles Installation"
+
+    # Install tools first
+    run_installer "tools.sh" "install_tools"
+
+    # Install shared shell config
+    run_installer "shell.sh" "install_shell_config"
+
+    # Install shell-specific configs
+    run_installer "bash.sh" "install_bash_config"
+    run_installer "zsh.sh" "install_zsh_config"
+
+    # Symlink config directories
+    run_installer "config-dirs.sh" "install_config_dirs"
 
     # Install Claude settings
-    source "$SCRIPT_DIR/installers/claude.sh"
-    install_claude_config
+    run_installer "claude.sh" "install_npm_packages"
+    run_installer "claude.sh" "install_claude_config"
 
     log_header "Installation Complete"
     echo "All dotfiles have been installed successfully."
     echo ""
     echo "Next steps:"
-    echo "  1. Restart your shell or run: source ~/.bashrc"
-    echo "  2. Restart Claude Code to pick up new settings"
+    echo "  1. Restart your shell or run: source ~/.zshrc (or ~/.bashrc)"
+    echo "  2. Run 'p10k configure' to setup powerlevel10k prompt"
+    echo "  3. Restart Claude Code to pick up new settings"
     echo ""
 }
 
@@ -50,13 +82,24 @@ main() {
         --help|-h)
             show_help
             ;;
+        --tools)
+            run_installer "tools.sh" "install_tools"
+            ;;
         --shell)
-            source "$SCRIPT_DIR/installers/shell.sh"
-            install_shell_config
+            run_installer "shell.sh" "install_shell_config"
+            ;;
+        --bash)
+            run_installer "bash.sh" "install_bash_config"
+            ;;
+        --zsh)
+            run_installer "zsh.sh" "install_zsh_config"
+            ;;
+        --config-dirs)
+            run_installer "config-dirs.sh" "install_config_dirs"
             ;;
         --claude)
-            source "$SCRIPT_DIR/installers/claude.sh"
-            install_claude_config
+            run_installer "claude.sh" "install_npm_packages"
+            run_installer "claude.sh" "install_claude_config"
             ;;
         --all|*)
             install_all
