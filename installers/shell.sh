@@ -1,46 +1,61 @@
 #!/bin/bash
 
-# Shell configuration installer (bash, tmux)
-# Installs: .bashrc, .bash_path, .tmux.conf
+# Shared shell configuration installer
+# Installs: tmux, chafa, .tmux.conf, ~/.accessTokens template
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Source common functions
 source "$DOTFILES_ROOT/lib/install-common.sh"
+source "$DOTFILES_ROOT/lib/install-packages.sh"
 
-# Files to symlink to home directory
-SHELL_FILES=(
-    ".bashrc"
-    ".bash_path"
+# Files to symlink from dotfiles root to $HOME
+DOTFILES=(
     ".tmux.conf"
 )
 
+# Packages to install
+PACKAGES=(
+    "tmux"
+    "chafa"
+)
+
 install_shell_config() {
-    log_header "Shell Configuration"
+    log_header "Shared Shell Configuration"
 
-    local backup_dir=""
-
-    for file in "${SHELL_FILES[@]}"; do
-        local source="$DOTFILES_ROOT/$file"
-        local target="$HOME/$file"
-
-        # Create backup dir only when needed (lazy initialization)
-        if [ -e "$target" ] && [ ! -L "$target" ] && [ -z "$backup_dir" ]; then
-            backup_dir="$(create_backup_dir "shell")"
-        fi
-
-        create_symlink "$source" "$target" "$backup_dir"
+    # Install required tools
+    for pkg in "${PACKAGES[@]}"; do
+        install_package "$pkg" "$pkg" "$pkg"
     done
 
+    # Symlink dotfiles
+    for file in "${DOTFILES[@]}"; do
+        link_dotfile "$file"
+    done
+
+    # Create ~/.accessTokens template if it doesn't exist
+    if [ ! -f "$HOME/.accessTokens" ]; then
+        cat > "$HOME/.accessTokens" << 'EOF'
+# Access tokens and API keys - DO NOT COMMIT TO GIT
+# Format: KEY=value (no spaces around =, no quotes needed)
+#
+# OPENAI_API_KEY=sk-...
+# GH_AUTH_TOKEN=github_pat_...
+# AZURE_DEVOPS_EXT_PAT=...
+EOF
+        chmod 600 "$HOME/.accessTokens"
+        log_info "Created ~/.accessTokens template"
+    fi
+
     echo ""
-    log_info "Shell config installation complete"
-    log_info "Run 'source ~/.bashrc' to apply changes"
+    log_info "Shared shell config complete"
+    echo ""
+    echo "Shared configs in config/shell/:"
+    echo "  env.sh, path.sh, aliases.sh, git.sh, tmux.sh"
+    echo ""
+    echo "Next: run ./installers/zsh.sh or ./installers/bash.sh"
 }
 
-# Run if executed directly
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    install_shell_config
-fi
+[[ "${BASH_SOURCE[0]}" == "${0}" ]] && install_shell_config
