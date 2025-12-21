@@ -1,0 +1,1 @@
+now create a beautiful html file telling the story of how this session went from the first  prompt to the final result, interesting parts, corrections, good prompt that helped, some  thing that stood in the way etc
