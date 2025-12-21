@@ -15,6 +15,7 @@ alias n='nvim'
 alias fvim='nvim "$(fzf)"'
 alias nz='nvim $(fzf)'
 alias setup-vim='nvim ~/.config/nvim/init.lua'
+alias setup-alias="nvim $DOTFILES_DIR/config/shell/aliases.sh"
 alias setup-tmux='nvim ~/.tmux.conf'
 alias setup-ghostty='nvim ~/.config/ghostty/config'
 alias setup-claude='nvim ~/.claude/CLAUDE.md'
@@ -23,6 +24,7 @@ alias re-tmux='tmux source-file ~/.tmux.conf'
 # ─────────────────────────────────────────────────────────────────────────────
 #   Git
 # ─────────────────────────────────────────────────────────────────────────────
+alias lz='lazygit'
 alias gs='git status'
 alias gsh='git show HEAD'
 alias cm='git cm'
