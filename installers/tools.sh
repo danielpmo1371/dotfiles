@@ -17,15 +17,12 @@ source "$DOTFILES_ROOT/lib/install-packages.sh"
 install_tools() {
     log_header "Common Development Tools"
 
-    # Install Homebrew if not present (macOS and Linux)
-    # This is the preferred package manager for this dotfiles setup
-    install_homebrew
-
-    # Ensure brew is in PATH for this session
-    ensure_brew_in_path
-
-    # Let user choose package manager if multiple available
+    # Let user choose package manager (will install brew if selected and not present)
     local manager=$(get_preferred_manager)
+    if [[ -z "$manager" ]]; then
+        log_error "No package manager selected"
+        return 1
+    fi
     log_info "Using package manager: $manager"
     echo ""
 
