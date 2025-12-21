@@ -1,0 +1,85 @@
+# Shared shell aliases - works in both bash and zsh
+# Source this from .bashrc and .zshrc
+
+# ─────────────────────────────────────────────────────────────────────────────
+#   Navigation
+# ─────────────────────────────────────────────────────────────────────────────
+alias root='cd ~/repos/'
+alias ..='cd ..'
+alias ...='cd ../..'
+
+# ─────────────────────────────────────────────────────────────────────────────
+#   Editor & Config
+# ─────────────────────────────────────────────────────────────────────────────
+alias n='nvim'
+alias fvim='nvim "$(fzf)"'
+alias nz='nvim $(fzf)'
+alias setup-vim='nvim ~/.config/nvim/init.lua'
+alias setup-tmux='nvim ~/.tmux.conf'
+alias setup-ghostty='nvim ~/.config/ghostty/config'
+alias setup-claude='nvim ~/.claude/CLAUDE.md'
+alias re-tmux='tmux source-file ~/.tmux.conf'
+
+# ─────────────────────────────────────────────────────────────────────────────
+#   Git
+# ─────────────────────────────────────────────────────────────────────────────
+alias gs='git status'
+alias gsh='git show HEAD'
+alias cm='git cm'
+alias psh='git push'
+alias lg='git log --pretty'
+alias flg="git log --oneline | fzf --ansi --preview 'git show --color=always {1}' | awk '{print \$1}' | xargs git show"
+
+# ─────────────────────────────────────────────────────────────────────────────
+#   AI Tools
+# ─────────────────────────────────────────────────────────────────────────────
+alias cc='claude -p'
+alias gg='gemini -p'
+alias g='gemini --model gemini-2.5-flash --prompt'
+alias update-claude='sudo npm i -g @anthropic-ai/claude-code'
+
+# ─────────────────────────────────────────────────────────────────────────────
+#   Terraform / DevOps
+# ─────────────────────────────────────────────────────────────────────────────
+alias tf='terraform'
+
+# ─────────────────────────────────────────────────────────────────────────────
+#   Azure CLI
+# ─────────────────────────────────────────────────────────────────────────────
+alias az-show='az account show'
+alias azl='az account list | grep name'
+alias az-list='az account list | grep name'
+alias azsetmbdev='az account set --name "INZ_TDS_DEV"'
+alias azsetmbsit='az account set --name "INZ_TDS_SIT"'
+
+# ─────────────────────────────────────────────────────────────────────────────
+#   File listing (uses lsd if available, falls back to ls)
+# ─────────────────────────────────────────────────────────────────────────────
+if command -v lsd &> /dev/null; then
+    alias ls='lsd'
+    alias la='lsd -la'
+    alias ll='lsd -l'
+else
+    alias ls='ls -G'
+    alias la='ls -la'
+    alias ll='ls -l'
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+#   Utilities
+# ─────────────────────────────────────────────────────────────────────────────
+alias cls='clear'
+alias myip='curl -s ifconfig.me'
+alias todo='nvim ~/todo/todo.list'
+alias start='tmux new-session -A -n dan'
+
+# ─────────────────────────────────────────────────────────────────────────────
+#   FZF + Ripgrep integration
+# ─────────────────────────────────────────────────────────────────────────────
+alias rgv='rg --line-number --color=always "$1" | fzf --ansi --delimiter : --preview "bat --color=always {1} --highlight-line {2}" | awk -F: '"'"'{ print "+"$2" "$1 }'"'"' | xargs nvim'
+
+# ─────────────────────────────────────────────────────────────────────────────
+#   Python
+# ─────────────────────────────────────────────────────────────────────────────
+alias python=python3
+alias pip=pip3
