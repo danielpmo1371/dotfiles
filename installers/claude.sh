@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Claude Code settings installer
-# Installs: CLAUDE.md, settings.json, skills/, workflow docs
+# Installs: Claude Code CLI, ACP, CLAUDE.md, settings.json, skills/, workflow docs
 
 set -e
 
@@ -22,6 +22,32 @@ CLAUDE_ITEMS=(
     "AGENT_HANDOVER_PROMPT.md"
     "ITERATIVE_WORKFLOW.md"
 )
+
+# NPM packages to install globally
+NPM_PACKAGES=(
+    "@anthropics/claude-code"
+    "@zed-industries/claude-code-acp"
+)
+
+install_npm_packages() {
+    log_header "Claude Code NPM Packages"
+
+    # Check if npm is available
+    if ! command -v npm &> /dev/null; then
+        log_error "npm is not installed. Please install Node.js first."
+        return 1
+    fi
+
+    for package in "${NPM_PACKAGES[@]}"; do
+        if npm list -g "$package" &> /dev/null; then
+            log_info "$package is already installed"
+        else
+            log_info "Installing $package..."
+            npm install -g "$package"
+            log_info "$package installed successfully"
+        fi
+    done
+}
 
 install_claude_config() {
     log_header "Claude Code Settings"
@@ -67,5 +93,6 @@ install_claude_config() {
 
 # Run if executed directly
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    install_npm_packages
     install_claude_config
 fi
