@@ -11,10 +11,38 @@ DOTFILES_DIR="$HOME/repos/dotfiles"
 echo "=== Dotfiles Bootstrap ==="
 echo ""
 
-# Check for git
+# Install git if not present
+install_git() {
+    echo "Git not found. Attempting to install..."
+
+    if command -v apt &> /dev/null; then
+        sudo apt update && sudo apt install -y git
+    elif command -v dnf &> /dev/null; then
+        sudo dnf install -y git
+    elif command -v pacman &> /dev/null; then
+        sudo pacman -S --noconfirm git
+    elif command -v brew &> /dev/null; then
+        brew install git
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        echo "Installing Xcode Command Line Tools (includes git)..."
+        xcode-select --install
+        echo "Please re-run this script after installation completes."
+        exit 0
+    else
+        echo "Error: Could not install git automatically."
+        echo "Please install git manually and re-run this script."
+        exit 1
+    fi
+}
+
+# Check for git, install if needed
 if ! command -v git &> /dev/null; then
-    echo "Error: git is required but not installed."
-    echo "Install git first, then run this script again."
+    install_git
+fi
+
+# Verify git is now available
+if ! command -v git &> /dev/null; then
+    echo "Error: git installation failed."
     exit 1
 fi
 
