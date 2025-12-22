@@ -13,6 +13,7 @@ HELP_TEXT="
   SESSIONS & WINDOWS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+  Cmd+e  N        Create new session and switch to it
   Cmd+e  r        Reload tmux config
   Cmd+e  e        Toggle synchronize panes
 
