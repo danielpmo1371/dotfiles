@@ -23,6 +23,7 @@ alias setup-tmux = nvim ~/.tmux.conf
 alias setup-ghostty = nvim ~/.config/ghostty/config
 alias setup-claude = nvim ~/.claude/CLAUDE.md
 alias re-tmux = tmux source-file ~/.tmux.conf
+alias dot = z dot
 
 # fzf + nvim (nushell style)
 def fvim [] {
