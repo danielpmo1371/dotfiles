@@ -38,6 +38,9 @@ fi
 # pipx
 [[ -d "$HOME/.local/bin" ]] && export PATH="$PATH:$HOME/.local/bin"
 
+# npm (user-configured global packages)
+[[ -d "$HOME/.npm-global/bin" ]] && export PATH="$HOME/.npm-global/bin:$PATH"
+
 # ─────────────────────────────────────────────────────────────────────────────
 #   Dotfiles utilities
 # ─────────────────────────────────────────────────────────────────────────────

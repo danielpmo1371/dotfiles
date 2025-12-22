@@ -34,12 +34,27 @@ install_npm_packages() {
         return 1
     fi
 
+    # Configure npm to use user-writable directory for global packages
+    local npm_global_dir="$HOME/.npm-global"
+    mkdir -p "$npm_global_dir"
+    npm config set prefix "$npm_global_dir"
+
+    # Ensure ~/.npm-global/bin is in PATH
+    if [[ ":$PATH:" != *":$npm_global_dir/bin:"* ]]; then
+        log_info "Note: Add '$npm_global_dir/bin' to your PATH"
+        log_info "  Add this line to ~/.bashrc or ~/.zshrc:"
+        log_info "  export PATH=\"$npm_global_dir/bin:\$PATH\""
+    fi
+
     for package in "${NPM_PACKAGES[@]}"; do
         if npm list -g "$package" &> /dev/null; then
             log_success "$package is already installed"
         else
             log_info "Installing $package..."
-            npm install -g "$package"
+            npm install -g "$package" || {
+                log_error "Failed to install $package"
+                return 1
+            }
             log_success "$package installed"
         fi
     done
