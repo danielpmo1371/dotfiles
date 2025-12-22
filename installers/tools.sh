@@ -31,6 +31,8 @@ install_tools() {
     install_package "tmux" "tmux" "tmux"
     install_package "nvim" "neovim" "neovim"
     install_package "git" "git" "git"
+    install_package "zsh" "zsh" "zsh"
+    install_package "curl" "curl" "curl"
 
     # Modern CLI replacements
     log_info "Installing modern CLI tools..."
@@ -52,9 +54,9 @@ install_tools() {
     log_info "Tools installation complete"
     echo ""
     echo "Installed tools:"
-    echo "  tmux, nvim, git          - essentials"
-    echo "  rg, fd, bat, lsd, zoxide - modern replacements"
-    echo "  fzf, jq, chafa, htop     - utilities"
+    echo "  tmux, nvim, git, zsh, curl - essentials"
+    echo "  rg, fd, bat, lsd, zoxide    - modern replacements"
+    echo "  fzf, jq, chafa, htop        - utilities"
     echo ""
     echo "To reset package manager preference: rm ~/.dotfiles_pkg_manager"
 }
