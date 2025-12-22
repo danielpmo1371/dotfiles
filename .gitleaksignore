@@ -1,0 +1,6 @@
+# Gitleaks ignore file
+# Add fingerprints of false positives here (one per line)
+# Format: commit-hash:file:rule:line-number
+# Get fingerprint from gitleaks output
+
+# No false positives currently - add fingerprints as needed
