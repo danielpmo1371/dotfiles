@@ -349,14 +349,19 @@ get_preferred_manager() {
 }
 
 # Install a package using the preferred manager
-# Usage: install_package <package_name> [brew_name] [apt_name] [npm_name] ...
-# Example: install_package "ripgrep" "ripgrep" "ripgrep" "" "ripgrep"
+# Usage: install_package <command_name> [brew] [apt/dnf/yum] [pacman] [npm] [cargo] [choco/scoop] [zypper] [apk]
+# Example: install_package "ripgrep" "ripgrep" "ripgrep" "ripgrep" "" "ripgrep"
+# Note: Most Linux package managers use the same name, so apt_pkg applies to dnf/yum by default
 install_package() {
-    local package="$1"
-    local brew_pkg="${2:-$package}"
-    local apt_pkg="${3:-$package}"
-    local npm_pkg="${4:-}"
-    local cargo_pkg="${5:-}"
+    local package="$1"           # Command name to check for
+    local brew_pkg="${2:-$package}"      # Homebrew (macOS, Linux)
+    local apt_pkg="${3:-$package}"       # apt (Debian, Ubuntu) - also used for dnf/yum
+    local pacman_pkg="${4:-$apt_pkg}"    # pacman (Arch) - defaults to apt name
+    local npm_pkg="${5:-}"               # npm (optional)
+    local cargo_pkg="${6:-}"             # cargo (optional)
+    local choco_pkg="${7:-$brew_pkg}"    # chocolatey/scoop (Windows) - defaults to brew name
+    local zypper_pkg="${8:-$apt_pkg}"    # zypper (openSUSE) - defaults to apt name
+    local apk_pkg="${9:-$apt_pkg}"       # apk (Alpine) - defaults to apt name
 
     # Check if already installed
     if command -v "$package" &> /dev/null; then
@@ -373,6 +378,11 @@ install_package() {
 
     log_info "Installing $package via $manager..."
 
+    # Debug: Show what we're about to install
+    if [[ "$package" != "$apt_pkg" ]] || [[ "$package" != "$brew_pkg" ]]; then
+        log_info "  Package name: $apt_pkg (apt), $brew_pkg (brew)"
+    fi
+
     # Update package manager cache if needed (once per session)
     update_package_manager "$manager"
 
@@ -385,25 +395,25 @@ install_package() {
             run_privileged apt install -y "$apt_pkg"
             ;;
         dnf)
-            run_privileged dnf install -y "$apt_pkg"  # Usually same as apt
+            run_privileged dnf install -y "$apt_pkg"
             ;;
         yum)
             run_privileged yum install -y "$apt_pkg"
             ;;
         pacman)
-            run_privileged pacman -S --noconfirm "$apt_pkg"
+            run_privileged pacman -S --noconfirm "$pacman_pkg"
             ;;
         zypper)
-            run_privileged zypper install -y "$apt_pkg"
+            run_privileged zypper install -y "$zypper_pkg"
             ;;
         apk)
-            run_privileged apk add "$apt_pkg"
+            run_privileged apk add "$apk_pkg"
             ;;
         choco)
-            choco install -y "$brew_pkg"  # Usually same as brew
+            choco install -y "$choco_pkg"
             ;;
         scoop)
-            scoop install "$brew_pkg"
+            scoop install "$choco_pkg"
             ;;
         npm)
             if [[ -n "$npm_pkg" ]]; then
@@ -440,17 +450,18 @@ install_packages() {
 install_common_tools() {
     log_header "Installing Common Tools"
 
-    # Format: install_package "command" "brew" "apt" "npm" "cargo"
-    install_package "tmux" "tmux" "tmux"
-    install_package "chafa" "chafa" "chafa"
-    install_package "fzf" "fzf" "fzf"
-    install_package "rg" "ripgrep" "ripgrep" "" "ripgrep"
-    install_package "fd" "fd" "fd-find" "" "fd-find"
-    install_package "bat" "bat" "bat" "" "bat"
-    install_package "eza" "eza" "eza" "" "eza"  # modern ls
-    install_package "zoxide" "zoxide" "zoxide" "" "zoxide"
-    install_package "jq" "jq" "jq"
-    install_package "lsd" "lsd" "lsd" "" "lsd"
+    # Format: install_package "command" "brew" "apt" "pacman" "npm" "cargo" "choco" "zypper" "apk"
+    # Most packages have the same name across managers, so we only specify differences
+    install_package "tmux"
+    install_package "chafa"
+    install_package "fzf"
+    install_package "rg" "ripgrep" "ripgrep" "ripgrep" "" "ripgrep"
+    install_package "fd" "fd" "fd-find" "fd" "" "fd-find"
+    install_package "bat"
+    install_package "eza"  # modern ls
+    install_package "zoxide"
+    install_package "jq"
+    install_package "lsd"
 }
 
 # Reset package manager choice

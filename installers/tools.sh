@@ -34,6 +34,14 @@ install_tools() {
     install_package "zsh" "zsh" "zsh"
     install_package "curl" "curl" "curl"
 
+    # Node.js and npm (required for Claude Code)
+    # Note: On most systems, 'node' command may not exist after install, check 'nodejs' too
+    install_package "node" "node" "nodejs"
+    # npm is sometimes separate package on apt-based systems
+    if ! command -v npm &> /dev/null; then
+        install_package "npm" "npm" "npm"
+    fi
+
     # Modern CLI replacements
     log_info "Installing modern CLI tools..."
     install_package "rg" "ripgrep" "ripgrep" "" "ripgrep"
@@ -54,9 +62,10 @@ install_tools() {
     log_info "Tools installation complete"
     echo ""
     echo "Installed tools:"
-    echo "  tmux, nvim, git, zsh, curl - essentials"
-    echo "  rg, fd, bat, lsd, zoxide    - modern replacements"
-    echo "  fzf, jq, chafa, htop        - utilities"
+    echo "  tmux, nvim, git, zsh, curl     - essentials"
+    echo "  node, npm                      - JavaScript runtime (for Claude Code)"
+    echo "  rg, fd, bat, lsd, zoxide       - modern replacements"
+    echo "  fzf, jq, chafa, htop, tree     - utilities"
     echo ""
     echo "To reset package manager preference: rm ~/.dotfiles_pkg_manager"
 }
