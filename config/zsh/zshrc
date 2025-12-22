@@ -51,6 +51,23 @@ bindkey '^a' beginning-of-line
 bindkey '^e' end-of-line
 
 # ─────────────────────────────────────────────────────────────────────────────
+#   Command routing: * prefix routes to cc alias
+# ─────────────────────────────────────────────────────────────────────────────
+preexec() {
+    # If command starts with *, route to cc (claude -p)
+    if [[ "$1" =~ '^\*(.*)' ]]; then
+        # Extract the text after *
+        local prompt="${match[1]}"
+        # Strip leading whitespace
+        prompt="${prompt##[[:space:]]}"
+        # Execute cc with the prompt
+        eval "cc \"$prompt\""
+        # Return to prevent original command execution
+        return 1
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 #   Completion
 # ─────────────────────────────────────────────────────────────────────────────
 autoload -Uz compinit
