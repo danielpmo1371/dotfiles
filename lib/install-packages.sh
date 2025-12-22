@@ -25,6 +25,47 @@ run_privileged() {
     fi
 }
 
+# Track if package manager has been updated this session
+declare -g PKG_MANAGER_UPDATED=""
+
+# Update package manager cache (once per session)
+update_package_manager() {
+    local manager="$1"
+
+    # Skip if already updated this session
+    if [[ "$PKG_MANAGER_UPDATED" == "$manager" ]]; then
+        return 0
+    fi
+
+    case "$manager" in
+        apt)
+            log_info "Updating apt cache..."
+            run_privileged apt update
+            ;;
+        dnf|yum)
+            # dnf/yum auto-update metadata, but we can force it
+            log_info "Updating $manager cache..."
+            run_privileged "$manager" check-update || true
+            ;;
+        pacman)
+            log_info "Updating pacman cache..."
+            run_privileged pacman -Sy
+            ;;
+        brew)
+            # Brew update can be slow, skip unless needed
+            # Users can manually run 'brew update' if they want
+            :
+            ;;
+        *)
+            # For other managers, no update needed
+            :
+            ;;
+    esac
+
+    # Mark as updated for this session
+    PKG_MANAGER_UPDATED="$manager"
+}
+
 # Check if running in non-interactive mode
 is_non_interactive() {
     # Check if stdin is not a TTY
@@ -332,13 +373,16 @@ install_package() {
 
     log_info "Installing $package via $manager..."
 
+    # Update package manager cache if needed (once per session)
+    update_package_manager "$manager"
+
     case "$manager" in
         brew)
             ensure_brew_in_path
             brew install "$brew_pkg"
             ;;
         apt)
-            run_privileged apt update && run_privileged apt install -y "$apt_pkg"
+            run_privileged apt install -y "$apt_pkg"
             ;;
         dnf)
             run_privileged dnf install -y "$apt_pkg"  # Usually same as apt
