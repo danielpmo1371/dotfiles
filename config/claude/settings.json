@@ -1,17 +1,4 @@
 {
-  "hooks": {
-    "Notification": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/.config/.claude/notification.sh"
-          }
-        ]
-      }
-    ]
-  },
   "permissions": {
     "allow": [
       "Fetch(*)",
@@ -61,12 +48,24 @@
       "Bash(curl:*)"
     ],
     "deny": [],
-    "additionalDirectories": [],
     "defaultMode": "acceptEdits",
+    "additionalDirectories": [],
     "autoApprove": [
       "git"
     ]
   },
-  "model": "opus",
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/.config/.claude/notification.sh"
+          }
+        ]
+      }
+    ]
+  },
   "alwaysThinkingEnabled": false
 }
