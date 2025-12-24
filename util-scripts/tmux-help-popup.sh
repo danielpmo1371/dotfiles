@@ -10,12 +10,33 @@ HELP_TEXT="
   PREFIX: Cmd+e  (or Ctrl+e)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  SESSIONS & WINDOWS
+  SESSIONS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   Cmd+e  N        Create new session and switch to it
+  Cmd+e  s        Choose session (interactive tree)
+  Cmd+e  $        Rename current session
+  Cmd+e  (        Switch to previous session
+  Cmd+e  )        Switch to next session
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  WINDOWS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Cmd+e  c        Create new window
+  Cmd+e  ,        Rename current window
+  Cmd+e  n        Next window
+  Cmd+e  p        Previous window
+  Cmd+e  w        Choose window (interactive list)
+  Cmd+e  &        Kill current window (with confirmation)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  GENERAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
   Cmd+e  r        Reload tmux config
   Cmd+e  e        Toggle synchronize panes
+  Cmd+e  :        Enter tmux command mode
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   PANE NAVIGATION (with prefix)
@@ -50,11 +71,16 @@ HELP_TEXT="
   Cmd+e  L        Resize pane right (repeatable)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  PANE SPLITTING
+  PANE MANAGEMENT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   Cmd+e  |        Split pane horizontally
   Cmd+e  -        Split pane vertically
+  Cmd+e  x        Close pane (with confirmation)
+  Cmd+e  z        Toggle zoom pane (fullscreen)
+  Cmd+e  {        Swap pane with previous
+  Cmd+e  }        Swap pane with next
+  Cmd+e  !        Break pane into new window
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   COPY MODE
@@ -78,11 +104,10 @@ HELP_TEXT="
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   Cmd+e  ?        Show this help popup
-  Cmd+e  :        Enter tmux command mode
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  Press any key to close...
+  Press q or Esc to close...
 "
 
 # Display the help text in a popup
