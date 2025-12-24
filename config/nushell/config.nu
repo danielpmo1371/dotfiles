@@ -57,10 +57,3 @@ source ($nu.default-config-dir | path join "aliases.nu")
 # ─────────────────────────────────────────────────────────────────────────────
 source ~/.zoxide.nu
 
-# ─────────────────────────────────────────────────────────────────────────────
-#   Startup
-# ─────────────────────────────────────────────────────────────────────────────
-# Show image on startup (like zsh with chafa)
-# if (which chafa | is-not-empty) and ($"($env.HOME)/linux.png" | path exists) {
-#     chafa -f symbols $"($env.HOME)/linux.png"
-# }
