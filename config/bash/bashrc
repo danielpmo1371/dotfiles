@@ -116,6 +116,7 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 #   Startup display
 # ─────────────────────────────────────────────────────────────────────────────
-if command -v chafa &>/dev/null && [[ -f ~/linux.png ]]; then
-  chafa -f symbols ~/linux.png
+# Show startup image (uses show-start function from aliases.sh)
+if type show-start &>/dev/null; then
+    show-start
 fi

@@ -9,6 +9,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
 #   Powerlevel10k instant prompt (must be at top)
 # ─────────────────────────────────────────────────────────────────────────────
+# Enable quiet mode to allow console output during init (for chafa, etc.)
+typeset -g POWERLEVEL9K_INSTANT_PROMPT=quiet
+
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
     source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
@@ -130,9 +133,11 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 #   Startup display
 # ─────────────────────────────────────────────────────────────────────────────
-# Show a nice image on terminal startup (requires chafa)
-if command -v chafa &> /dev/null && [[ -f $DOTFILES_DIR/images/start.png ]]; then
-    # chafa $DOTFILES_DIR/images/start.png
+# Show startup image (uses show-start function from aliases.sh)
+if (( ${+functions[show-start]} )); then
+    # Finalize instant prompt to allow console output
+    (( ${+functions[p10k-instant-prompt-finalize]} )) && p10k-instant-prompt-finalize
+    show-start
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
