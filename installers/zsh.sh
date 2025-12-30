@@ -14,6 +14,7 @@ source "$DOTFILES_ROOT/lib/install-common.sh"
 # Files to symlink: "source:target" (source in config/zsh/, target in $HOME)
 ZSH_FILES=(
     "zshrc:.zshrc"
+    "p10k.zsh:.p10k.zsh"
 )
 
 install_zsh_config() {
@@ -55,11 +56,15 @@ install_zsh_config() {
     echo ""
     log_info "Zsh config installation complete"
     echo ""
+    echo "Files installed:"
+    echo "  - .zshrc (main config)"
+    echo "  - .p10k.zsh (Powerlevel10k theme customizations)"
+    echo ""
     echo "Plugins (via Zap): powerlevel10k, zsh-autosuggestions, zsh-syntax-highlighting"
     echo ""
     echo "Next steps:"
     echo "  1. Run 'source ~/.zshrc' to reload"
-    echo "  2. Run 'p10k configure' to setup prompt"
+    echo "  2. Your custom p10k theme is already configured!"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
