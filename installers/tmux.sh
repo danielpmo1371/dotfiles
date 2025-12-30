@@ -75,8 +75,6 @@ install_tmux() {
     echo "  - tmux-gruvbox (Gruvbox dark theme)"
     echo "  - tmux-resurrect (Session saving)"
     echo "  - tmux-continuum (Auto-save/restore)"
-    echo "  - tmux-floax (Floating windows)"
-    echo "  - tmux-colortag (Window color tags)"
     echo ""
     echo "To reload config: tmux source ~/.tmux.conf"
     echo "To install/update plugins manually: prefix + I"
