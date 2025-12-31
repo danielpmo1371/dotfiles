@@ -57,19 +57,35 @@ create_popup() {
     # Create a temporary script that will run in the popup
     local temp_script="/tmp/tmux-corner-info-$$"
 
-    cat > "$temp_script" <<POPUP_SCRIPT
+    cat > "$temp_script" <<'POPUP_SCRIPT'
 #!/usr/bin/env bash
 
 # Save PID for tracking
-echo \$\$ > "$POPUP_MARKER"
+echo $$ > "POPUP_MARKER_PLACEHOLDER"
 
 # Cleanup on exit
-trap 'rm -f "$POPUP_MARKER"' EXIT
+trap 'rm -f "POPUP_MARKER_PLACEHOLDER"' EXIT
 
-# Use watch with the command script for auto-refresh
-# -t: no title, -n: interval in seconds
-exec watch -t -n $REFRESH_INTERVAL "$COMMAND_SCRIPT"
+# Custom refresh loop to avoid flickering from watch command
+# Clear screen once at start
+clear
+
+while true; do
+    # Move cursor to home position (top-left) without clearing
+    # printf '\033[H'
+
+    # Run the command script
+    "COMMAND_SCRIPT_PLACEHOLDER"
+
+    # Sleep for the refresh interval
+    sleep REFRESH_INTERVAL_PLACEHOLDER
+done
 POPUP_SCRIPT
+
+    # Replace placeholders with actual values
+    sed -i '' "s|POPUP_MARKER_PLACEHOLDER|$POPUP_MARKER|g" "$temp_script"
+    sed -i '' "s|COMMAND_SCRIPT_PLACEHOLDER|$COMMAND_SCRIPT|g" "$temp_script"
+    sed -i '' "s|REFRESH_INTERVAL_PLACEHOLDER|$REFRESH_INTERVAL|g" "$temp_script"
 
     chmod +x "$temp_script"
 
