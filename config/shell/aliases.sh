@@ -92,26 +92,26 @@ alias pip=pip3
 #   Image Display (chafa)
 # ─────────────────────────────────────────────────────────────────────────────
 # Manual image display - auto-display disabled in tmux due to compatibility issues
-if command -v chafa &>/dev/null; then
-    # Show image with automatic format detection and size limit (max 1/4 terminal width)
-    show-img() {
-        local max_width=$(($(tput cols) / 4))
-
-        if [[ -n "$TMUX" ]]; then
-            # In tmux: use symbols for stability (or try passthrough at your own risk)
-            chafa -f symbols --size="${max_width}x" "$@"
-        else
-            # Outside tmux: use high-quality graphics
-            chafa --size="${max_width}x" "$@"
-        fi
-    }
-
-    # Show startup image
-    show-start() {
-        if [[ -f "$DOTFILES_DIR/images/start.png" ]]; then
-            show-img "$DOTFILES_DIR/images/start.png"
-        else
-            echo "Startup image not found: $DOTFILES_DIR/images/start.png"
-        fi
-    }
-fi
+# if command -v chafa &>/dev/null; then
+#     # Show image with automatic format detection and size limit (max 1/4 terminal width)
+#     show-img() {
+#         local max_width=$(($(tput cols) / 4))
+#
+#         if [[ -n "$TMUX" ]]; then
+#             # In tmux: use symbols for stability (or try passthrough at your own risk)
+#             chafa -f symbols --size="${max_width}x" "$@"
+#         else
+#             # Outside tmux: use high-quality graphics
+#             chafa --size="${max_width}x" "$@"
+#         fi
+#     }
+#
+#     # Show startup image
+#     show-start() {
+#         if [[ -f "$DOTFILES_DIR/images/start.png" ]]; then
+#             show-img "$DOTFILES_DIR/images/start.png"
+#         else
+#             echo "Startup image not found: $DOTFILES_DIR/images/start.png"
+#         fi
+#     }
+# fi
