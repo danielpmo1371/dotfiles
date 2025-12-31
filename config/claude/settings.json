@@ -67,5 +67,6 @@
       }
     ]
   },
-  "alwaysThinkingEnabled": false
+  "alwaysThinkingEnabled": true,
+  "model": "opus"
 }
