@@ -80,3 +80,12 @@ keybind = super+backslash=text:\x1c
 # Suspend process (SIGTSTP)
 keybind = ctrl+z=text:\x1A
 keybind = super+z=text:\x1A
+
+# ─────────────────────────────────────────────────────────────────────────────
+#   Tmux Window/Session Navigation with Cmd+Shift+h/j/k/l
+# ─────────────────────────────────────────────────────────────────────────────
+# Map Cmd+Shift+hjkl to escape sequences for Shift+Arrow keys
+keybind = super+shift+h=text:\x1b[1;2D   # Shift+Left
+keybind = super+shift+l=text:\x1b[1;2C   # Shift+Right
+keybind = super+shift+j=text:\x1b[1;2B   # Shift+Down
+keybind = super+shift+k=text:\x1b[1;2A   # Shift+Up
