@@ -9,5 +9,5 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 exec "$SCRIPT_DIR/tmux-corner-pane.sh" \
     "$SCRIPT_DIR/show-claude-processes.sh" \
     60 \
-    25% \
-    30%
+    45% \
+    50%
