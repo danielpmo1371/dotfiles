@@ -66,23 +66,16 @@ echo \$\$ > "$POPUP_MARKER"
 # Cleanup on exit
 trap 'rm -f "$POPUP_MARKER"' EXIT
 
-# Display loop
-while true; do
-    clear
-
-    # Run the command script
-    "$COMMAND_SCRIPT"
-
-    echo ""
-    echo "Cmd+e i to close | ⟳ ${REFRESH_INTERVAL}s"
-
-    sleep $REFRESH_INTERVAL
-done
+# Use watch with the command script for auto-refresh
+# -t: no title, -n: interval in seconds
+exec watch -t -n $REFRESH_INTERVAL "$COMMAND_SCRIPT"
 POPUP_SCRIPT
 
     chmod +x "$temp_script"
 
     # Launch floating popup in top-right corner (non-blocking)
+    # -E flag closes popup when command exits
+    # For scrolling: Use Cmd+e [ to enter copy mode, then j/k to scroll
     tmux display-popup \
         -x "$POPUP_X" \
         -y "$POPUP_Y" \
