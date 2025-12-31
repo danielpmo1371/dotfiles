@@ -23,6 +23,10 @@ keybind = ctrl+d=scroll_page_down
 # Configure Option key as Meta for tmux prefix
 macos-option-as-alt = true
 
+# Decrease_font_size
+keybind = ctrl+-=decrease_font_size:1
+keybind = super+\=decrease_font_size:1
+
 # ─────────────────────────────────────────────────────────────────────────────
 #   Map Command+⟨key⟩ → Ctrl+⟨key⟩ for letters, digits, punctuation
 # ─────────────────────────────────────────────────────────────────────────────
@@ -75,7 +79,7 @@ keybind = super+-=text:\x0D
 
 
 # Backslash - for nvim Claude Code toggle
-keybind = super+backslash=text:\x1c
+# keybind = super+backslash=text:\x1c
 
 # Suspend process (SIGTSTP)
 keybind = ctrl+z=text:\x1A
@@ -85,6 +89,8 @@ keybind = super+z=text:\x1A
 #   Tmux Window/Session Navigation with Cmd+Shift+h/j/k/l
 # ─────────────────────────────────────────────────────────────────────────────
 # Map Cmd+Shift+hjkl to escape sequences for Shift+Arrow keys
+keybind = super+[=text:\x1b[1;2D   # Shift+Left
+keybind = super+]=text:\x1b[1;2C   # Shift+Right
 keybind = super+shift+h=text:\x1b[1;2D   # Shift+Left
 keybind = super+shift+l=text:\x1b[1;2C   # Shift+Right
 keybind = super+shift+j=text:\x1b[1;2B   # Shift+Down
