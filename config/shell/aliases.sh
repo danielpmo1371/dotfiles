@@ -27,11 +27,23 @@ alias dot='z dot'
 # ─────────────────────────────────────────────────────────────────────────────
 alias lz='lazygit'
 alias gs='git status'
-alias gsh='git show HEAD'
 alias cm='git cm'
 alias psh='git push'
 alias lg='git log --pretty'
 alias flg="git log --oneline | fzf --ansi --preview 'git show --color=always {1}' | awk '{print \$1}' | xargs git show"
+
+# Git show with syntax highlighting (uses delta > bat > git native)
+gshow() {
+    local ref="${1:-HEAD}"
+    if command -v delta &>/dev/null; then
+        git show --color=always "$ref" | delta
+    elif command -v bat &>/dev/null; then
+        git show --color=always "$ref" | bat --style=plain --paging=never
+    else
+        git show --color=always "$ref"
+    fi
+}
+alias gsh='gshow'
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   AI Tools
@@ -76,6 +88,9 @@ alias myip='curl -s ifconfig.me'
 alias todo='nvim ~/todo/todo.list'
 alias start='tmux new-session -A -n dan'
 alias awake='caffeinate -d'  # Keep Mac awake (display on, system won't sleep)
+alias node="/home/linuxbrew/.linuxbrew/Cellar/node/25.2.1/bin/node"
+alias nvim="/home/linuxbrew/.linuxbrew/Cellar/neovim/0.11.5_1/bin/nvim"
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   FZF + Ripgrep integration
