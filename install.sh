@@ -12,6 +12,7 @@
 #   6. zsh.sh        - Zsh configuration + Zap - requires: git, zsh, curl
 #   7. config-dirs.sh - Symlink config directories (nvim) - no dependencies
 #   8. claude.sh     - Claude Code CLI + settings - requires: node, npm
+#   9. mcp.sh        - MCP (Model Context Protocol) configuration - requires: node, npm
 
 set -e
 
@@ -36,6 +37,7 @@ show_help() {
     echo "  --terminals    Install terminal emulators config (Ghostty, etc.)"
     echo "  --config-dirs  Symlink config directories (nvim)"
     echo "  --claude       Install Claude Code settings (requires: node, npm)"
+    echo "  --mcp          Install MCP configuration (requires: node, npm)"
     echo "  --help         Show this help message"
     echo ""
     echo "Examples:"
@@ -102,6 +104,9 @@ install_all() {
     run_installer "claude.sh" "install_npm_packages"
     run_installer "claude.sh" "install_claude_config"
 
+    # Install MCP configuration
+    run_installer "mcp.sh" "main"
+
     log_header "Installation Complete"
     echo "All dotfiles have been installed successfully."
     echo ""
@@ -146,6 +151,9 @@ main() {
         --claude)
             run_installer "claude.sh" "install_npm_packages"
             run_installer "claude.sh" "install_claude_config"
+            ;;
+        --mcp)
+            run_installer "mcp.sh" "main"
             ;;
         --all|*)
             install_all
