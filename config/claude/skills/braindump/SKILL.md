@@ -80,7 +80,7 @@ Then switch modes:
 ## File Saving
 
 When saving notes:
-- Suggest `~/repos/braindump_[date].md` or user-specified location
+- Suggest `~/context/braindump_[date].md` or user-specified location
 - Use markdown with checkboxes `- [ ]` for actionable items
 - Offer symlinks to common locations if requested
 
