@@ -1,0 +1,20 @@
+# MCP Server Environment Variables Template
+# Copy this to mcp-env.local and fill in your API keys
+# The mcp-env.local file will be gitignored
+
+# Task Master AI API Keys (at least one required)
+ANTHROPIC_API_KEY=your_anthropic_key_here
+PERPLEXITY_API_KEY=your_perplexity_key_here
+OPENAI_API_KEY=your_openai_key_here
+GOOGLE_API_KEY=your_google_key_here
+XAI_API_KEY=your_xai_key_here
+OPENROUTER_API_KEY=your_openrouter_key_here
+MISTRAL_API_KEY=your_mistral_key_here
+AZURE_OPENAI_API_KEY=your_azure_openai_key_here
+OLLAMA_API_KEY=your_ollama_key_here
+
+# Task Master Tools Tier (core, standard, all)
+TASK_MASTER_TOOLS=core
+
+# Memory Server Configuration
+MCP_MEMORY_SERVER_URL=http://192.168.1.107:8000

@@ -98,6 +98,7 @@ zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'  # Case-insensitive
 [[ -f "$DOTFILES_DIR/config/shell/aliases.sh" ]] && source "$DOTFILES_DIR/config/shell/aliases.sh"
 [[ -f "$DOTFILES_DIR/config/shell/git.sh" ]] && source "$DOTFILES_DIR/config/shell/git.sh"
 [[ -f "$DOTFILES_DIR/config/shell/tmux.sh" ]] && source "$DOTFILES_DIR/config/shell/tmux.sh"
+[[ -f "$DOTFILES_DIR/config/shell/mcp.sh" ]] && source "$DOTFILES_DIR/config/shell/mcp.sh"
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Zsh-specific aliases
@@ -150,3 +151,11 @@ fi
 #   Profiling output
 # ─────────────────────────────────────────────────────────────────────────────
 # zprof
+
+export PNPM_HOME="/home/dan/.local/share/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME:"*) ;;
+  *) export PATH="$PNPM_HOME:$PATH" ;;
+esac
+
+alias cdh="cd ~"
