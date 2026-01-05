@@ -43,6 +43,12 @@ This directory contains MCP (Model Context Protocol) configuration for Claude Co
 - `mcp-env.local` - Your actual API keys (gitignored)
 - `.gitignore` - Excludes local files from git
 
+## Compatibility
+
+The installer automatically configures MCP for both:
+- **Claude Code CLI**: Uses `~/.mcp.json`
+- **Claudecode UI**: Uses `~/.claude.json` (automatically updated)
+
 ## Required API Keys
 
 At least one of these is required for Task Master:
