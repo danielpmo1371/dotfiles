@@ -48,7 +48,7 @@ alias gsh='gshow'
 # ─────────────────────────────────────────────────────────────────────────────
 #   AI Tools
 # ─────────────────────────────────────────────────────────────────────────────
-alias cc='claude -p'
+alias cc='claude -p --model haiku'
 alias gg='gemini -p'
 alias g='gemini --model gemini-2.5-flash --prompt'
 alias update-claude='sudo npm i -g @anthropic-ai/claude-code'
