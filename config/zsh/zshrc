@@ -70,7 +70,8 @@ preexec() {
         # Strip leading whitespace
         prompt="${prompt##[[:space:]]}"
         # Execute cc with the prompt
-        eval "cc \"$prompt\""
+        # eval "cc \"$prompt\""
+        eval "g \"$prompt\""
         # Return to prevent original command execution
         return 1
     fi
