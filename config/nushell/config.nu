@@ -50,6 +50,7 @@ $env.config = ($env.config | merge {
 #   Source modular configs
 # ─────────────────────────────────────────────────────────────────────────────
 source ($nu.default-config-dir | path join "aliases.nu")
+source ($nu.default-config-dir | path join "scripts" "docker.nu")
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Zoxide (z command - smart cd)
