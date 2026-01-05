@@ -64,6 +64,31 @@ main() {
         log_success "npx is available"
     fi
 
+    # Update .claude.json for claudecode UI compatibility
+    local claude_json="$HOME/.claude.json"
+    if [ -f "$claude_json" ]; then
+        log_info "Updating .claude.json with MCP servers for claudecode UI..."
+        # Merge MCP servers into existing .claude.json
+        if command -v jq &> /dev/null; then
+            jq -s '.[0] * {mcpServers: .[1].mcpServers}' "$claude_json" "$target_file" > /tmp/claude-merged.json && \
+                mv /tmp/claude-merged.json "$claude_json"
+            log_success "Updated .claude.json with MCP servers"
+        else
+            log_warn "jq not installed - cannot update .claude.json automatically"
+            log_warn "Install jq or manually copy mcpServers from ~/.mcp.json to ~/.claude.json"
+        fi
+    else
+        log_info "Creating .claude.json with MCP servers..."
+        # Create new .claude.json with just MCP servers
+        if command -v jq &> /dev/null; then
+            jq '{mcpServers: .mcpServers}' "$target_file" > "$claude_json"
+            log_success "Created .claude.json with MCP servers"
+        else
+            log_warn "jq not installed - cannot create .claude.json automatically"
+            log_warn "Install jq or manually create ~/.claude.json with mcpServers from ~/.mcp.json"
+        fi
+    fi
+
     # Provide instructions for API keys
     log_header "MCP Configuration Complete"
     echo ""
