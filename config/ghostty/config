@@ -89,8 +89,10 @@ keybind = super+z=text:\x1A
 #   Tmux Window/Session Navigation with Cmd+Shift+h/j/k/l
 # ─────────────────────────────────────────────────────────────────────────────
 # Map Cmd+Shift+hjkl to escape sequences for Shift+Arrow keys
-keybind = super+[=text:\x1b[1;2D   # Shift+Left
-keybind = super+]=text:\x1b[1;2C   # Shift+Right
+keybind = super+[=text:\x1b[1;2D   # Shift+Left (prev window)
+keybind = super+]=text:\x1b[1;2C   # Shift+Right (next window)
+keybind = super+shift+[=text:\x1b[1;6D   # Ctrl+Shift+Left (move window left)
+keybind = super+shift+]=text:\x1b[1;6C   # Ctrl+Shift+Right (move window right)
 keybind = super+shift+h=text:\x1b[1;2D   # Shift+Left
 keybind = super+shift+l=text:\x1b[1;2C   # Shift+Right
 keybind = super+shift+j=text:\x1b[1;2B   # Shift+Down
