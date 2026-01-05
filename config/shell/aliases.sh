@@ -52,6 +52,7 @@ alias cc='claude -p'
 alias gg='gemini -p'
 alias g='gemini --model gemini-2.5-flash --prompt'
 alias update-claude='sudo npm i -g @anthropic-ai/claude-code'
+alias cdang='claude --dangerously-skip-permissions'
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Terraform / DevOps
