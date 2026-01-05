@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "memory": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-proxy", "http://192.168.1.107:8000"],
+      "command": "ssh",
+      "args": ["admin@192.168.1.107", "source /home/admin/mcp-env/bin/activate && exec python -m mcp_memory_service.server"],
       "env": {}
     },
     "task-master-ai": {
