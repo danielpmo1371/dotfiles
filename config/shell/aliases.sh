@@ -94,8 +94,8 @@ alias myip='curl -s ifconfig.me'
 alias todo='nvim ~/todo/todo.list'
 alias start='tmux new-session -A -n dan'
 alias awake='caffeinate -d'  # Keep Mac awake (display on, system won't sleep)
-alias node="/home/linuxbrew/.linuxbrew/Cellar/node/25.2.1/bin/node"
-alias nvim="/home/linuxbrew/.linuxbrew/Cellar/neovim/0.11.5_1/bin/nvim"
+#alias node="/home/linuxbrew/.linuxbrew/Cellar/node/25.2.1/bin/node"
+#alias nvim="/home/linuxbrew/.linuxbrew/Cellar/neovim/0.11.5_1/bin/nvim"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
