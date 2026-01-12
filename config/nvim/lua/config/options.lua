@@ -7,3 +7,4 @@ vim.opt.clipboard = "unnamedplus"
 vim.g.autoformat = false
 vim.opt.autochdir = true
 vim.opt.winfixbuf = false
+vim.opt.showtabline = 2
