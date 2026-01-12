@@ -6,7 +6,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Auto-ls after cd
 cd() {
-    builtin cd "$@" && lcd
+    builtin cd "$@" && lsd
 }
 
 alias root='cd ~/repos/'
