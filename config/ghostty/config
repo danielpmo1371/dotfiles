@@ -27,6 +27,9 @@ macos-option-as-alt = true
 keybind = ctrl+-=decrease_font_size:1
 keybind = super+\=decrease_font_size:1
 
+# SSH TERM variable Option
+term = xterm-256color
+
 # ─────────────────────────────────────────────────────────────────────────────
 #   Map Command+⟨key⟩ → Ctrl+⟨key⟩ for letters, digits, punctuation
 # ─────────────────────────────────────────────────────────────────────────────
