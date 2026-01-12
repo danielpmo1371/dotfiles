@@ -160,3 +160,7 @@ case ":$PATH:" in
 esac
 
 alias cdh="cd ~"
+
+# Task Master aliases added on 1/12/2026
+alias tm='task-master'
+alias taskmaster='task-master'
