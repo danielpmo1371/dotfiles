@@ -2,15 +2,6 @@
 # Source this from .bashrc and .zshrc
 
 # ─────────────────────────────────────────────────────────────────────────────
-#   Homebrew (macOS)
-# ─────────────────────────────────────────────────────────────────────────────
-if [[ -d "/opt/homebrew/bin" ]]; then
-    export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
-elif [[ -d "/home/linuxbrew/.linuxbrew/bin" ]]; then
-    eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-fi
-
-# ─────────────────────────────────────────────────────────────────────────────
 #   Standard paths
 # ─────────────────────────────────────────────────────────────────────────────
 export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
@@ -55,3 +46,13 @@ fi
 
 # Console Ninja
 [[ -d "$HOME/.console-ninja/.bin" ]] && export PATH="$HOME/.console-ninja/.bin:$PATH"
+
+# ─────────────────────────────────────────────────────────────────────────────
+#   Homebrew (macOS)
+# ─────────────────────────────────────────────────────────────────────────────
+if [[ -d "/opt/homebrew/bin" ]]; then
+    export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
+elif [[ -d "/home/linuxbrew/.linuxbrew/bin" ]]; then
+    eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+fi
+
