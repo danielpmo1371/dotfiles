@@ -1,7 +1,7 @@
 # Ghostty Configuration
 
 # Window transparency - 0.95 means 95% opaque (5% transparent)
-background-opacity = 0.95
+background-opacity = 0.99
 
 # Scrolling keybinds
 # Page scrolling (standard terminal keybinds)
