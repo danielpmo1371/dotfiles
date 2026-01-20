@@ -8,3 +8,4 @@ vim.g.autoformat = false
 -- vim.opt.autochdir = true
 vim.opt.winfixbuf = false
 vim.opt.showtabline = 2
+vim.opt.wrap = true
