@@ -1,9 +1,7 @@
 {
   "mcpServers": {
     "memory": {
-      "command": "ssh",
-      "args": ["admin@192.168.1.107", "source /home/admin/mcp-env/bin/activate && exec python -m mcp_memory_service.server"],
-      "env": {}
+      "url": "http://memory-mcp:8000/mcp"
     },
     "task-master-ai": {
       "command": "npx",
