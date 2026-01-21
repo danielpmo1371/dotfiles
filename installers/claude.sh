@@ -18,6 +18,8 @@ CLAUDE_FILES=(
     "settings.json"
     "commands"
     "skills"
+    "scripts"
+    "agents"
 )
 
 # NPM packages to install globally
