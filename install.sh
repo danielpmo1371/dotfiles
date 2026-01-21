@@ -38,6 +38,8 @@ show_help() {
     echo "  --config-dirs  Symlink config directories (nvim)"
     echo "  --claude       Install Claude Code settings (requires: node, npm)"
     echo "  --mcp          Install MCP configuration (requires: node, npm)"
+    echo "  --memory-hooks Install MCP memory service hooks for Claude Code"
+    echo "  --logging-hooks Install session logging hooks for Claude Code"
     echo "  --help         Show this help message"
     echo ""
     echo "Examples:"
@@ -154,6 +156,12 @@ main() {
             ;;
         --mcp)
             run_installer "mcp.sh" "main"
+            ;;
+        --memory-hooks)
+            run_installer "memory-hooks.sh" "main"
+            ;;
+        --logging-hooks)
+            run_installer "logging-hooks.sh" "main"
             ;;
         --all|*)
             install_all
