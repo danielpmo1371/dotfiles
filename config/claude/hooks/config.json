@@ -1,0 +1,49 @@
+{
+  "memoryService": {
+    "protocol": "http",
+    "preferredProtocol": "http",
+    "fallbackEnabled": false,
+    "http": {
+      "endpoint": "http://memory-mcp:8000",
+      "healthCheckTimeout": 3000,
+      "useDetailedHealthCheck": false
+    },
+    "mcp": {
+      "serverCommand": ["uv", "run", "memory", "server"],
+      "serverWorkingDir": null,
+      "connectionTimeout": 5000,
+      "toolCallTimeout": 10000
+    },
+    "defaultTags": ["claude-code", "auto-generated"],
+    "maxMemoriesPerSession": 8,
+    "injectAfterCompacting": false
+  },
+  "autoCapture": {
+    "enabled": true,
+    "patterns": ["Decision", "Error", "Learning", "Implementation"],
+    "userOverrides": {
+      "skip": "#skip",
+      "remember": "#remember"
+    }
+  },
+  "permissionRequest": {
+    "enabled": true,
+    "autoApprove": true,
+    "safePatterns": [
+      "mcp__memory__retrieve_memory",
+      "mcp__memory__search_by_tag",
+      "mcp__memory__list_memories",
+      "mcp__memory__check_database_health",
+      "mcp__memory__get_cache_stats"
+    ],
+    "destructivePatterns": [
+      "mcp__memory__delete_memory"
+    ],
+    "logDecisions": false
+  },
+  "output": {
+    "verbose": false,
+    "showMemoryDetails": false,
+    "cleanMode": true
+  }
+}
