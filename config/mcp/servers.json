@@ -1,0 +1,26 @@
+{
+  "memory": {
+    "type": "http",
+    "url": "http://memory-mcp:8000/mcp"
+  },
+  "azure-devops": {
+    "type": "stdio",
+    "command": "npx",
+    "args": ["-y", "@azure-devops/mcp", "mbie-immigrationnz-prod"]
+  },
+  "sequential-thinking": {
+    "type": "stdio",
+    "command": "npx",
+    "args": ["-y", "u/modelcontextprotocol/server-sequential-thinking"]
+  },
+  "puppeteer": {
+    "type": "stdio",
+    "command": "npx",
+    "args": ["-y", "u/modelcontextprotocol/server-puppeteer"]
+  },
+  "fetch": {
+    "type": "stdio",
+    "command": "npx",
+    "args": ["-y", "u/kazuph/mcp-fetch"]
+  }
+}

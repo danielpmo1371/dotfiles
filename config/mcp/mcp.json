@@ -9,6 +9,10 @@
       "env": {
         "TASK_MASTER_TOOLS": "core"
       }
+    },
+    "azure-devops": {
+      "command": "npx",
+      "args": ["-y", "@azure-devops/mcp", "mbie-immigrationnz-prod"]
     }
   }
 }
