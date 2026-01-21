@@ -3,6 +3,10 @@
 # Window transparency - 0.95 means 95% opaque (5% transparent)
 background-opacity = 0.99
 
+# Window paddin2
+window-padding-x = 20,20
+window-padding-y = 20,20   
+
 # Scrolling keybinds
 # Page scrolling (standard terminal keybinds)
 keybind = shift+page_up=scroll_page_up
