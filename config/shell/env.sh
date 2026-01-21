@@ -1,6 +1,6 @@
 # Shared environment variables - works in both bash and zsh
 # Source this from .bashrc and .zshrc
-# NOTE: Secrets go in ~/.accessTokens (not committed to git)
+# NOTE: Secrets are managed via secrets.sh (native keychain with file fallback)
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   XDG Base Directories
@@ -42,27 +42,3 @@ export TTALK_WORD_COUNT=20
 # ─────────────────────────────────────────────────────────────────────────────
 export LS_COLORS="di=01;34:ln=01;36:so=01;35:pi=40;33:ex=01;32:bd=40;33;01:cd=40;33;01:su=37;41:sg=30;43:tw=30;42:ow=34;42:st=37;44:fi=00"
 
-# ─────────────────────────────────────────────────────────────────────────────
-#   Secrets loader function
-#   Loads KEY=VALUE pairs from ~/.accessTokens
-# ─────────────────────────────────────────────────────────────────────────────
-__load_access_tokens() {
-    local f="$1"
-    [[ -f "$f" ]] || return 0
-    while IFS= read -r __line || [[ -n "$__line" ]]; do
-        case "$__line" in
-            ''|\#*) continue ;;
-            *=*)
-                # Only accept VAR=VALUE with a valid shell var name
-                if [[ "$__line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
-                    export "$__line"
-                fi
-                ;;
-        esac
-    done < "$f"
-}
-
-# Load secrets from home directory
-__load_access_tokens "$HOME/.accessTokens"
-# Also try dotfiles location (for WSL convenience)
-[[ -n "$DOTFILES_DIR" ]] && __load_access_tokens "$DOTFILES_DIR/.accessTokens"
