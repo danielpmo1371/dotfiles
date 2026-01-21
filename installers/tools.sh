@@ -33,6 +33,7 @@ install_tools() {
     install_package "git" "git" "git"
     install_package "zsh" "zsh" "zsh"
     install_package "curl" "curl" "curl"
+    install_package "tldc" "tldc" "tdlc"
 
     # Node.js and npm (required for Claude Code)
     # Note: On most systems, 'node' command may not exist after install, check 'nodejs' too
@@ -57,7 +58,10 @@ install_tools() {
     install_package "jq" "jq" "jq"
     install_package "chafa" "chafa" "chafa"
     install_package "htop" "htop" "htop"
+    install_package "btop" "btop" "btop"
     install_package "tree" "tree" "tree"
+    install_package "gdu" "gdu" "gdu"
+    install_package "terminal-notifier" "terminal-notifier" "terminal-notifier"
 
     echo ""
     log_info "Tools installation complete"
