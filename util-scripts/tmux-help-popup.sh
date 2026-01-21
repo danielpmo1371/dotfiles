@@ -76,6 +76,8 @@ HELP_TEXT="
 
   Cmd+e  |        Split pane horizontally
   Cmd+e  -        Split pane vertically
+  Cmd+e  p        Display pane numbers (press # to jump)
+  Cmd+e  m        Swap pane (shows numbers, press # to swap)
   Cmd+e  x        Close pane (with confirmation)
   Cmd+e  z        Toggle zoom pane (fullscreen)
   Cmd+e  {        Swap pane with previous
