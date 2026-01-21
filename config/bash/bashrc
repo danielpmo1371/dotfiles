@@ -96,6 +96,7 @@ fi
 [[ -f "$DOTFILES_DIR/config/shell/git.sh" ]] && source "$DOTFILES_DIR/config/shell/git.sh"
 [[ -f "$DOTFILES_DIR/config/shell/tmux.sh" ]] && source "$DOTFILES_DIR/config/shell/tmux.sh"
 [[ -f "$DOTFILES_DIR/config/shell/mcp.sh" ]] && source "$DOTFILES_DIR/config/shell/mcp.sh"
+[[ -f "$DOTFILES_DIR/config/shell/secrets.sh" ]] && source "$DOTFILES_DIR/config/shell/secrets.sh"
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Bash-specific aliases
@@ -113,6 +114,7 @@ fi
 
 # FZF
 [[ -f ~/.fzf.bash ]] && source ~/.fzf.bash
+eval "$(fzf --bash)"
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Startup display
