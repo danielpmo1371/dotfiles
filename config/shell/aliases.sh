@@ -113,7 +113,8 @@ alias awake='caffeinate -d'  # Keep Mac awake (display on, system won't sleep)
 # ─────────────────────────────────────────────────────────────────────────────
 #   FZF + Ripgrep integration
 # ─────────────────────────────────────────────────────────────────────────────
-alias rgv='rg --line-number --color=always "$1" | fzf --ansi --delimiter : --preview "bat --color=always {1} --highlight-line {2}" | awk -F: '"'"'{ print "+"$2" "$1 }'"'"' | xargs nvim'
+# FZF Search with RG instead of find
+alias nzz='rg --line-number --color=always "$1" | fzf --ansi --delimiter : --preview "bat --color=always {1} --highlight-line {2}" | awk -F: '"'"'{ print "+"$2" "$1 }'"'"' | xargs nvim'
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Python
