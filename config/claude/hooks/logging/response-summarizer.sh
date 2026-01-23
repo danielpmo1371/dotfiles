@@ -12,21 +12,23 @@
 
 set -euo pipefail
 
+# Source shared library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib-session-dir.sh"
+
 # Configuration
-BASE_LOG_DIR="${HOME}/repos/dotfiles/tmp/claude/sessions"
 USE_AI_SUMMARY="${CLAUDE_HOOK_AI_SUMMARY:-true}"  # Set to "false" to disable AI summarization
 AI_MODEL="haiku"  # Use haiku for fast, cheap summarization
 
 # Read JSON input from stdin
 INPUT=$(cat)
 
-# Parse session ID first to create session-specific directory
+# Parse required fields
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // "unknown"')
+CWD=$(echo "$INPUT" | jq -r '.cwd // "unknown"')
 
-# Create session-specific directory
-SESSION_DIR="${BASE_LOG_DIR}/${SESSION_ID}"
-mkdir -p "$SESSION_DIR"
-
+# Get session directory with human-readable name
+SESSION_DIR=$(get_session_dir "$SESSION_ID" "$CWD")
 LOG_FILE="${SESSION_DIR}/summaries.log"
 DEBUG_LOG="${SESSION_DIR}/hook-debug.log"
 
@@ -34,7 +36,6 @@ DEBUG_LOG="${SESSION_DIR}/hook-debug.log"
 echo "=== $(date '+%Y-%m-%d %H:%M:%S') ===" >> "$DEBUG_LOG"
 echo "$INPUT" | jq . >> "$DEBUG_LOG" 2>&1 || echo "$INPUT" >> "$DEBUG_LOG"
 echo "" >> "$DEBUG_LOG"
-CWD=$(echo "$INPUT" | jq -r '.cwd // "unknown"')
 TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path // ""')
 HOOK_EVENT=$(echo "$INPUT" | jq -r '.hook_event_name // "unknown"')
 

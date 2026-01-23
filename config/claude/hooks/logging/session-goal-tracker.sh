@@ -10,21 +10,20 @@
 
 set -euo pipefail
 
-# Configuration
-BASE_LOG_DIR="${HOME}/repos/dotfiles/tmp/claude/sessions"
+# Source shared library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib-session-dir.sh"
 
 # Read JSON input from stdin
 INPUT=$(cat)
 
-# Parse session ID first to create session-specific directory
+# Parse required fields
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // "unknown"')
-
-# Create session-specific directory
-SESSION_DIR="${BASE_LOG_DIR}/${SESSION_ID}"
-mkdir -p "$SESSION_DIR"
-
-GOALS_FILE="${SESSION_DIR}/goals.log"
 CWD=$(echo "$INPUT" | jq -r '.cwd // "unknown"')
+
+# Get session directory with human-readable name
+SESSION_DIR=$(get_session_dir "$SESSION_ID" "$CWD")
+GOALS_FILE="${SESSION_DIR}/goals.log"
 HOOK_EVENT=$(echo "$INPUT" | jq -r '.hook_event_name // "unknown"')
 
 # Extract project name
