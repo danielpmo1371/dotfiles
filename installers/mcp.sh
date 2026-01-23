@@ -1,9 +1,13 @@
 #!/bin/bash
 
 # MCP (Model Context Protocol) Configuration Installer
-# Syncs MCP servers from canonical source to all Claude tools:
-# - Claude Code CLI (~/.claude.json)
-# - Claude Desktop (~/Library/Application Support/Claude/claude_desktop_config.json)
+# Syncs MCP servers from canonical source to Claude tools:
+# - Claude Code CLI (~/.claude.json) - always synced
+# - Claude Desktop - opt-in with --desktop flag (experimental)
+#
+# Usage:
+#   ./installers/mcp.sh           # Sync to Claude Code CLI only
+#   ./installers/mcp.sh --desktop # Also sync to Claude Desktop
 
 set -e  # Exit on error
 
@@ -16,6 +20,21 @@ DOTFILES_ROOT="$(get_dotfiles_root)"
 SERVERS_SOURCE="$DOTFILES_ROOT/config/mcp/servers.json"
 CLAUDE_CODE_CONFIG="$HOME/.claude.json"
 CLAUDE_DESKTOP_CONFIG="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+BACKUP_DIR="$DOTFILES_ROOT/tmp/mcp-backups"
+
+# Flags
+SYNC_DESKTOP=false
+
+backup_file() {
+    local file="$1"
+    local name="$2"
+    if [ -f "$file" ]; then
+        mkdir -p "$BACKUP_DIR"
+        local backup="$BACKUP_DIR/${name}-$(date +%Y%m%d_%H%M%S).json"
+        cp "$file" "$backup"
+        log_info "Backup created: $backup"
+    fi
+}
 
 sync_to_claude_code() {
     log_info "Syncing MCP servers to Claude Code CLI..."
@@ -23,6 +42,8 @@ sync_to_claude_code() {
     if [ ! -f "$CLAUDE_CODE_CONFIG" ]; then
         log_info "Creating new ~/.claude.json..."
         echo '{"mcpServers": {}}' > "$CLAUDE_CODE_CONFIG"
+    else
+        backup_file "$CLAUDE_CODE_CONFIG" "claude-code"
     fi
 
     # Merge servers into existing config (preserves other settings)
@@ -52,17 +73,29 @@ sync_to_claude_desktop() {
     if [ ! -f "$CLAUDE_DESKTOP_CONFIG" ]; then
         log_info "Creating new claude_desktop_config.json..."
         echo '{"mcpServers": {}}' > "$CLAUDE_DESKTOP_CONFIG"
+    else
+        backup_file "$CLAUDE_DESKTOP_CONFIG" "claude-desktop"
     fi
 
-    # Merge servers into existing config (preserves preferences)
+    # Filter to only stdio servers (Claude Desktop doesn't support HTTP servers)
+    # Replace mcpServers entirely (preserves other settings like preferences)
     local merged
     merged=$(jq -s '
         .[0] as $existing |
         .[1] as $servers |
-        $existing * {mcpServers: ($existing.mcpServers // {}) * $servers}
+        ($servers | to_entries | map(select((.value.type == "http") | not)) | from_entries) as $stdio_only |
+        $existing | .mcpServers = $stdio_only
     ' "$CLAUDE_DESKTOP_CONFIG" "$SERVERS_SOURCE")
 
     echo "$merged" > "$CLAUDE_DESKTOP_CONFIG"
+
+    # Show which servers were skipped
+    local skipped
+    skipped=$(jq -r 'to_entries | map(select(.value.type == "http")) | .[].key' "$SERVERS_SOURCE")
+    if [ -n "$skipped" ]; then
+        log_warn "Skipped HTTP servers (not supported by Claude Desktop): $skipped"
+    fi
+
     log_success "Updated Claude Desktop config with MCP servers"
 }
 
@@ -96,6 +129,19 @@ show_servers() {
 }
 
 main() {
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --desktop)
+                SYNC_DESKTOP=true
+                shift
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+
     log_header "Syncing MCP Configuration"
 
     # Verify source exists
@@ -106,14 +152,19 @@ main() {
 
     check_dependencies
 
-    # Sync to all targets
+    # Sync to Claude Code CLI (always)
     sync_to_claude_code
 
-    # Only sync to Claude Desktop on macOS
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        sync_to_claude_desktop
+    # Sync to Claude Desktop (opt-in, macOS only)
+    if [[ "$SYNC_DESKTOP" == "true" ]]; then
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            log_warn "Claude Desktop sync is experimental - MCP servers may not work correctly"
+            sync_to_claude_desktop
+        else
+            log_info "Skipping Claude Desktop sync (not macOS)"
+        fi
     else
-        log_info "Skipping Claude Desktop sync (not macOS)"
+        log_info "Skipping Claude Desktop sync (use --desktop to enable)"
     fi
 
     log_header "MCP Sync Complete"
@@ -122,15 +173,19 @@ main() {
     echo ""
     echo "Targets updated:"
     echo "  - Claude Code CLI: ~/.claude.json"
-    if [[ "$OSTYPE" == "darwin"* ]]; then
+    if [[ "$SYNC_DESKTOP" == "true" && "$OSTYPE" == "darwin"* ]]; then
         echo "  - Claude Desktop: ~/Library/Application Support/Claude/claude_desktop_config.json"
     fi
     echo ""
-    echo "Restart Claude Code and Claude Desktop to load the new servers."
+    echo "Backups saved to: $BACKUP_DIR"
+    echo ""
+    echo "Restart Claude Code to load the new servers."
     echo ""
     echo "To add/modify servers, edit:"
     echo "  $SERVERS_SOURCE"
     echo "Then run: ./install.sh --mcp"
+    echo ""
+    echo "For Claude Desktop (experimental): ./installers/mcp.sh --desktop"
 
     log_success "MCP sync complete!"
 }
