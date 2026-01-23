@@ -35,6 +35,7 @@ export AI_MAX_TOKENS="2000"
 #   Azure DevOps
 # ─────────────────────────────────────────────────────────────────────────────
 export AZDO_ORG="mbie-immigrationnz-prod"
+export AZURE_DEVOPS_PAT
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Custom tools
