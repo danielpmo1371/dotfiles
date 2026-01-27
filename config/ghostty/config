@@ -1,7 +1,33 @@
 # Ghostty Configuration
 
 # Window transparency - 0.95 means 95% opaque (5% transparent)
-background-opacity = 0.99
+# background-opacity = 0.85
+
+# Custom shader
+custom-shader = ~/.config/ghostty/shaders/shader.glsl
+# custom-shader = ~/.config/ghostty/shaders/rocaille.glsl
+custom-shader-animation = always
+
+font-family = "SF Mono"
+font-size = 19
+font-thicken = true
+# theme = light:Xcode Light hc,dark:Xcode Dark hc
+quick-terminal-animation-duration = 0
+keybind = global:super+grave_accent=toggle_quick_terminal
+cursor-style = block
+shell-integration-features = no-cursor
+cursor-style-blink = false
+link-url = true
+window-inherit-working-directory = true
+window-inherit-font-size = true
+window-theme = system
+clipboard-trim-trailing-spaces = true
+mouse-hide-while-typing = true
+macos-titlebar-proxy-icon = hidden
+macos-icon = custom-style
+macos-icon-frame = plastic
+macos-icon-ghost-color = FFFFFF
+macos-icon-screen-color = 000000
 
 # Window paddin2
 window-padding-x = 20,20
