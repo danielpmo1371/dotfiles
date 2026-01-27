@@ -62,6 +62,7 @@ install_tools() {
     install_package "tree" "tree" "tree"
     install_package "gdu" "gdu" "gdu"
     install_package "terminal-notifier" "terminal-notifier" "terminal-notifier"
+    install_package "neofetch" "neofetch" "neofetch"
     # install calcure with pipx install calcure # calendar
 
     echo ""
