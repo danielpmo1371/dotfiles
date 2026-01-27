@@ -10,9 +10,9 @@
 #   Powerlevel10k instant prompt (must be at top)
 # ─────────────────────────────────────────────────────────────────────────────
 # Enable quiet mode to allow console output during init (for chafa, etc.)
-if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
-    source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
-fi
+# if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+    # source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+# fi
 
 # typeset -g POWERLEVEL9K_INSTANT_PROMPT=off
 # typeset -g POWERLEVEL9K_INSTANT_PROMPT=quiet
@@ -121,6 +121,9 @@ plug "zsh-users/zsh-syntax-highlighting"
 # ─────────────────────────────────────────────────────────────────────────────
 #   Tools initialization
 # ─────────────────────────────────────────────────────────────────────────────
+# atuin
+ # eval "$(atuin init bash|zsh)"
+
 # Zoxide (smart cd)
 if command -v zoxide &> /dev/null; then
     eval "$(zoxide init zsh)"
@@ -147,11 +150,12 @@ export FZF_DEFAULT_OPTS="--height 40% --tmux center,75% \
 #   Startup display
 # ─────────────────────────────────────────────────────────────────────────────
 # Show startup image (uses show-start function from aliases.sh)
-if (( ${+functions[show-start]} )); then
+# if (( ${+functions[show-start]} )); then
     # Finalize instant prompt to allow console output
-    (( ${+functions[p10k-instant-prompt-finalize]} )) && p10k-instant-prompt-finalize
-    show-start
-fi
+    # (( ${+functions[p10k-instant-prompt-finalize]} )) && p10k-instant-prompt-finalize
+    # show-start
+# fi
+neofetch
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Profiling output
@@ -169,3 +173,4 @@ alias cdh="cd ~"
 # Task Master aliases added on 1/12/2026
 alias tm='task-master'
 alias taskmaster='task-master'
+export AZURE_DEVOPS_PAT=$(security find-generic-password -a "AZDO_PAT" -w 2>/dev/null)
