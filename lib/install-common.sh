@@ -62,11 +62,11 @@ create_backup_dir() {
 }
 
 # Create a symlink, backing up existing file if necessary
-# Usage: create_symlink "source" "target" ["category"]
+# Usage: create_symlink_with_backup "source" "target" ["category"]
 # - source: the file in dotfiles repo
 # - target: where the symlink should be created (e.g., ~/.bashrc)
 # - category: optional category for backup organization (default: from target path)
-create_symlink() {
+create_symlink_with_backup() {
     local source="$1"
     local target="$2"
     local category="${3:-}"
@@ -128,7 +128,7 @@ link_config_dirs() {
     for dir in "$@"; do
         local source="$dotfiles_root/config/$dir"
         local target="$HOME/.config/$dir"
-        create_symlink "$source" "$target"
+        create_symlink_with_backup "$source" "$target"
     done
 }
 
@@ -145,7 +145,7 @@ link_home_files() {
         local target_name="${pair##*:}"
         local source="$dotfiles_root/config/$config_subdir/$source_name"
         local target="$HOME/$target_name"
-        create_symlink "$source" "$target"
+        create_symlink_with_backup "$source" "$target"
     done
 }
 
@@ -154,7 +154,7 @@ link_home_files() {
 link_dotfile() {
     local filename="$1"
     local dotfiles_root="${DOTFILES_ROOT:-$(get_dotfiles_root)}"
-    create_symlink "$dotfiles_root/$filename" "$HOME/$filename"
+    create_symlink_with_backup "$dotfiles_root/$filename" "$HOME/$filename"
 }
 
 # Link files from config/<subdir>/ to a target directory
@@ -171,6 +171,6 @@ link_target_files() {
     for item in "$@"; do
         local source="$dotfiles_root/config/$config_subdir/$item"
         local target="$target_dir/$item"
-        create_symlink "$source" "$target"
+        create_symlink_with_backup "$source" "$target"
     done
 }

@@ -22,7 +22,7 @@ install_ghostty() {
         local ghostty_app_support="$HOME/Library/Application Support/com.mitchellh.ghostty"
 
         if [ -d "$ghostty_app_support" ]; then
-            create_symlink "$DOTFILES_ROOT/config/ghostty/config" "$ghostty_app_support/config"
+            create_symlink_with_backup "$DOTFILES_ROOT/config/ghostty/config" "$ghostty_app_support/config"
         fi
     fi
 }
