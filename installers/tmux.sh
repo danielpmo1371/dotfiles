@@ -26,7 +26,7 @@ install_tmux() {
     install_package "tmux" "tmux" "tmux"
 
     # Symlink tmux.conf from config/tmux to ~/.tmux.conf
-    create_symlink "$DOTFILES_ROOT/config/tmux/tmux.conf" "$HOME/.tmux.conf"
+    create_symlink_with_backup "$DOTFILES_ROOT/config/tmux/tmux.conf" "$HOME/.tmux.conf"
 
     # Verify tmux.conf is in place before proceeding with TPM
     if [ ! -e "$HOME/.tmux.conf" ]; then
