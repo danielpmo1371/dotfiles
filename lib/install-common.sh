@@ -49,42 +49,39 @@ get_dotfiles_root() {
     echo "$(dirname "$script_dir")"
 }
 
-# Create a timestamped backup directory
+# Source the unified backup library
+_INSTALL_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$_INSTALL_COMMON_DIR/backup.sh"
+
+# Create a timestamped backup directory (wrapper for backward compatibility)
 # Usage: create_backup_dir "component-name"
 # Returns: path to backup directory via echo
 create_backup_dir() {
     local component="${1:-general}"
-    local backup_dir="$HOME/.dotfiles-backup/${component}-$(date +%Y%m%d-%H%M%S)"
-
-    mkdir -p "$backup_dir"
-    echo "$backup_dir"
-}
-
-# Backup a file or directory if it exists and is not a symlink
-# Usage: backup_item "/path/to/item" "/path/to/backup/dir"
-backup_item() {
-    local item="$1"
-    local backup_dir="$2"
-
-    if [ -e "$item" ] && [ ! -L "$item" ]; then
-        local item_name="$(basename "$item")"
-        mv "$item" "$backup_dir/"
-        log_info "Backed up: $item_name"
-        return 0
-    fi
-    return 1
+    backup_init "$component"
 }
 
 # Create a symlink, backing up existing file if necessary
-# Usage: create_symlink "source" "target" "backup_dir"
+# Usage: create_symlink "source" "target" ["category"]
 # - source: the file in dotfiles repo
 # - target: where the symlink should be created (e.g., ~/.bashrc)
-# - backup_dir: where to backup existing files (optional, created if needed)
+# - category: optional category for backup organization (default: from target path)
 create_symlink() {
     local source="$1"
     local target="$2"
-    local backup_dir="$3"
+    local category="${3:-}"
     local item_name="$(basename "$target")"
+
+    # Auto-detect category from target path if not provided
+    if [[ -z "$category" ]]; then
+        if [[ "$target" == "$HOME/.config/"* ]]; then
+            category="config"
+        elif [[ "$target" == "$HOME/."* ]]; then
+            category="dotfiles"
+        else
+            category="other"
+        fi
+    fi
 
     # Check if source exists
     if [ ! -e "$source" ]; then
@@ -103,11 +100,8 @@ create_symlink() {
             rm "$target"
         fi
     elif [ -e "$target" ]; then
-        # Target exists and is not a symlink - back it up
-        if [ -z "$backup_dir" ]; then
-            backup_dir="$(create_backup_dir "auto")"
-        fi
-        backup_item "$target" "$backup_dir"
+        # Target exists and is not a symlink - back it up using unified backup
+        backup_item "$target" "$category"
     fi
 
     # Create the symlink

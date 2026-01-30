@@ -429,12 +429,19 @@ show_help() {
     echo "  --mcp          Install MCP configuration"
     echo "  --memory-hooks Install MCP memory hooks"
     echo "  --logging-hooks Install session logging hooks"
+    echo ""
+    echo "Backup & Restore:"
+    echo "  --restore      Interactive restore from backup"
+    echo "  --list-backups List available backups"
+    echo "  --cleanup-backups [N]  Keep only N most recent backups (default: 5)"
+    echo ""
     echo "  --help         Show this help message"
     echo ""
     echo "Examples:"
     echo "  ./install.sh              # Interactive dialog mode"
     echo "  ./install.sh --zsh        # Install only zsh config"
     echo "  ./install.sh --all        # Install everything (CLI mode)"
+    echo "  ./install.sh --restore    # Restore from a backup"
     echo ""
 }
 
@@ -554,6 +561,16 @@ main() {
                 ;;
             --dialog)
                 run_dialog_mode
+                ;;
+            --restore)
+                restore_interactive
+                ;;
+            --list-backups)
+                list_backups
+                ;;
+            --cleanup-backups)
+                local keep_count="${2:-5}"
+                backup_cleanup "$keep_count"
                 ;;
             *)
                 log_error "Unknown option: $mode"
