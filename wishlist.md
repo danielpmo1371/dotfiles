@@ -5,5 +5,5 @@ extend tmux helper panel
 create ? command for useful cli commands
 interactive installs
 log every command with pwd context
-
+use stow or homemanage
 
