@@ -210,6 +210,7 @@ select_components() {
     result=$(dialog_checklist "Select Components" \
         "brew:Homebrew package manager:on" \
         "tools:CLI tools and utilities:on" \
+        "git:Git configuration (global gitignore):on" \
         "zsh:Zsh shell + plugins:off" \
         "bash:Bash configuration:off" \
         "tmux:Tmux + TPM plugins:off" \
@@ -345,6 +346,7 @@ run_dialog_installation() {
 
         log_info "Running $comp installer..."
         case "$comp" in
+            git)       run_installer "git.sh" "install_git_config" ;;
             zsh)       run_installer "zsh.sh" "install_zsh_config" ;;
             bash)      run_installer "bash.sh" "install_bash_config" ;;
             tmux)      run_installer "tmux.sh" "install_tmux" ;;
@@ -418,6 +420,7 @@ show_help() {
     echo "  --all          Install everything"
     echo "  --brew         Install Homebrew"
     echo "  --tools        Install common dev tools"
+    echo "  --git          Configure git (global gitignore)"
     echo "  --secrets      Create ~/.accessTokens template"
     echo "  --tmux         Install tmux and plugins"
     echo "  --bash         Install bash configuration"
@@ -468,6 +471,9 @@ install_all() {
 
     # Install tools
     run_installer "tools.sh" "install_tools"
+
+    # Configure git
+    run_installer "git.sh" "install_git_config"
 
     # Create secrets template
     run_installer "secrets.sh" "install_secrets"
@@ -521,6 +527,9 @@ main() {
                 ;;
             --tools)
                 run_installer "tools.sh" "install_tools"
+                ;;
+            --git)
+                run_installer "git.sh" "install_git_config"
                 ;;
             --secrets)
                 run_installer "secrets.sh" "install_secrets"

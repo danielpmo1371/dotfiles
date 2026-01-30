@@ -1,23 +1,27 @@
-**/.claude/settings.local.json
+# Global gitignore
+# Symlinked to ~/.config/git/ignore
 
-**/.claude/settings.local.json
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
 
-**/.claude/settings.local.json
+# Editor
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
 
+# Claude Code local settings
 **/.claude/settings.local.json
+**/.claude/.credentials.json
 
-**/.claude/settings.local.json
+# Environment files
+.env.local
+.env.*.local
 
-**/.claude/settings.local.json
-
-**/.claude/settings.local.json
-
-**/.claude/settings.local.json
-
-**/.claude/settings.local.json
-
-**/.claude/settings.local.json
-
-**/.claude/settings.local.json
-
-**/.claude/settings.local.json
+# Build artifacts
+*.log
+npm-debug.log*
