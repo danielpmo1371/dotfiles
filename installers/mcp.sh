@@ -20,21 +20,9 @@ DOTFILES_ROOT="$(get_dotfiles_root)"
 SERVERS_SOURCE="$DOTFILES_ROOT/config/mcp/servers.json"
 CLAUDE_CODE_CONFIG="$HOME/.claude.json"
 CLAUDE_DESKTOP_CONFIG="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
-BACKUP_DIR="$DOTFILES_ROOT/tmp/mcp-backups"
 
 # Flags
 SYNC_DESKTOP=false
-
-backup_file() {
-    local file="$1"
-    local name="$2"
-    if [ -f "$file" ]; then
-        mkdir -p "$BACKUP_DIR"
-        local backup="$BACKUP_DIR/${name}-$(date +%Y%m%d_%H%M%S).json"
-        cp "$file" "$backup"
-        log_info "Backup created: $backup"
-    fi
-}
 
 sync_to_claude_code() {
     log_info "Syncing MCP servers to Claude Code CLI..."
@@ -43,7 +31,7 @@ sync_to_claude_code() {
         log_info "Creating new ~/.claude.json..."
         echo '{"mcpServers": {}}' > "$CLAUDE_CODE_CONFIG"
     else
-        backup_file "$CLAUDE_CODE_CONFIG" "claude-code"
+        backup_copy "$CLAUDE_CODE_CONFIG" "mcp"
     fi
 
     # Merge servers into existing config (preserves other settings)
@@ -74,7 +62,7 @@ sync_to_claude_desktop() {
         log_info "Creating new claude_desktop_config.json..."
         echo '{"mcpServers": {}}' > "$CLAUDE_DESKTOP_CONFIG"
     else
-        backup_file "$CLAUDE_DESKTOP_CONFIG" "claude-desktop"
+        backup_copy "$CLAUDE_DESKTOP_CONFIG" "mcp"
     fi
 
     # Filter to only stdio servers (Claude Desktop doesn't support HTTP servers)
@@ -152,6 +140,9 @@ main() {
 
     check_dependencies
 
+    # Initialize backup session
+    backup_init "mcp"
+
     # Sync to Claude Code CLI (always)
     sync_to_claude_code
 
@@ -167,6 +158,9 @@ main() {
         log_info "Skipping Claude Desktop sync (use --desktop to enable)"
     fi
 
+    # Finalize backup session
+    backup_finish
+
     log_header "MCP Sync Complete"
     show_servers
 
@@ -176,8 +170,6 @@ main() {
     if [[ "$SYNC_DESKTOP" == "true" && "$OSTYPE" == "darwin"* ]]; then
         echo "  - Claude Desktop: ~/Library/Application Support/Claude/claude_desktop_config.json"
     fi
-    echo ""
-    echo "Backups saved to: $BACKUP_DIR"
     echo ""
     echo "Restart Claude Code to load the new servers."
     echo ""

@@ -29,9 +29,24 @@ cd ~/repos/dotfiles
 
 ## Installation Options
 
+### Interactive Mode (Recommended)
+
 ```bash
-./install.sh              # Install everything (recommended)
-./install.sh --tools      # Dev tools + Homebrew
+./install.sh              # Launch interactive dialog installer
+```
+
+The dialog mode provides:
+- Component selection checklist (brew, tools, shells, tmux, etc.)
+- Package profiles: Minimal, Developer, Full, or Custom
+- Individual package selection with pre-filled profiles
+- Dependency resolution with prompts
+
+### CLI Mode
+
+```bash
+./install.sh --all        # Install everything
+./install.sh --brew       # Homebrew package manager
+./install.sh --tools      # Dev tools (nvim, ripgrep, fzf, etc.)
 ./install.sh --secrets    # Create ~/.accessTokens template
 ./install.sh --terminals  # Terminal emulators (Ghostty)
 ./install.sh --tmux       # Tmux + TPM + plugins
@@ -61,9 +76,10 @@ Homebrew is recommended and will be installed automatically if selected. Your ch
 ```
 dotfiles/
 ├── bootstrap.sh          # One-line installer
-├── install.sh            # Main installer
+├── install.sh            # Main installer (dialog + CLI modes)
 ├── installers/           # Individual installer scripts
-│   ├── tools.sh          # CLI tools + Homebrew
+│   ├── brew.sh           # Homebrew with OS detection
+│   ├── tools.sh          # CLI tools
 │   ├── secrets.sh        # ~/.accessTokens template
 │   ├── terminals.sh      # Ghostty config
 │   ├── tmux.sh           # Tmux + TPM + plugins
@@ -73,7 +89,8 @@ dotfiles/
 │   └── claude.sh         # Claude Code
 ├── lib/                  # Shared functions
 │   ├── install-common.sh # Logging, symlinks, backups
-│   └── install-packages.sh # Package manager abstraction
+│   ├── install-packages.sh # Package manager abstraction
+│   └── dialog-ui.sh      # Dialog TUI wrapper functions
 └── config/               # Configuration files
     ├── shell/            # Shared shell configs (env, path, aliases)
     ├── bash/             # Bash-specific
@@ -100,6 +117,7 @@ nvim ~/.accessTokens
 ## Requirements
 
 - `git` and `curl` (for bootstrap)
+- `dialog` (for interactive mode, optional - falls back to CLI)
 - macOS or Linux (Arch, Ubuntu, Fedora, etc.)
 
 ## License
