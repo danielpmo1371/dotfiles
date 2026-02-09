@@ -1,2 +1,17 @@
+# Secrets
 *Tokens
 
+# npm cache directories
+config/configstore/
+
+# Nushell history (contains sensitive commands)
+config/nushell/history.sqlite3
+config/nushell/history.txt
+
+# macOS
+.DS_Store
+
+# Editor
+*.swp
+*.swo
+*~

@@ -80,6 +80,9 @@ preexec() {
 # ─────────────────────────────────────────────────────────────────────────────
 #   Completion
 # ─────────────────────────────────────────────────────────────────────────────
+# Add custom completions directory to fpath
+fpath=(~/.local/share/zsh/completions $fpath)
+
 autoload -Uz compinit
 # Only regenerate completion cache once per day
 if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
@@ -155,7 +158,12 @@ export FZF_DEFAULT_OPTS="--height 40% --tmux center,75% \
     # (( ${+functions[p10k-instant-prompt-finalize]} )) && p10k-instant-prompt-finalize
     # show-start
 # fi
-neofetch
+# Cached neofetch (regenerates once per day)
+_neofetch_cache="$HOME/.cache/neofetch-cache"
+if [[ ! -f "$_neofetch_cache" ]] || [[ $(find "$_neofetch_cache" -mtime +1 2>/dev/null) ]]; then
+    neofetch > "$_neofetch_cache" 2>/dev/null
+fi
+cat "$_neofetch_cache" 2>/dev/null
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Profiling output

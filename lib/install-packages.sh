@@ -26,7 +26,7 @@ run_privileged() {
 }
 
 # Track if package manager has been updated this session
-declare -g PKG_MANAGER_UPDATED=""
+PKG_MANAGER_UPDATED=""
 
 # Update package manager cache (once per session)
 update_package_manager() {
