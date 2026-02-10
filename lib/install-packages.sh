@@ -205,9 +205,17 @@ is_manager_installed() {
     esac
 }
 
-# Get the best available native package manager for non-interactive mode
+# Get the best available package manager for non-interactive mode
+# Prefers brew when available (modern packages) over native managers (often outdated)
 get_native_package_manager() {
-    # Prefer native package managers in order
+    # Prefer brew on all platforms when available (modern, consistent versions)
+    if find_brew &> /dev/null; then
+        ensure_brew_in_path
+        echo "brew"
+        return 0
+    fi
+
+    # Fall back to native package managers
     local native_managers=("apt" "dnf" "yum" "pacman" "zypper" "apk")
 
     for mgr in "${native_managers[@]}"; do
@@ -216,12 +224,6 @@ get_native_package_manager() {
             return 0
         fi
     done
-
-    # Fall back to brew on macOS
-    if [[ "$OSTYPE" == darwin* ]] && find_brew &> /dev/null; then
-        echo "brew"
-        return 0
-    fi
 
     return 1
 }
