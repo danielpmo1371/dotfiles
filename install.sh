@@ -165,6 +165,7 @@ CLI MODE
   ./install.sh --bash       Configure Bash
   ./install.sh --tmux       Install Tmux + plugins
   ./install.sh --terminals  Configure terminal emulators
+  ./install.sh --fonts      Install Nerd Fonts
   ./install.sh --claude     Install Claude Code CLI
   ./install.sh --mcp        Configure MCP servers
 
@@ -215,8 +216,11 @@ select_components() {
         "bash:Bash configuration:off" \
         "tmux:Tmux + TPM plugins:off" \
         "terminals:Terminal emulators (Ghostty):off" \
+        "fonts:Nerd Fonts for Powerlevel10k:off" \
         "claude:Claude Code CLI + config:off" \
-        "mcp:MCP server configuration:off") || result=""
+        "mcp:MCP server configuration:off" \
+        "memory-hooks:MCP memory service hooks:off" \
+        "logging-hooks:Session logging hooks:off") || result=""
 
     # Parse space-separated result into array
     read -ra SELECTED_COMPONENTS <<< "$result"
@@ -350,12 +354,15 @@ run_dialog_installation() {
             bash)      run_installer "bash.sh" "install_bash_config" ;;
             tmux)      run_installer "tmux.sh" "install_tmux" ;;
             terminals) run_installer "terminals.sh" "install_terminals" ;;
+            fonts)     run_installer "fonts.sh" "install_fonts" ;;
             claude)
                 run_installer "claude.sh" "install_npm_packages"
                 run_installer "claude.sh" "install_claude_config"
                 ;;
-            mcp)       run_installer "mcp.sh" "main" ;;
-            *)         continue ;;
+            mcp)          run_installer "mcp.sh" "main" ;;
+            memory-hooks) run_installer "memory-hooks.sh" "main" ;;
+            logging-hooks) run_installer "logging-hooks.sh" "main" ;;
+            *)            continue ;;
         esac
         echo ""
     done
@@ -425,6 +432,7 @@ show_help() {
     echo "  --zsh          Install zsh configuration"
     echo "  --nushell      Install nushell configuration"
     echo "  --terminals    Install terminal emulators config"
+    echo "  --fonts        Install Nerd Fonts for Powerlevel10k"
     echo "  --config-dirs  Symlink config directories"
     echo "  --claude       Install Claude Code settings"
     echo "  --mcp          Install MCP configuration"
@@ -484,6 +492,12 @@ install_all() {
         ((failures++))
         failed_components+="  - secrets\n"
     }
+    # Install Nerd Fonts (before shells - p10k needs them for glyphs)
+    run_installer "fonts.sh" "install_fonts" || {
+        log_warn "Fonts installation failed, continuing..."
+        ((failures++))
+        failed_components+="  - fonts\n"
+    }
     # Install TMUX
     run_installer "tmux.sh" "install_tmux" || {
         log_warn "Tmux installation failed, continuing..."
@@ -536,12 +550,6 @@ install_all() {
         log_warn "Memory hooks installation failed, continuing..."
         ((failures++))
         failed_components+="  - memory-hooks\n"
-    }
-    # Install Nerd Fonts (before shells - p10k needs them for glyphs)
-    run_installer "fonts.sh" "install_fonts" || {
-        log_warn "Fonts installation failed, continuing..."
-        ((failures++))
-        failed_components+="  - fonts\n"
     }
     # Install logging hooks
     run_installer "logging-hooks.sh" "main" || {
