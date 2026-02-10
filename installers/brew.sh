@@ -2,8 +2,8 @@
 
 # Homebrew installer with cross-platform support
 # Supports: macOS, Ubuntu/Debian, Fedora, Arch Linux
-
-set -e
+# Note: No 'set -e' here - this file is sourced by install.sh via run_installer.
+# A global set -e would propagate to the parent shell and break error handling.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_ROOT="$(dirname "$SCRIPT_DIR")"

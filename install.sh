@@ -356,7 +356,7 @@ run_dialog_installation() {
             terminals) run_installer "terminals.sh" "install_terminals" ;;
             fonts)     run_installer "fonts.sh" "install_fonts" ;;
             claude)
-                run_installer "claude.sh" "install_npm_packages"
+                run_installer "claude.sh" "install_claude_code"
                 run_installer "claude.sh" "install_claude_config"
                 ;;
             mcp)          run_installer "mcp.sh" "main" ;;
@@ -534,7 +534,7 @@ install_all() {
         ((failures++))
         failed_components+="  - config-dirs\n"
     }
-  (run_installer "claude.sh" "install_npm_packages" && run_installer "claude.sh" "install_claude_config") || {
+  (run_installer "claude.sh" "install_claude_code" && run_installer "claude.sh" "install_claude_config") || {
         log_warn "Claude config installation failed, continuing..."
         ((failures++))
         failed_components+="  - claude (config)\n"
@@ -664,7 +664,7 @@ main() {
                 }
                 ;;
             --claude)
-              (run_installer "claude.sh" "install_npm_packages" && run_installer "claude.sh" "install_claude_config") || {
+              (run_installer "claude.sh" "install_claude_code" && run_installer "claude.sh" "install_claude_config") || {
                     log_warn "Claude config installation failed, continuing..."
                     ((failures++))
                     failed_components+="  - claude (config)\n"
