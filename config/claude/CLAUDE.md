@@ -55,6 +55,20 @@ Good practices:
 - Plan rollback strategies for each component
 - Review impact on existing workflows
 
+## Verification Integrity Rules
+- **NEVER bypass the real path to fake a success.** If a URL/endpoint/service fails when tested normally, do NOT re-test with flags that skip DNS, skip auth, skip TLS, use --resolve, connect to a different IP, or otherwise circumvent the actual user-facing path. A test that bypasses the failure point proves nothing.
+- **Report failures as failures.** If `curl https://example.com` times out, say "it's broken — here's why." Do NOT quietly switch to `curl --resolve example.com:443:internal-ip` and call it working.
+- **Test from the user's perspective.** The question is always "does the URL work when I type it in a browser?" — not "does the backend respond if I skip every layer in front of it?"
+- **Distinguish layers clearly.** When diagnosing, explicitly separate: DNS resolution → network path → TLS termination → reverse proxy → backend. Report which layer fails. Don't conflate "backend is healthy" with "the URL works."
+- **NAT hairpin awareness.** When DNS points to a public IP, always consider that internal LAN clients may not be able to reach that public IP (no NAT loopback). Flag this explicitly — don't just say "port forwarding needed" and ignore the internal breakage.
+
+## Infrastructure Safety Rules
+- **NEVER assume the environment type.** Before any infrastructure work, explicitly determine: Is this a VM, LXC container, bare metal, or cloud instance? Check `/proc/1/cgroup`, `systemd-detect-virt`, or `cat /proc/1/environ` — don't guess from disk names or mount points.
+- **NEVER suggest destructive operations on block devices without full context.** Unknown block devices (`/dev/sdX`) in containers are often host passthrough disks. Formatting or partitioning them can destroy host storage, ZFS pools, or other critical data. Always ask the user what the device is before touching it.
+- **Understand the storage stack before acting.** In Proxmox environments: the host manages ZFS pools, LVM, and disk passthrough. The correct approach for container storage is usually creating datasets or bind mounts on the HOST side, not creating pools/filesystems inside containers.
+- **When you don't know enough, say so and gather information.** Don't present options that include potentially destructive actions alongside safe ones as if they're equivalent. If the information needed to make a safe recommendation isn't available, stop and ask — don't guess.
+- **The user's primary environment is a Proxmox server with ZFS.** Development workloads run in LXC containers, not VMs. Docker runs inside LXC containers. Storage expansion should be done via Proxmox host-side ZFS datasets bind-mounted into containers.
+
 ## Claude Code Preferences
 - Use TodoWrite tool for multi-step tasks to track progress
 - Mark todos as completed immediately after finishing
