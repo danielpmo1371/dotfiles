@@ -198,12 +198,15 @@ run_install_flow() {
     # Step 3: Resolve dependencies
     resolve_dependencies
 
-    # Step 4: Show confirmation
+    # Step 4: Show change report
+    show_change_report
+
+    # Step 5: Show confirmation
     if ! show_confirmation; then
         return
     fi
 
-    # Step 5: Run installation
+    # Step 6: Run installation
     run_dialog_installation
 }
 
@@ -301,26 +304,170 @@ resolve_dependencies() {
     fi
 }
 
-show_confirmation() {
-    local summary="The following will be installed:\n\n"
+# =============================================================================
+# Change Report Functions
+# =============================================================================
 
-    if [[ ${#SELECTED_COMPONENTS[@]} -gt 0 ]]; then
-        summary+="COMPONENTS:\n"
-        for comp in "${SELECTED_COMPONENTS[@]}"; do
-            summary+="  - $comp\n"
-        done
-    fi
+# Get target file mappings for a component
+# Output format: "type:source:target" per line
+#   type: symlink, merge, install, download
+get_component_targets() {
+    local component="$1"
+    local root="$SCRIPT_DIR"
+
+    case "$component" in
+        bash)
+            echo "symlink:$root/config/bash/bashrc:$HOME/.bashrc"
+            echo "symlink:$root/config/bash/bash_aliases:$HOME/.bash_aliases"
+            echo "symlink:$root/config/bash/bash_path:$HOME/.bash_path"
+            ;;
+        zsh)
+            echo "symlink:$root/config/zsh/zshrc:$HOME/.zshrc"
+            echo "symlink:$root/config/zsh/p10k.zsh:$HOME/.p10k.zsh"
+            ;;
+        tmux)
+            echo "symlink:$root/config/tmux/tmux.conf:$HOME/.tmux.conf"
+            ;;
+        terminals)
+            echo "symlink:$root/config/ghostty:$HOME/.config/ghostty"
+            ;;
+        config-dirs)
+            echo "symlink:$root/config/nvim:$HOME/.config/nvim"
+            ;;
+        claude)
+            local items=("CLAUDE.md" "settings.json" "commands" "skills" "scripts" "agents")
+            for item in "${items[@]}"; do
+                echo "symlink:$root/config/claude/$item:$HOME/.claude/$item"
+            done
+            ;;
+        mcp)
+            echo "merge:$root/config/mcp/servers.json:$HOME/.claude.json"
+            ;;
+        memory-hooks)
+            echo "symlink:$root/config/claude/hooks/memory:$HOME/.claude/hooks/memory"
+            echo "symlink:$root/config/claude/hooks/utilities:$HOME/.claude/hooks/utilities"
+            ;;
+        logging-hooks)
+            echo "symlink:$root/config/claude/hooks/logging:$HOME/.claude/hooks/logging"
+            ;;
+        fonts)
+            echo "download:::Nerd Fonts (MesloLGS NF)"
+            ;;
+        brew)
+            echo "install:::Homebrew package manager"
+            ;;
+    esac
+}
+
+# Check the status of a single target
+# Args: type source target
+# Returns: status string
+check_target_status() {
+    local type="$1"
+    local source="$2"
+    local target="$3"
+
+    case "$type" in
+        symlink)
+            if [[ ! -e "$source" ]]; then
+                echo "SKIP"
+            elif [[ -L "$target" ]]; then
+                local current_link
+                current_link=$(readlink "$target")
+                if [[ "$current_link" == "$source" ]]; then
+                    echo "OK"
+                else
+                    echo "UPDATE"
+                fi
+            elif [[ -e "$target" ]]; then
+                echo "BACKUP"
+            else
+                echo "NEW"
+            fi
+            ;;
+        merge)
+            if [[ -f "$target" ]]; then
+                echo "MERGE"
+            else
+                echo "NEW"
+            fi
+            ;;
+        install|download)
+            echo "INSTALL"
+            ;;
+    esac
+}
+
+# Build a formatted change report for all selected components and packages
+generate_change_report() {
+    local report=""
+    local backup_needed=false
+
+    for comp in "${SELECTED_COMPONENTS[@]}"; do
+        [[ "$comp" == "tools" ]] && continue
+
+        report+="--- $comp ---\n"
+
+        while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            IFS=':' read -r type source target desc <<< "$line"
+
+            if [[ "$type" == "install" || "$type" == "download" ]]; then
+                report+="  [INSTALL] $desc\n"
+                continue
+            fi
+
+            local status
+            status=$(check_target_status "$type" "$source" "$target")
+            local display_target="${target/#$HOME/\~}"
+
+            case "$status" in
+                NEW)    report+="  [NEW]    $display_target\n" ;;
+                OK)     report+="  [OK]     $display_target  (no change)\n" ;;
+                UPDATE) report+="  [UPDATE] $display_target  (relink)\n" ;;
+                BACKUP) report+="  [BACKUP] $display_target  -> backup dir\n"
+                        backup_needed=true ;;
+                MERGE)  report+="  [MERGE]  $display_target  (update + backup copy)\n"
+                        backup_needed=true ;;
+                SKIP)   report+="  [SKIP]   $display_target  (source missing)\n" ;;
+            esac
+        done <<< "$(get_component_targets "$comp")"
+
+        report+="\n"
+    done
 
     if [[ ${#SELECTED_PACKAGES[@]} -gt 0 ]]; then
-        summary+="\nPACKAGES:\n"
+        report+="--- packages ---\n"
         for pkg in "${SELECTED_PACKAGES[@]}"; do
-            summary+="  - $pkg\n"
+            local cmd
+            cmd=$(get_package_command "$pkg")
+            if command -v "$cmd" &>/dev/null; then
+                report+="  [EXISTS]  $pkg  (already installed)\n"
+            else
+                report+="  [INSTALL] $pkg\n"
+            fi
         done
+        report+="\n"
     fi
 
-    summary+="\nProceed with installation?"
+    if $backup_needed; then
+        report+="BACKUP INFO:\n"
+        report+="  Existing files will be moved to:\n"
+        report+="  ~/.dotfiles-backup-<timestamp>/\n"
+        report+="  Use ./install.sh --restore to undo.\n"
+    fi
 
-    dialog_yesno "$summary"
+    echo -e "$report"
+}
+
+show_change_report() {
+    local report
+    report=$(generate_change_report)
+    dialog_textbox "Change Report" "$report"
+}
+
+show_confirmation() {
+    dialog_yesno "Proceed with installation?"
 }
 
 run_dialog_installation() {
