@@ -56,3 +56,7 @@ elif [[ -d "/home/linuxbrew/.linuxbrew/bin" ]]; then
     eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 fi
 
+# ─────────────────────────────────────────────────────────────────────────────
+#   Claude code native installation
+# ─────────────────────────────────────────────────────────────────────────────
+export PATH="$HOME/.local/bin:$PATH"
