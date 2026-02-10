@@ -1,6 +1,7 @@
 {
   "mcpServers": {
     "memory": {
+      "type": "url",
       "url": "http://memory-mcp:8000/mcp"
     },
     "task-master-ai": {

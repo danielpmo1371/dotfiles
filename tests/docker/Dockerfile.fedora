@@ -1,0 +1,33 @@
+# Fedora-based test environment for dotfiles e2e testing
+FROM fedora:39
+
+# Install essential packages
+RUN dnf install -y \
+    curl \
+    git \
+    wget \
+    sudo \
+    gcc \
+    gcc-c++ \
+    make \
+    findutils \
+    which \
+    procps-ng \
+    && dnf clean all
+
+# Create a test user with sudo privileges
+RUN useradd -m -s /bin/bash testuser && \
+    echo "testuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Switch to test user
+USER testuser
+WORKDIR /home/testuser
+
+# Copy dotfiles repository
+COPY --chown=testuser:testuser . /home/testuser/dotfiles/
+
+# Set working directory
+WORKDIR /home/testuser/dotfiles
+
+# Default command
+CMD ["/bin/bash"]

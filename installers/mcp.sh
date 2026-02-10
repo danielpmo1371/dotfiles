@@ -9,7 +9,6 @@
 #   ./installers/mcp.sh           # Sync to Claude Code CLI only
 #   ./installers/mcp.sh --desktop # Also sync to Claude Desktop
 
-set -e  # Exit on error
 
 # Source common functions
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

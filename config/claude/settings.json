@@ -1,4 +1,7 @@
 {
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
   "permissions": {
     "allow": [
       "Fetch(*)",
@@ -45,7 +48,11 @@
       "Bash(ttalk:*)",
       "Bash(az:*)",
       "Bash(jq:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(tmux:*)",
+      "Bash(claude:*)",
+      "Bash(bash:*)",
+      "Bash(source:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",
@@ -62,7 +69,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/.config/.claude/notification.sh"
+            "command": "$HOME/.config/.claude/notification.sh"
           }
         ]
       }
@@ -72,12 +79,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /Users/daniel/.claude/hooks/memory/session-start.js",
+            "command": "node $HOME/.claude/hooks/memory/session-start.js",
             "timeout": 30
           },
           {
             "type": "command",
-            "command": "/Users/daniel/.claude/hooks/logging/session-goal-tracker.sh",
+            "command": "$HOME/.claude/hooks/logging/session-goal-tracker.sh",
             "timeout": 5
           }
         ]
@@ -88,12 +95,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /Users/daniel/.claude/hooks/memory/session-end.js",
+            "command": "node $HOME/.claude/hooks/memory/session-end.js",
             "timeout": 15
           },
           {
             "type": "command",
-            "command": "/Users/daniel/.claude/hooks/logging/session-goal-tracker.sh",
+            "command": "$HOME/.claude/hooks/logging/session-goal-tracker.sh",
             "timeout": 5
           }
         ]
@@ -105,7 +112,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /Users/daniel/.claude/hooks/memory/permission-request.js",
+            "command": "node $HOME/.claude/hooks/memory/permission-request.js",
             "timeout": 5
           }
         ]
@@ -116,12 +123,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/daniel/.claude/hooks/logging/user-request-logger.sh",
+            "command": "$HOME/.claude/hooks/logging/user-request-logger.sh",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "/Users/daniel/.claude/hooks/logging/session-goal-tracker.sh",
+            "command": "$HOME/.claude/hooks/logging/session-goal-tracker.sh",
             "timeout": 5
           }
         ]
@@ -132,7 +139,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/daniel/.claude/hooks/logging/response-summarizer.sh",
+            "command": "$HOME/.claude/hooks/logging/response-summarizer.sh",
             "timeout": 30
           }
         ]
