@@ -19,6 +19,7 @@ Personal dotfiles repository with modular installation system. Supports macOS an
 ./install.sh --bash         # Bash configuration
 ./install.sh --zsh          # Zsh configuration (requires: git, zsh, curl)
 ./install.sh --terminals    # Terminal emulators (Ghostty, etc.)
+./install.sh --fonts        # Nerd Fonts for Powerlevel10k (requires: curl)
 ./install.sh --config-dirs  # Symlink nvim to ~/.config/
 ./install.sh --claude       # Claude Code CLI and settings (requires: node, npm)
 
@@ -48,7 +49,7 @@ config/              # Configuration files organized by tool
 ### Key Patterns
 
 **Installation Flow**: `install.sh` dispatches to `installers/*.sh` scripts which source `lib/install-common.sh` for utilities. Order matters for `--all`:
-1. tools.sh → secrets.sh → terminals.sh → tmux.sh → bash.sh → zsh.sh → config-dirs.sh → claude.sh
+1. tools.sh → secrets.sh → terminals.sh → fonts.sh → tmux.sh → bash.sh → zsh.sh → config-dirs.sh → claude.sh
 
 **Symlink Strategy**:
 - `config/` subdirs symlink to `~/.config/` via `link_config_dirs()`
@@ -72,6 +73,31 @@ Settings symlinked from `config/claude/` to `~/.claude/`:
 - `skills/` - Custom skills
 
 Local files (not synced): `settings.local.json`, `.credentials.json`
+
+## Agent Teams (Experimental)
+
+Claude Code Agent Teams are enabled for parallel work on this repo. Teams coordinate multiple Claude Code instances working together with shared tasks and inter-agent messaging. Requires tmux (installed via `--tmux`).
+
+### Available Team Commands
+
+| Command | What it does |
+|---------|-------------|
+| `/setup-machine` | Spawns 4 teammates to install dotfiles in parallel (base tools, shells, dev env, claude/mcp) |
+| `/test-all-distros` | Spawns 3 teammates to run Docker e2e tests on Ubuntu, Debian, and Fedora simultaneously |
+| `/review-changes` | Spawns 3 teammates for pre-commit review (cross-platform compat, security, symlink validation) |
+
+### Configuration
+
+Agent teams are enabled in `config/claude/settings.json`:
+- `env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`: `"1"` enables the feature
+- `teammateMode`: `"auto"` uses tmux split panes when inside tmux, in-process otherwise
+
+### Test Harness
+
+Test scripts in `tests/` that teammates (or manual runs) can use:
+- `tests/test-installer.sh <component|all>` - Validates a single installer's results
+- `tests/test-docker.sh <distro|all>` - Builds Docker image and runs full e2e test
+- `tests/validate-symlinks.sh` - Checks all expected symlinks exist and point correctly
 
 ## Adding New Configurations
 
