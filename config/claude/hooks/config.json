@@ -2,7 +2,7 @@
   "memoryService": {
     "protocol": "http",
     "preferredProtocol": "http",
-    "fallbackEnabled": false,
+    "fallbackEnabled": true,
     "http": {
       "endpoint": "http://memory-mcp:8000",
       "healthCheckTimeout": 3000,
