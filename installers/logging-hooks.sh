@@ -6,8 +6,6 @@
 # Usage: ./logging-hooks.sh [--dry-run]
 #
 
-set -euo pipefail
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_ROOT="$(dirname "$SCRIPT_DIR")"
 
@@ -71,7 +69,7 @@ update_settings() {
   log_info "Updating settings.json with logging hooks..."
 
   if ! command -v jq &> /dev/null; then
-    log_error "jq is required but not installed. Install with: brew install jq"
+    log_error "jq is required but not installed. Run ./install.sh --tools or install jq manually"
     return 1
   fi
 
@@ -83,6 +81,9 @@ update_settings() {
   # Backup settings
   cp "$SETTINGS_FILE" "$SETTINGS_FILE.bak"
 
+  # Use portable $HOME path instead of expanded home directory
+  local hooks_path="\$HOME/.claude/hooks/logging"
+
   # Add logging hooks if not already present
   local updated
   updated=$(jq '
@@ -93,12 +94,12 @@ update_settings() {
           "hooks": [
             {
               "type": "command",
-              "command": "'"$HOOKS_TARGET_DIR"'/user-request-logger.sh",
+              "command": "'"$hooks_path"'/user-request-logger.sh",
               "timeout": 5
             },
             {
               "type": "command",
-              "command": "'"$HOOKS_TARGET_DIR"'/session-goal-tracker.sh",
+              "command": "'"$hooks_path"'/session-goal-tracker.sh",
               "timeout": 5
             }
           ]
@@ -113,7 +114,7 @@ update_settings() {
           "hooks": [
             {
               "type": "command",
-              "command": "'"$HOOKS_TARGET_DIR"'/response-summarizer.sh",
+              "command": "'"$hooks_path"'/response-summarizer.sh",
               "timeout": 10
             }
           ]
@@ -126,7 +127,7 @@ update_settings() {
       .hooks.SessionStart[0].hooks += [
         {
           "type": "command",
-          "command": "'"$HOOKS_TARGET_DIR"'/session-goal-tracker.sh",
+          "command": "'"$hooks_path"'/session-goal-tracker.sh",
           "timeout": 5
         }
       ] | .hooks.SessionStart[0].hooks |= unique_by(.command)
@@ -136,7 +137,7 @@ update_settings() {
           "hooks": [
             {
               "type": "command",
-              "command": "'"$HOOKS_TARGET_DIR"'/session-goal-tracker.sh",
+              "command": "'"$hooks_path"'/session-goal-tracker.sh",
               "timeout": 5
             }
           ]
@@ -149,7 +150,7 @@ update_settings() {
       .hooks.SessionEnd[0].hooks += [
         {
           "type": "command",
-          "command": "'"$HOOKS_TARGET_DIR"'/session-goal-tracker.sh",
+          "command": "'"$hooks_path"'/session-goal-tracker.sh",
           "timeout": 5
         }
       ] | .hooks.SessionEnd[0].hooks |= unique_by(.command)
@@ -159,7 +160,7 @@ update_settings() {
           "hooks": [
             {
               "type": "command",
-              "command": "'"$HOOKS_TARGET_DIR"'/session-goal-tracker.sh",
+              "command": "'"$hooks_path"'/session-goal-tracker.sh",
               "timeout": 5
             }
           ]
