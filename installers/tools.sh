@@ -59,8 +59,12 @@ install_tools() {
     install_package "btop" "btop" "btop" || log_warn "Failed to install btop, continuing..."
     install_package "tree" "tree" "tree" || log_warn "Failed to install tree, continuing..."
     install_package "gdu" "gdu" "gdu" || log_warn "Failed to install gdu, continuing..."
-    install_package "terminal-notifier" "terminal-notifier" "terminal-notifier" || log_warn "Failed to install terminal-notifier, continuing..."
-    install_package "neofetch" "neofetch" "neofetch" || log_warn "Failed to install neofetch, continuing..."
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        install_package "terminal-notifier" "terminal-notifier" || log_warn "Failed to install terminal-notifier, continuing..."
+    else
+        install_package "notify-send" "libnotify" "libnotify-bin" "libnotify" || log_warn "Failed to install libnotify, continuing..."
+    fi
+    install_package "fastfetch" "fastfetch" "fastfetch" || log_warn "Failed to install fastfetch, continuing..."
     # install calcure with pipx install calcure # calendar
 
     echo ""
