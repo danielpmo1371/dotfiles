@@ -3,8 +3,6 @@
 # Secrets management installer
 # Sets up native OS secret store (macOS Keychain / Linux libsecret)
 
-set -e
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_ROOT="$(dirname "$SCRIPT_DIR")"
 
