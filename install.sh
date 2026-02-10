@@ -11,15 +11,16 @@
 #
 # Installation Order & Dependencies:
 #   1. brew.sh       - Homebrew package manager - no dependencies
-#   2. tools.sh      - Base dev tools (git, nvim, etc.) - no dependencies
+#   2. tools.sh      - Base dev tools (git, nvim, chafa, etc.) - no dependencies
 #   3. secrets.sh    - Create ~/.accessTokens template - no dependencies
 #   4. terminals.sh  - Terminal emulators (Ghostty, etc.) - no dependencies
-#   5. tmux.sh       - Tmux + TPM + plugins - requires: git
-#   6. bash.sh       - Bash configuration - no dependencies
-#   7. zsh.sh        - Zsh configuration + Zap - requires: git, zsh, curl
-#   8. config-dirs.sh - Symlink config directories (nvim) - no dependencies
-#   9. claude.sh     - Claude Code CLI + settings - requires: node, npm
-#  10. mcp.sh        - MCP configuration - requires: jq
+#   5. fonts.sh      - Nerd Fonts for Powerlevel10k - requires: curl
+#   6. tmux.sh       - Tmux + TPM + plugins - requires: git, terminal config
+#   7. bash.sh       - Bash configuration - no dependencies
+#   8. zsh.sh        - Zsh configuration + Zap - requires: git, zsh, curl
+#   9. config-dirs.sh - Symlink config directories (nvim) - no dependencies
+#   10. claude.sh     - Claude Code CLI + settings - requires: node, npm
+#  11. mcp.sh        - MCP configuration - requires: jq, node, npm
 
 set -e
 
@@ -461,52 +462,122 @@ run_installer() {
 }
 
 install_all() {
-    log_header "Full Dotfiles Installation"
+  log_header "Full Dotfiles Installation"
+  local failures=0
+  local failed_components=""
 
-    # Install brew first
-    run_installer "brew.sh" "install_brew"
-
-    # Install tools
-    run_installer "tools.sh" "install_tools"
-
+    # Install brew
+    run_installer "brew.sh" "install_brew" || {
+        log_warn "Brew installation had failures, continuing..."
+        ((failures++))
+        failed_components+="  - tools\n"
+    }
+    # Install tools first
+    run_installer "tools.sh" "install_tools" || {
+        log_warn "Tools installation had failures, continuing..."
+        ((failures++))
+        failed_components+="  - tools\n"
+    }
     # Create secrets template
-    run_installer "secrets.sh" "install_secrets"
-
-    # Install terminal emulators config
-    run_installer "terminals.sh" "install_terminals"
-
-    # Install tmux
-    run_installer "tmux.sh" "install_tmux"
-
+    run_installer "secrets.sh" "install_secrets" || {
+        log_warn "Secrets installation failed, continuing..."
+        ((failures++))
+        failed_components+="  - secrets\n"
+    }
+    # Install TMUX
+    run_installer "tmux.sh" "install_tmux" || {
+        log_warn "Tmux installation failed, continuing..."
+        ((failures++))
+        failed_components+="  - tmux\n"
+    }
     # Install shell-specific configs
-    run_installer "bash.sh" "install_bash_config"
-    run_installer "zsh.sh" "install_zsh_config"
-
+    run_installer "bash.sh" "install_bash_config" || {
+        log_warn "Bash config installation failed, continuing..."
+        ((failures++))
+        failed_components+="  - bash\n"
+    }
+    # Install shell-specific configs
+    run_installer "zsh.sh" "install_zsh_config" || {
+        log_warn "Zsh config installation failed, continuing..."
+        ((failures++))
+        failed_components+="  - zsh\n"
+    }
+    # Install shell-specific configs
+    run_installer "nushell.sh" "install_nushell_config" || {
+        log_warn "Nushell config installation failed, continuing..."
+        ((failures++))
+        failed_components+="  - terminals\n"
+    }
+    # Install terminal emulators config (before tmux - tmux needs terminal keybindings)
+    run_installer "terminals.sh" "install_terminals" || {
+        log_warn "Terminals installation failed, continuing..."
+        ((failures++))
+        failed_components+="  - terminals\n"
+    }
     # Symlink config directories
-    run_installer "config-dirs.sh" "install_config_dirs"
-
-    # Install Claude settings
-    run_installer "claude.sh" "install_npm_packages"
-    run_installer "claude.sh" "install_claude_config"
-
+    run_installer "config-dirs.sh" "install_config_dirs" || {
+        log_warn "Config dirs installation failed, continuing..."
+        ((failures++))
+        failed_components+="  - config-dirs\n"
+    }
+  (run_installer "claude.sh" "install_npm_packages" && run_installer "claude.sh" "install_claude_config") || {
+        log_warn "Claude config installation failed, continuing..."
+        ((failures++))
+        failed_components+="  - claude (config)\n"
+    }
     # Install MCP configuration
-    run_installer "mcp.sh" "main"
+    run_installer "mcp.sh" "main" || {
+        log_warn "MCP installation failed, continuing..."
+        ((failures++))
+        failed_components+="  - mcp\n"
+    }
+    # Install memory hooks for MCP memory service
+    run_installer "memory-hooks.sh" "main" || {
+        log_warn "Memory hooks installation failed, continuing..."
+        ((failures++))
+        failed_components+="  - memory-hooks\n"
+    }
+    # Install Nerd Fonts (before shells - p10k needs them for glyphs)
+    run_installer "fonts.sh" "install_fonts" || {
+        log_warn "Fonts installation failed, continuing..."
+        ((failures++))
+        failed_components+="  - fonts\n"
+    }
+    # Install logging hooks
+    run_installer "logging-hooks.sh" "main" || {
+        log_warn "Logging hooks installation failed, continuing..."
+        ((failures++))
+        failed_components+="  - logging-hooks\n"
+    }
 
     log_header "Installation Complete"
-    echo "All dotfiles have been installed successfully."
+
+    if [[ $failures -gt 0 ]]; then
+        log_warn "$failures component(s) had failures:"
+        echo -e "$failed_components"
+        echo "You can re-run individual installers to retry failed components."
+    else
+        echo "All dotfiles have been installed successfully."
+    fi
     echo ""
     echo "Next steps:"
     echo "  1. Restart your shell or run: source ~/.zshrc (or ~/.bashrc)"
     echo "  2. Run 'p10k configure' to setup powerlevel10k prompt"
     echo "  3. Restart Claude Code to pick up new settings"
     echo ""
-}
+
+    return $failures
+
+  }
 
 # =============================================================================
 # Main Entry Point
 # =============================================================================
 
 main() {
+    local failures=0
+    local failed_components=""
+
     if should_use_dialog "$@"; then
         run_dialog_mode
     else
@@ -517,44 +588,111 @@ main() {
                 show_help
                 ;;
             --brew)
-                run_installer "brew.sh" "install_brew"
+                run_installer "brew.sh" "install_brew" || {
+                    log_warn "Brew installation had failures, continuing..."
+                    ((failures++))
+                    failed_components+="  - tools\n"
+                }
                 ;;
             --tools)
-                run_installer "tools.sh" "install_tools"
+                # Install tools first
+                run_installer "tools.sh" "install_tools" || {
+                    log_warn "Tools installation had failures, continuing..."
+                    ((failures++))
+                    failed_components+="  - tools\n"
+                }
                 ;;
             --secrets)
-                run_installer "secrets.sh" "install_secrets"
+                # Create secrets template
+                run_installer "secrets.sh" "install_secrets" || {
+                    log_warn "Secrets installation failed, continuing..."
+                    ((failures++))
+                    failed_components+="  - secrets\n"
+                }
                 ;;
             --tmux)
-                run_installer "tmux.sh" "install_tmux"
+                run_installer "tmux.sh" "install_tmux" || {
+                    log_warn "Tmux installation failed, continuing..."
+                    ((failures++))
+                    failed_components+="  - tmux\n"
+                }
                 ;;
             --bash)
-                run_installer "bash.sh" "install_bash_config"
+                # Install shell-specific configs
+                run_installer "bash.sh" "install_bash_config" || {
+                    log_warn "Bash config installation failed, continuing..."
+                    ((failures++))
+                    failed_components+="  - bash\n"
+                }
                 ;;
             --zsh)
-                run_installer "zsh.sh" "install_zsh_config"
+                run_installer "zsh.sh" "install_zsh_config" || {
+                    log_warn "Zsh config installation failed, continuing..."
+                    ((failures++))
+                    failed_components+="  - zsh\n"
+                }
                 ;;
             --nushell)
-                run_installer "nushell.sh" "install_nushell_config"
+                run_installer "nushell.sh" "install_nushell_config" || {
+                    log_warn "Nushell config installation failed, continuing..."
+                    ((failures++))
+                    failed_components+="  - terminals\n"
+                }
                 ;;
             --terminals)
-                run_installer "terminals.sh" "install_terminals"
+                # Install terminal emulators config (before tmux - tmux needs terminal keybindings)
+                run_installer "terminals.sh" "install_terminals" || {
+                    log_warn "Terminals installation failed, continuing..."
+                    ((failures++))
+                    failed_components+="  - terminals\n"
+                }
                 ;;
             --config-dirs)
-                run_installer "config-dirs.sh" "install_config_dirs"
+                # Symlink config directories
+                run_installer "config-dirs.sh" "install_config_dirs" || {
+                    log_warn "Config dirs installation failed, continuing..."
+                    ((failures++))
+                    failed_components+="  - config-dirs\n"
+                }
                 ;;
             --claude)
-                run_installer "claude.sh" "install_npm_packages"
-                run_installer "claude.sh" "install_claude_config"
+              (run_installer "claude.sh" "install_npm_packages" && run_installer "claude.sh" "install_claude_config") || {
+                    log_warn "Claude config installation failed, continuing..."
+                    ((failures++))
+                    failed_components+="  - claude (config)\n"
+                }
                 ;;
             --mcp)
-                run_installer "mcp.sh" "main"
+                # Install MCP configuration
+                run_installer "mcp.sh" "main" || {
+                    log_warn "MCP installation failed, continuing..."
+                    ((failures++))
+                    failed_components+="  - mcp\n"
+                }
                 ;;
             --memory-hooks)
-                run_installer "memory-hooks.sh" "main"
+                # Install memory hooks for MCP memory service
+                run_installer "memory-hooks.sh" "main" || {
+                    log_warn "Memory hooks installation failed, continuing..."
+                    ((failures++))
+                    failed_components+="  - memory-hooks\n"
+                }
+                ;;
+            --fonts)
+                # Install Nerd Fonts (before shells - p10k needs them for glyphs)
+                run_installer "fonts.sh" "install_fonts" || {
+                    log_warn "Fonts installation failed, continuing..."
+                    ((failures++))
+                    failed_components+="  - fonts\n"
+                }
                 ;;
             --logging-hooks)
-                run_installer "logging-hooks.sh" "main"
+                # Install logging hooks
+                run_installer "logging-hooks.sh" "main" || {
+                    log_warn "Logging hooks installation failed, continuing..."
+                    ((failures++))
+                    failed_components+="  - logging-hooks\n"
+                }
                 ;;
             --all)
                 install_all
@@ -579,6 +717,23 @@ main() {
                 ;;
         esac
     fi
-}
 
+    log_header "Installation Complete"
+
+    if [[ $failures -gt 0 ]]; then
+        log_warn "$failures component(s) had failures:"
+        echo -e "$failed_components"
+        echo "You can re-run individual installers to retry failed components."
+    else
+        echo "All dotfiles have been installed successfully."
+    fi
+    echo ""
+    echo "Next steps:"
+    echo "  1. Restart your shell or run: source ~/.zshrc (or ~/.bashrc)"
+    echo "  2. Run 'p10k configure' to setup powerlevel10k prompt"
+    echo "  3. Restart Claude Code to pick up new settings"
+    echo ""
+
+    return $failures
+  }
 main "$@"
