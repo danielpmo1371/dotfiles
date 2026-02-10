@@ -6,8 +6,6 @@
 # Usage: ./memory-hooks.sh [--dry-run]
 #
 
-set -euo pipefail
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_ROOT="$(dirname "$SCRIPT_DIR")"
 
@@ -105,7 +103,7 @@ create_config() {
   "memoryService": {
     "protocol": "http",
     "preferredProtocol": "http",
-    "fallbackEnabled": false,
+    "fallbackEnabled": true,
     "http": {
       "endpoint": "http://memory-mcp:8000",
       "healthCheckTimeout": 3000,
@@ -164,13 +162,13 @@ update_settings_json() {
   log_info "Updating settings.json with hook configuration..."
 
   if ! command -v jq &> /dev/null; then
-    log_error "jq is required but not installed. Install with: brew install jq"
+    log_error "jq is required but not installed. Run ./install.sh --tools or install jq manually"
     return 1
   fi
 
   # Hooks to add to settings.json
   # Using absolute path with $HOME expanded at runtime via the hook script
-  local hooks_path="$TARGET_HOOKS_DIR"
+  local hooks_path="\$HOME/.claude/hooks/memory"
 
   local new_hooks='{
     "SessionStart": [

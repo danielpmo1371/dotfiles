@@ -1,5 +1,6 @@
 # Secrets
 *Tokens
+tmp/
 
 # npm cache directories
 config/configstore/

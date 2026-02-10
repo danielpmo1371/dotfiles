@@ -5,8 +5,6 @@
 #
 # Dependencies: node, npm (for Claude Code CLI)
 
-set -e
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_ROOT="$(dirname "$SCRIPT_DIR")"
 
@@ -54,18 +52,69 @@ install_npm_packages() {
         else
             log_info "Installing $package..."
             npm install -g "$package" || {
-                log_error "Failed to install $package"
-                return 1
+                log_warn "Failed to install $package, continuing..."
+                continue
             }
             log_success "$package installed"
         fi
     done
 }
 
+ensure_settings_local() {
+    local settings_local="$HOME/.claude/settings.local.json"
+
+    # Ensure ~/.claude/ directory exists
+    if [[ ! -d "$HOME/.claude" ]]; then
+        mkdir -p "$HOME/.claude"
+        log_info "Created ~/.claude/ directory"
+    fi
+
+    # Check for jq dependency
+    if ! command -v jq &> /dev/null; then
+        log_warn "jq is not installed - cannot create/update settings.local.json"
+        log_warn "Install jq and re-run: ./install.sh --claude"
+        return 1
+    fi
+
+    if [[ ! -f "$settings_local" ]]; then
+        # File doesn't exist - create it fresh
+        log_info "Creating settings.local.json..."
+        jq -n '{
+            "enableAllProjectMcpServers": true,
+            "enabledMcpjsonServers": ["memory"]
+        }' > "$settings_local"
+        log_success "Created settings.local.json"
+    elif [[ ! -s "$settings_local" ]]; then
+        # File exists but is empty - recreate it
+        log_info "settings.local.json is empty, recreating..."
+        jq -n '{
+            "enableAllProjectMcpServers": true,
+            "enabledMcpjsonServers": ["memory"]
+        }' > "$settings_local"
+        log_success "Recreated settings.local.json"
+    else
+        # File exists with content - merge required keys preserving existing content
+        log_info "Updating existing settings.local.json..."
+        local updated
+        updated=$(jq '
+            .enableAllProjectMcpServers = true |
+            .enabledMcpjsonServers = (
+                (.enabledMcpjsonServers // [])
+                | if any(. == "memory") then . else . + ["memory"] end
+            )
+        ' "$settings_local")
+        echo "$updated" > "$settings_local"
+        log_success "Updated settings.local.json (preserved existing content)"
+    fi
+}
+
 install_claude_config() {
     log_header "Claude Code Settings"
 
     link_target_files "claude" "$HOME/.claude" "${CLAUDE_FILES[@]}"
+
+    # Generate/update settings.local.json for MCP memory service
+    ensure_settings_local
 
     echo ""
     log_info "Claude settings installation complete"
