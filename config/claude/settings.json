@@ -79,13 +79,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $HOME/.claude/hooks/memory/session-start.js",
-            "timeout": 30
+            "command": "$HOME/.claude/hooks/logging/session-goal-tracker.sh",
+            "timeout": 5
           },
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/logging/session-goal-tracker.sh",
-            "timeout": 5
+            "command": "node $HOME/.claude/hooks/memory/session-start.js",
+            "timeout": 30
           }
         ]
       }
@@ -95,13 +95,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $HOME/.claude/hooks/memory/session-end.js",
-            "timeout": 15
+            "command": "$HOME/.claude/hooks/logging/session-goal-tracker.sh",
+            "timeout": 5
           },
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/logging/session-goal-tracker.sh",
-            "timeout": 5
+            "command": "node $HOME/.claude/hooks/memory/session-end.js",
+            "timeout": 15
           }
         ]
       }
