@@ -1,4 +1,7 @@
 {
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
   "permissions": {
     "allow": [
       "Fetch(*)",
@@ -45,7 +48,11 @@
       "Bash(ttalk:*)",
       "Bash(az:*)",
       "Bash(jq:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(tmux:*)",
+      "Bash(claude:*)",
+      "Bash(bash:*)",
+      "Bash(source:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",
@@ -62,7 +69,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/.config/.claude/notification.sh"
+            "command": "$HOME/.config/.claude/notification.sh"
           }
         ]
       }
@@ -72,7 +79,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /Users/daniel/.claude/hooks/memory/session-start.js",
+            "command": "$HOME/.claude/hooks/logging/session-goal-tracker.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node $HOME/.claude/hooks/memory/session-start.js",
             "timeout": 30
           }
         ]
@@ -83,7 +95,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /Users/daniel/.claude/hooks/memory/session-end.js",
+            "command": "$HOME/.claude/hooks/logging/session-goal-tracker.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node $HOME/.claude/hooks/memory/session-end.js",
             "timeout": 15
           }
         ]
@@ -95,8 +112,35 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /Users/daniel/.claude/hooks/memory/permission-request.js",
+            "command": "node $HOME/.claude/hooks/memory/permission-request.js",
             "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/logging/user-request-logger.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/logging/session-goal-tracker.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/logging/response-summarizer.sh",
+            "timeout": 10
           }
         ]
       }
@@ -108,15 +152,13 @@
     "github@claude-plugins-official": true,
     "code-review@claude-plugins-official": true,
     "feature-dev@claude-plugins-official": true,
-    "serena@claude-plugins-official": false,
-    "typescript-lsp@claude-plugins-official": true,
-    "security-guidance@claude-plugins-official": true,
     "code-simplifier@claude-plugins-official": true,
     "ralph-loop@claude-plugins-official": true,
     "pr-review-toolkit@claude-plugins-official": true,
     "agent-sdk-dev@claude-plugins-official": true,
-    "csharp-lsp@claude-plugins-official": true,
-    "superpowers@claude-plugins-official": true
+    "superpowers@claude-plugins-official": true,
+    "cicd-automation@claude-code-workflows": true,
+    "cloud-infrastructure@claude-code-workflows": true
   },
   "alwaysThinkingEnabled": true
 }
