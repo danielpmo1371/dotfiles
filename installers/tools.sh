@@ -65,6 +65,7 @@ install_tools() {
         install_package "notify-send" "libnotify" "libnotify-bin" "libnotify" || log_warn "Failed to install libnotify, continuing..."
     fi
     install_package "fastfetch" "fastfetch" "fastfetch" || log_warn "Failed to install fastfetch, continuing..."
+    install_package "toilet" "toilet" "toilet" || log_warn "Failed to install toilet, continuing..."
     # install calcure with pipx install calcure # calendar
 
     echo ""
