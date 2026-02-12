@@ -117,6 +117,7 @@ create_config() {
     },
     "defaultTags": ["claude-code", "auto-generated"],
     "maxMemoriesPerSession": 8,
+    "enableSessionConsolidation": true,
     "injectAfterCompacting": false
   },
   "autoCapture": {
@@ -127,19 +128,18 @@ create_config() {
       "remember": "#remember"
     }
   },
+  "sessionAnalysis": {
+    "extractTopics": true,
+    "extractDecisions": true,
+    "extractInsights": true,
+    "extractCodeChanges": true,
+    "extractNextSteps": true,
+    "minSessionLength": 100,
+    "minConfidence": 0.1
+  },
   "permissionRequest": {
     "enabled": true,
     "autoApprove": true,
-    "safePatterns": [
-      "mcp__memory__retrieve_memory",
-      "mcp__memory__search_by_tag",
-      "mcp__memory__list_memories",
-      "mcp__memory__check_database_health",
-      "mcp__memory__get_cache_stats"
-    ],
-    "destructivePatterns": [
-      "mcp__memory__delete_memory"
-    ],
     "logDecisions": false
   },
   "output": {
@@ -195,12 +195,35 @@ update_settings_json() {
     ],
     "PreToolUse": [
       {
-        "matcher": "mcp__memory__*",
+        "matcher": "mcp__memory__.*",
         "hooks": [
           {
             "type": "command",
             "command": "node '"$hooks_path"'/permission-request.js",
             "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node '"$hooks_path"'/auto-capture-hook.js",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node '"$hooks_path"'/mid-conversation.js",
+            "timeout": 8
           }
         ]
       }
@@ -261,6 +284,16 @@ link_hooks_to_home() {
   fi
   ln -s "$source_hooks_dir/utilities" "$target_hooks_dir/utilities"
   log_success "Linked utilities directory"
+
+  # Link config.json (hooks read this from ~/.claude/hooks/config.json)
+  if [[ -L "$target_hooks_dir/config.json" ]]; then
+    rm "$target_hooks_dir/config.json"
+  elif [[ -f "$target_hooks_dir/config.json" ]]; then
+    log_warn "Backing up existing config.json"
+    mv "$target_hooks_dir/config.json" "$target_hooks_dir/config.json.bak.$(date +%Y%m%d%H%M%S)"
+  fi
+  ln -s "$source_hooks_dir/config.json" "$target_hooks_dir/config.json"
+  log_success "Linked config.json"
 }
 
 verify_installation() {
@@ -285,8 +318,16 @@ verify_installation() {
     ((errors++))
   fi
 
-  # Check required hook files
-  for hook in "session-start.js" "session-end.js"; do
+  # Check config.json symlink
+  if [[ -f "$target_hooks_dir/config.json" ]] || $DRY_RUN; then
+    log_success "config.json accessible at $target_hooks_dir/config.json"
+  else
+    log_error "config.json not found at $target_hooks_dir/config.json"
+    ((errors++))
+  fi
+
+  # Check all required hook files
+  for hook in "session-start.js" "session-end.js" "permission-request.js" "auto-capture-hook.js" "mid-conversation.js"; do
     if [[ -f "$target_hooks_dir/memory/$hook" ]] || $DRY_RUN; then
       log_success "Found $hook"
     else
@@ -313,13 +354,15 @@ verify_installation() {
     ((errors++))
   fi
 
-  # Check settings.json has hooks
-  if jq -e '.hooks.SessionStart' "$SETTINGS_FILE" &>/dev/null || $DRY_RUN; then
-    log_success "SessionStart hook configured in settings.json"
-  else
-    log_error "SessionStart hook not found in settings.json"
-    ((errors++))
-  fi
+  # Check settings.json has all memory hooks registered
+  for event in "SessionStart" "SessionEnd" "PreToolUse" "PostToolUse" "UserPromptSubmit"; do
+    if jq -e ".hooks.$event" "$SETTINGS_FILE" &>/dev/null || $DRY_RUN; then
+      log_success "$event hook configured in settings.json"
+    else
+      log_error "$event hook not found in settings.json"
+      ((errors++))
+    fi
+  done
 
   # Test hook execution (non-blocking)
   log_info "Testing session-start.js execution..."

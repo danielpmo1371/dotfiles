@@ -16,6 +16,7 @@
     },
     "defaultTags": ["claude-code", "auto-generated"],
     "maxMemoriesPerSession": 8,
+    "enableSessionConsolidation": true,
     "injectAfterCompacting": false
   },
   "autoCapture": {
@@ -26,19 +27,18 @@
       "remember": "#remember"
     }
   },
+  "sessionAnalysis": {
+    "extractTopics": true,
+    "extractDecisions": true,
+    "extractInsights": true,
+    "extractCodeChanges": true,
+    "extractNextSteps": true,
+    "minSessionLength": 100,
+    "minConfidence": 0.1
+  },
   "permissionRequest": {
     "enabled": true,
     "autoApprove": true,
-    "safePatterns": [
-      "mcp__memory__retrieve_memory",
-      "mcp__memory__search_by_tag",
-      "mcp__memory__list_memories",
-      "mcp__memory__check_database_health",
-      "mcp__memory__get_cache_stats"
-    ],
-    "destructivePatterns": [
-      "mcp__memory__delete_memory"
-    ],
     "logDecisions": false
   },
   "output": {
