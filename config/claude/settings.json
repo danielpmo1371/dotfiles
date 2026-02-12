@@ -108,11 +108,23 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "mcp__memory__*",
+        "matcher": "mcp__memory__.*",
         "hooks": [
           {
             "type": "command",
             "command": "node $HOME/.claude/hooks/memory/permission-request.js",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $HOME/.claude/hooks/memory/auto-capture-hook.js",
             "timeout": 5
           }
         ]
@@ -130,6 +142,11 @@
             "type": "command",
             "command": "$HOME/.claude/hooks/logging/session-goal-tracker.sh",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node $HOME/.claude/hooks/memory/mid-conversation.js",
+            "timeout": 8
           }
         ]
       }
