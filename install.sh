@@ -37,7 +37,7 @@ source "$SCRIPT_DIR/lib/install-packages.sh"
 # Profile package lists
 PROFILE_MINIMAL="git curl wget"
 PROFILE_DEVELOPER="git curl wget nvim tmux zsh node npm ripgrep fzf fd bat jq"
-PROFILE_FULL="git curl wget nvim tmux zsh node npm ripgrep fzf fd bat jq git-delta lsd zoxide eza chafa htop btop tree gdu terminal-notifier neofetch tlrc"
+PROFILE_FULL="git curl wget nvim tmux zsh node npm ripgrep fzf fd bat jq git-delta lsd zoxide eza chafa htop btop tree gdu notifications fastfetch tlrc"
 
 # All available packages with descriptions
 # Format: "package:description"
@@ -64,8 +64,8 @@ ALL_PACKAGES=(
     "btop:Resource monitor"
     "tree:Directory tree"
     "gdu:Disk usage analyzer"
-    "terminal-notifier:macOS notifications"
-    "neofetch:System info"
+    "notifications:Desktop notifications"
+    "fastfetch:System info"
     "tlrc:Tldr client (Rust)"
 )
 
