@@ -4,6 +4,10 @@
       "type": "url",
       "url": "http://memory-mcp:8000/mcp"
     },
+    "browser": {
+      "type": "sse",
+      "url": "http://10.0.0.102:3002/sse"
+    },
     "task-master-ai": {
       "command": "npx",
       "args": ["-y", "task-master-ai"],
