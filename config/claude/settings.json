@@ -177,5 +177,6 @@
     "cicd-automation@claude-code-workflows": true,
     "cloud-infrastructure@claude-code-workflows": true
   },
-  "alwaysThinkingEnabled": true
+  "alwaysThinkingEnabled": true,
+  "skipDangerousModePermissionPrompt": true
 }

@@ -142,6 +142,9 @@ install_claude_config() {
 
     link_target_files "claude" "$HOME/.claude" "${CLAUDE_FILES[@]}"
 
+    # Symlink ~/.claude.json (user-level MCP config) to home directory
+    link_home_files "claude" "claude.json:.claude.json"
+
     # Generate/update settings.local.json for MCP memory service
     ensure_settings_local
 
@@ -152,6 +155,7 @@ install_claude_config() {
     for item in "${CLAUDE_FILES[@]}"; do
         echo "  - $item"
     done
+    echo "  - ~/.claude.json (user-level MCP config)"
     echo ""
     echo "Local items (not synced):"
     echo "  - settings.local.json (per-machine permissions)"

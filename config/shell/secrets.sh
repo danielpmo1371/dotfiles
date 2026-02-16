@@ -20,3 +20,4 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 export AZDO_PAT="$(secret AZDO_PAT 2>/dev/null)"
 export AZURE_DEVOPS_PAT="$(secret AZDO_PAT 2>/dev/null)"
+export ADO_MCP_AUTH_TOKEN="$(secret AZDO_PAT 2>/dev/null)"

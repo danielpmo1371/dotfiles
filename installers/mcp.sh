@@ -13,6 +13,7 @@
 # Source common functions
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/install-common.sh"
+source "$SCRIPT_DIR/../lib/secrets.sh"
 
 # Configuration paths
 DOTFILES_ROOT="$(get_dotfiles_root)"
@@ -22,6 +23,48 @@ CLAUDE_DESKTOP_CONFIG="$HOME/Library/Application Support/Claude/claude_desktop_c
 
 # Flags
 SYNC_DESKTOP=false
+
+# Resolve secret:KEY_NAME references in env blocks
+# Replaces values like "secret:AZDO_PAT" with the actual secret from keychain
+resolve_secrets() {
+    local config_file="$1"
+    local has_secrets
+    has_secrets=$(jq -r '
+        [.mcpServers // {} | to_entries[] | .value.env // {} | to_entries[] |
+         select(.value | startswith("secret:"))] | length
+    ' "$config_file")
+
+    if [[ "$has_secrets" -eq 0 ]]; then
+        return 0
+    fi
+
+    log_info "Resolving $has_secrets secret reference(s) from keychain..."
+
+    local resolved="$config_file"
+    local tmpfile
+    tmpfile=$(mktemp)
+
+    # Extract secret references and resolve them
+    jq -r '
+        .mcpServers // {} | to_entries[] |
+        .key as $server |
+        .value.env // {} | to_entries[] |
+        select(.value | startswith("secret:")) |
+        "\($server)\t\(.key)\t\(.value | ltrimstr("secret:"))"
+    ' "$config_file" | while IFS=$'\t' read -r server env_key secret_key; do
+        local secret_value
+        secret_value=$(secret "$secret_key" 2>/dev/null)
+
+        if [[ -n "$secret_value" ]]; then
+            jq --arg server "$server" --arg key "$env_key" --arg val "$secret_value" '
+                .mcpServers[$server].env[$key] = $val
+            ' "$config_file" > "$tmpfile" && mv "$tmpfile" "$config_file"
+            log_success "Resolved secret for $server.$env_key"
+        else
+            log_warn "Secret '$secret_key' not found for $server.$env_key"
+        fi
+    done
+}
 
 sync_to_claude_code() {
     log_info "Syncing MCP servers to Claude Code CLI..."
@@ -42,6 +85,7 @@ sync_to_claude_code() {
     ' "$CLAUDE_CODE_CONFIG" "$SERVERS_SOURCE")
 
     echo "$merged" > "$CLAUDE_CODE_CONFIG"
+    resolve_secrets "$CLAUDE_CODE_CONFIG"
     log_success "Updated ~/.claude.json with MCP servers"
 }
 
@@ -75,6 +119,7 @@ sync_to_claude_desktop() {
     ' "$CLAUDE_DESKTOP_CONFIG" "$SERVERS_SOURCE")
 
     echo "$merged" > "$CLAUDE_DESKTOP_CONFIG"
+    resolve_secrets "$CLAUDE_DESKTOP_CONFIG"
 
     # Show which servers were skipped
     local skipped
