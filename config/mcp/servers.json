@@ -10,10 +10,9 @@
   "azure-devops": {
     "type": "stdio",
     "command": "npx",
-    "args": ["-y", "@azure-devops/mcp", "mbie-immigrationnz-prod"],
+    "args": ["-y", "@azure-devops/mcp", "mbie-immigrationnz-prod", "--authentication", "envvar"],
     "env": {
-      "AZURE_DEVOPS_AUTH_METHOD": "pat",
-      "AZURE_DEVOPS_ORG_URL": "https://dev.azure.com/mbie-immigrationnz-prod"
+      "ADO_MCP_AUTH_TOKEN": "secret:AZDO_PAT"
     }
   },
   "sequential-thinking": {
