@@ -182,7 +182,7 @@ test_claude() {
 test_mcp() {
     echo -e "\n${BLUE}=== Testing: mcp ===${NC}"
     # MCP merges config into ~/.claude.json or similar
-    if [ -f "$HOME/.claude.json" ] || [ -f "$HOME/.claude/mcp.json" ]; then
+    if [ -f "$HOME/.claude.json" ]; then
         echo -e "  ${GREEN}PASS${NC} MCP config file exists"
         PASS=$((PASS + 1))
     else
