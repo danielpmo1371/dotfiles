@@ -10,7 +10,11 @@
   "azure-devops": {
     "type": "stdio",
     "command": "npx",
-    "args": ["-y", "@azure-devops/mcp", "mbie-immigrationnz-prod"]
+    "args": ["-y", "@azure-devops/mcp", "mbie-immigrationnz-prod"],
+    "env": {
+      "AZURE_DEVOPS_AUTH_METHOD": "pat",
+      "AZURE_DEVOPS_ORG_URL": "https://dev.azure.com/mbie-immigrationnz-prod"
+    }
   },
   "sequential-thinking": {
     "type": "stdio",
