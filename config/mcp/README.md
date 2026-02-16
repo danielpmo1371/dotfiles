@@ -34,20 +34,22 @@ This directory contains MCP (Model Context Protocol) configuration for Claude Co
   - `core` (7 tools) - default
   - `standard` (14 tools)
   - `all` (44+ tools)
-- **Configuration**: Edit `TASK_MASTER_TOOLS` in mcp.json
+- **Configuration**: Edit `TASK_MASTER_TOOLS` in servers.json
 
 ## Files
 
-- `mcp.json` - Main MCP server configuration
+- `servers.json` - **Canonical source of truth** for MCP server definitions (edit this to add/remove servers)
 - `mcp-env.template` - Template for API keys
 - `mcp-env.local` - Your actual API keys (gitignored)
 - `.gitignore` - Excludes local files from git
 
-## Compatibility
+## How It Works
 
-The installer automatically configures MCP for both:
-- **Claude Code CLI**: Uses `~/.mcp.json`
-- **Claudecode UI**: Uses `~/.claude.json` (automatically updated)
+Claude Code reads MCP servers from `~/.claude.json` (the `mcpServers` key). The installer (`installers/mcp.sh`) merges `servers.json` into `~/.claude.json`, preserving other settings.
+
+**Never edit `~/.claude.json` directly for MCP servers** — run the installer instead.
+
+The installer also supports syncing to Claude Desktop (opt-in with `--desktop` flag).
 
 ## Required API Keys
 
@@ -78,4 +80,4 @@ At least one of these is required for Task Master:
 ### MCP Not Loading in Claude Code
 1. Restart Claude Code after configuration
 2. Check MCP debug output: `claude --mcp-debug`
-3. Verify ~/.mcp.json symlink exists
+3. Verify servers are in `~/.claude.json` under `mcpServers` key (run `./install.sh --mcp` to sync)

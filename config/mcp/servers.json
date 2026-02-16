@@ -26,5 +26,10 @@
     "type": "stdio",
     "command": "npx",
     "args": ["-y", "u/kazuph/mcp-fetch"]
+  },
+  "browsermcp": {
+    "type": "stdio",
+    "command": "npx",
+    "args": ["@browsermcp/mcp@latest"]
   }
 }

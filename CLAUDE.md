@@ -74,6 +74,22 @@ Settings symlinked from `config/claude/` to `~/.claude/`:
 
 Local files (not synced): `settings.local.json`, `.credentials.json`
 
+### MCP Server Configuration
+
+**IMPORTANT**: Claude Code reads MCP servers from `~/.claude.json` (the `mcpServers` key), NOT from `~/.claude/mcp.json` or `settings.json`.
+
+**To add/remove/modify MCP servers:**
+1. Edit `config/mcp/servers.json` (canonical source of truth)
+2. Run `./install.sh --mcp` (or `./installers/mcp.sh`) to sync into `~/.claude.json`
+3. Restart Claude Code to load changes
+
+**Never** edit `~/.claude.json` directly for MCP servers — the installer will overwrite manual changes.
+
+Files:
+- `config/mcp/servers.json` - Server definitions (tracked in git)
+- `config/mcp/mcp-env.local` - API keys (gitignored)
+- `installers/mcp.sh` - Sync script that merges servers into `~/.claude.json`
+
 ## Agent Teams (Experimental)
 
 Claude Code Agent Teams are enabled for parallel work on this repo. Teams coordinate multiple Claude Code instances working together with shared tasks and inter-agent messaging. Requires tmux (installed via `--tmux`).
