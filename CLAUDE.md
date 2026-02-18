@@ -71,6 +71,12 @@ Settings symlinked from `config/claude/` to `~/.claude/`:
 - `settings.json` - Permissions and config
 - `commands/` - Custom slash commands
 - `skills/` - Custom skills
+- `scripts/pipeline-validator.sh` - Hard safety rules for pipeline triggers (blocks PRE/PRD)
+- `scripts/pipeline-registry.sh` - CWD-based service detection and pipeline ID resolution
+- `hooks/pipeline-guard.sh` - PreToolUse hook intercepting direct MCP pipeline calls
+- `commands/pipe-deploy.md` - `/pipe-deploy` command for CI/CD orchestration
+- `agents/pipeline-runner.md` - Autonomous pipeline trigger/monitor/recovery agent
+- `skills/pipeline-ops/` - Auto-discoverable skill matching "deploy", "run pipeline" etc.
 
 Local files (not synced): `settings.local.json`, `.credentials.json`
 
