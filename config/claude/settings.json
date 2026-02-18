@@ -116,6 +116,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "mcp__azure-devops__pipelines_run_pipeline",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/pipeline-guard.sh",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
