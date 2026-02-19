@@ -6,7 +6,7 @@
 # Shaders
 # custom-shader = ~/.config/ghostty/shaders/water.glsl
 # custom-shader = ~/.config/ghostty/shaders/inside-the-matrix.glsl
-custom-shader = ~/.config/ghostty/shaders/matrix-hallway.glsl
+# custom-shader = ~/.config/ghostty/shaders/matrix-hallway.glsl
 # custom-shader = ~/.config/ghostty/shaders/rocaille.glsl.glsl
 # custom-shader = ~/.config/ghostty/shaders/shader.glsl
 # custom-shader = ~/.config/ghostty/shaders/candidate/blaze_sparks.glsl
@@ -33,6 +33,16 @@ custom-shader = ~/.config/ghostty/shaders/matrix-hallway.glsl
 # custom-shader = ~/.config/ghostty/shaders/candidate/test.glsl
 # custom-shader = ~/.config/ghostty/shaders/candidate/WIP.glsl
 # custom-shader = ~/.config/ghostty/shaders/candidate/zoom_and_aberration.glsl
+# custom-shader = ~/.config/ghostty/shaders/candidates/blaze_sparks.glsl
+# custom-shader = ~/.config/ghostty/shaders/candidates/cursor_blaze_no_trail.glsl
+# custom-shader = ~/.config/ghostty/shaders/candidates/cursor_blaze_tapered.glsl
+# custom-shader = ~/.config/ghostty/shaders/candidates/cursor_smear_fade_original.glsl
+# custom-shader = ~/.config/ghostty/shaders/candidates/debug_cursor_animated.glsl
+# custom-shader = ~/.config/ghostty/shaders/candidates/last_letter_zoom.glsl
+# custom-shader = ~/.config/ghostty/shaders/matrix-hallway.glsl
+# custom-shader = ~/.config/ghostty/shaders/water.glsl
+# custom-shader = ~/.config/ghostty/shaders/inside-the-matrix.glsl
+# custom-shader = ~/.config/ghostty/shaders/smoke-and-ghost.glsl
 custom-shader-animation = always
 
 font-family = "SF Mono"
