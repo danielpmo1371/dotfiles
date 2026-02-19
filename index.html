@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dotfiles - Cross-Platform Dev Environment</title>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --bg-card: #111111;
+    --bg-terminal: #0d0d0d;
+    --green: #00ff41;
+    --green-dim: #00cc33;
+    --amber: #ffb000;
+    --cyan: #00d4ff;
+    --red: #ff5f56;
+    --yellow: #ffbd2e;
+    --green-dot: #27c93f;
+    --text: #c0c0c0;
+    --text-dim: #666;
+    --border: #222;
+    --border-highlight: #333;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.03) 2px,
+      rgba(0, 0, 0, 0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* --- Layout --- */
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  section {
+    padding: 80px 0;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+  section.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* --- Hero --- */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    opacity: 1;
+    transform: none;
+  }
+
+  .ascii-art {
+    color: var(--green);
+    font-size: 10px;
+    line-height: 1.2;
+    white-space: pre;
+    margin-bottom: 24px;
+    text-shadow: 0 0 10px rgba(0, 255, 65, 0.3);
+  }
+
+  .tagline {
+    color: var(--text);
+    font-size: 18px;
+    margin-bottom: 8px;
+  }
+
+  .tagline-sub {
+    color: var(--text-dim);
+    font-size: 14px;
+    margin-bottom: 40px;
+  }
+
+  .install-box {
+    position: relative;
+    display: inline-block;
+  }
+
+  .install-cmd {
+    background: var(--bg-terminal);
+    border: 1px solid var(--border-highlight);
+    border-radius: 6px;
+    padding: 16px 48px 16px 24px;
+    color: var(--green);
+    font-size: 14px;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    user-select: all;
+  }
+  .install-cmd:hover {
+    border-color: var(--green-dim);
+    box-shadow: 0 0 20px rgba(0, 255, 65, 0.1);
+  }
+  .install-cmd .prompt { color: var(--amber); }
+
+  .copy-icon {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-dim);
+    font-size: 12px;
+    pointer-events: none;
+    transition: color 0.2s;
+  }
+  .install-box:hover .copy-icon { color: var(--text); }
+
+  .copy-toast {
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--green-dim);
+    color: var(--bg);
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 11px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+  }
+  .copy-toast.show { opacity: 1; }
+
+  .hero-stats {
+    margin-top: 40px;
+    display: flex;
+    gap: 32px;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  .hero-stats span { color: var(--amber); }
+
+  .scroll-hint {
+    position: absolute;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--text-dim);
+    font-size: 12px;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.8; }
+  }
+
+  /* --- Section Headers --- */
+  .section-header {
+    color: var(--green);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-bottom: 8px;
+  }
+
+  .section-title {
+    color: #fff;
+    font-size: 24px;
+    margin-bottom: 32px;
+  }
+  .section-title .accent { color: var(--amber); }
+
+  /* --- Terminal Window Chrome --- */
+  .terminal {
+    background: var(--bg-terminal);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+
+  .terminal-bar {
+    background: #1a1a1a;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .terminal-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+  .terminal-dot.red { background: var(--red); }
+  .terminal-dot.yellow { background: var(--yellow); }
+  .terminal-dot.green { background: var(--green-dot); }
+
+  .terminal-title {
+    color: var(--text-dim);
+    font-size: 11px;
+    margin-left: 8px;
+  }
+
+  .terminal-body {
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.7;
+    overflow-x: auto;
+  }
+
+  .terminal-body .comment { color: var(--text-dim); }
+  .terminal-body .cmd { color: var(--green); }
+  .terminal-body .flag { color: var(--cyan); }
+  .terminal-body .arg { color: var(--amber); }
+
+  /* --- Feature Cards --- */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.1s;
+  }
+  .card:hover {
+    border-color: var(--border-highlight);
+    transform: translateY(-2px);
+  }
+
+  .card-icon {
+    font-size: 20px;
+    margin-bottom: 8px;
+  }
+
+  .card-title {
+    color: #fff;
+    font-size: 15px;
+    margin-bottom: 6px;
+  }
+
+  .card-desc {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+
+  .card-details {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+  .card.expanded .card-details {
+    max-height: 500px;
+  }
+
+  .card-details-inner {
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    color: var(--text);
+    font-size: 13px;
+  }
+
+  .card-expand-hint {
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+  .card.expanded .card-expand-hint { display: none; }
+
+  /* --- Tool tags --- */
+  .tool-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .tool-tag {
+    background: rgba(0, 255, 65, 0.08);
+    border: 1px solid rgba(0, 255, 65, 0.15);
+    color: var(--green);
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+  }
+  .tool-tag.amber {
+    background: rgba(255, 176, 0, 0.08);
+    border-color: rgba(255, 176, 0, 0.15);
+    color: var(--amber);
+  }
+  .tool-tag.cyan {
+    background: rgba(0, 212, 255, 0.08);
+    border-color: rgba(0, 212, 255, 0.15);
+    color: var(--cyan);
+  }
+
+  /* --- Stack Section --- */
+  .stack-category {
+    margin-bottom: 24px;
+  }
+  .stack-label {
+    color: var(--amber);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+  }
+
+  /* --- Tree --- */
+  .tree {
+    font-size: 13px;
+    line-height: 1.8;
+  }
+
+  .tree-node {
+    cursor: pointer;
+    padding: 2px 0;
+    transition: color 0.15s;
+  }
+  .tree-node:hover { color: #fff; }
+  .tree-node .prefix { color: var(--text-dim); }
+  .tree-node .name { color: var(--amber); }
+  .tree-node .name.file { color: var(--text); }
+  .tree-node .desc { color: var(--text-dim); font-size: 12px; }
+
+  .tree-children {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+  .tree-node.open > .tree-children {
+    max-height: 2000px;
+  }
+
+  .tree-toggle {
+    color: var(--green);
+    display: inline-block;
+    width: 14px;
+    transition: transform 0.2s;
+  }
+  .tree-node.open > .tree-toggle { transform: rotate(90deg); }
+
+  /* --- Platform badges --- */
+  .platform-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+  }
+
+  .platform-badge {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .platform-badge .icon { font-size: 24px; }
+  .platform-badge .name { color: #fff; font-size: 14px; }
+  .platform-badge .detail { color: var(--text-dim); font-size: 12px; }
+
+  /* --- Claude Section --- */
+  .claude-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+  }
+
+  .claude-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .claude-item:hover { border-color: var(--border-highlight); }
+  .claude-item .count {
+    color: var(--amber);
+    font-size: 28px;
+    font-weight: bold;
+  }
+  .claude-item .label {
+    color: #fff;
+    font-size: 14px;
+    margin-top: 4px;
+  }
+  .claude-item .sub {
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-top: 4px;
+  }
+
+  .claude-details {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+  .claude-item.expanded .claude-details {
+    max-height: 600px;
+  }
+  .claude-details-inner {
+    padding-top: 12px;
+    margin-top: 12px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.8;
+  }
+
+  /* --- Footer --- */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 40px 0;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  footer a {
+    color: var(--cyan);
+    text-decoration: none;
+  }
+  footer a:hover { text-decoration: underline; }
+
+  /* --- Nav --- */
+  .nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: rgba(10, 10, 10, 0.9);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 24px;
+    z-index: 100;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    opacity: 0;
+    transform: translateY(-100%);
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  .nav.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .nav-brand {
+    color: var(--green);
+    font-size: 14px;
+    font-weight: bold;
+    text-decoration: none;
+  }
+  .nav-links {
+    display: flex;
+    gap: 20px;
+  }
+  .nav-links a {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 12px;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--text); }
+
+  /* --- Cursor blink --- */
+  .cursor {
+    display: inline-block;
+    width: 8px;
+    height: 16px;
+    background: var(--green);
+    animation: blink 1s step-end infinite;
+    vertical-align: middle;
+    margin-left: 2px;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  /* --- Typing effect --- */
+  .typing-target {
+    min-height: 1.2em;
+  }
+
+  /* --- Responsive --- */
+  @media (max-width: 600px) {
+    .ascii-art { font-size: 6px; }
+    .hero-stats { flex-direction: column; gap: 8px; }
+    .card-grid { grid-template-columns: 1fr; }
+    .nav-links { display: none; }
+    section { padding: 48px 0; }
+    .install-cmd { font-size: 12px; padding: 12px 40px 12px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav class="nav" id="nav">
+  <a href="#" class="nav-brand">~/dotfiles</a>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#stack">Stack</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#install">Install</a>
+    <a href="#claude">Claude</a>
+    <a href="https://github.com/danielpmo1371/dotfiles" target="_blank">GitHub</a>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero" id="hero">
+  <pre class="ascii-art">
+     _       _    __ _ _
+  __| | ___ | |_ / _(_) | ___  ___
+ / _` |/ _ \| __| |_| | |/ _ \/ __|
+| (_| | (_) | |_|  _| | |  __/\__ \
+ \__,_|\___/ \__|_| |_|_|\___||___/
+  </pre>
+
+  <div class="tagline">Cross-platform dev environment in one command.</div>
+  <div class="tagline-sub">macOS &amp; Linux &middot; Modular &middot; Tested &middot; AI-augmented</div>
+
+  <div class="install-box" onclick="copyInstall(this)">
+    <div class="install-cmd">
+      <span class="prompt">$</span> curl -fsSL https://raw.githubusercontent.com/danielpmo1371/dotfiles/main/bootstrap.sh | bash
+    </div>
+    <span class="copy-icon">[ copy ]</span>
+    <div class="copy-toast" id="copy-toast">Copied!</div>
+  </div>
+
+  <div class="hero-stats">
+    <div><span>245+</span> commits</div>
+    <div><span>11</span> installer modules</div>
+    <div><span>5</span> package managers</div>
+    <div><span>3</span> distros tested</div>
+  </div>
+
+  <div class="scroll-hint">scroll to explore</div>
+</section>
+
+<!-- Features -->
+<section id="features">
+  <div class="container">
+    <div class="section-header">// what's inside</div>
+    <div class="section-title">Everything you need. <span class="accent">Nothing you don't.</span></div>
+
+    <div class="card-grid">
+
+      <div class="card" onclick="toggleCard(this)">
+        <div class="card-title">Zsh + Bash</div>
+        <div class="card-desc">Dual-shell support with shared configuration layer</div>
+        <div class="card-expand-hint">click to expand</div>
+        <div class="card-details"><div class="card-details-inner">
+          Modular design: <code>~/.zshrc</code> and <code>~/.bashrc</code> source shared files from <code>config/shell/</code> for aliases, env, path, and git config. Zsh uses Zap plugin manager with Powerlevel10k prompt. 150+ shared aliases across both shells.
+          <div class="tool-tags">
+            <span class="tool-tag">zap</span>
+            <span class="tool-tag">powerlevel10k</span>
+            <span class="tool-tag">shared aliases</span>
+          </div>
+        </div></div>
+      </div>
+
+      <div class="card" onclick="toggleCard(this)">
+        <div class="card-title">Neovim</div>
+        <div class="card-desc">LazyVim-based config with curated plugins</div>
+        <div class="card-expand-hint">click to expand</div>
+        <div class="card-details"><div class="card-details-inner">
+          Built on LazyVim with custom plugin configs for Git integration, AI code completion (NeoCodeium), Lualine statusbar, Mason LSP management, and Gruvbox colorscheme. Custom keymaps for rapid navigation.
+          <div class="tool-tags">
+            <span class="tool-tag">lazyvim</span>
+            <span class="tool-tag">neocodeium</span>
+            <span class="tool-tag">mason</span>
+            <span class="tool-tag">gruvbox</span>
+          </div>
+        </div></div>
+      </div>
+
+      <div class="card" onclick="toggleCard(this)">
+        <div class="card-title">Tmux</div>
+        <div class="card-desc">Session management with TPM plugins</div>
+        <div class="card-expand-hint">click to expand</div>
+        <div class="card-details"><div class="card-details-inner">
+          Ctrl+E prefix, vi-mode copy, mouse support, status bar on top. Plugins: Gruvbox theme, session resurrect + continuum for persistence, floax for floating panes. 50k line history, zero escape delay.
+          <div class="tool-tags">
+            <span class="tool-tag">gruvbox</span>
+            <span class="tool-tag">resurrect</span>
+            <span class="tool-tag">continuum</span>
+            <span class="tool-tag">floax</span>
+          </div>
+        </div></div>
+      </div>
+
+      <div class="card" onclick="toggleCard(this)">
+        <div class="card-title">Modern CLI Tools</div>
+        <div class="card-desc">Better replacements for every classic Unix tool</div>
+        <div class="card-expand-hint">click to expand</div>
+        <div class="card-details"><div class="card-details-inner">
+          <code>ls</code> &rarr; lsd/eza, <code>cat</code> &rarr; bat, <code>grep</code> &rarr; ripgrep, <code>find</code> &rarr; fd, <code>cd</code> &rarr; zoxide, <code>diff</code> &rarr; delta, plus fzf, jq, chafa, htop, btop, gdu, fastfetch, and tldr.
+          <div class="tool-tags">
+            <span class="tool-tag">ripgrep</span>
+            <span class="tool-tag">fd</span>
+            <span class="tool-tag">bat</span>
+            <span class="tool-tag">fzf</span>
+            <span class="tool-tag">zoxide</span>
+            <span class="tool-tag">lsd</span>
+            <span class="tool-tag">delta</span>
+          </div>
+        </div></div>
+      </div>
+
+      <div class="card" onclick="toggleCard(this)">
+        <div class="card-title">Ghostty Terminal</div>
+        <div class="card-desc">GPU-accelerated terminal configuration</div>
+        <div class="card-expand-hint">click to expand</div>
+        <div class="card-details"><div class="card-details-inner">
+          Pre-configured Ghostty terminal emulator settings, symlinked from <code>config/ghostty/</code>. Designed to pair with the Gruvbox theme across the entire stack.
+          <div class="tool-tags">
+            <span class="tool-tag">ghostty</span>
+            <span class="tool-tag">gpu-accelerated</span>
+          </div>
+        </div></div>
+      </div>
+
+      <div class="card" onclick="toggleCard(this)">
+        <div class="card-title">Claude Code AI</div>
+        <div class="card-desc">13 commands, 10 skills, 2 agents, pipeline ops</div>
+        <div class="card-expand-hint">click to expand</div>
+        <div class="card-details"><div class="card-details-inner">
+          Full Claude Code CLI integration: custom slash commands for deployment, reviews, and braindumps. Skills for pipeline ops, testing, and memory. Autonomous agents for pipeline running and log analysis. Agent Teams for parallel multi-agent workflows.
+          <div class="tool-tags">
+            <span class="tool-tag amber">commands</span>
+            <span class="tool-tag amber">skills</span>
+            <span class="tool-tag amber">agents</span>
+            <span class="tool-tag amber">agent teams</span>
+          </div>
+        </div></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Stack -->
+<section id="stack">
+  <div class="container">
+    <div class="section-header">// the stack</div>
+    <div class="section-title">Tools that <span class="accent">compose.</span></div>
+
+    <div class="stack-category">
+      <div class="stack-label">Shells</div>
+      <div class="tool-tags">
+        <span class="tool-tag">zsh</span>
+        <span class="tool-tag">bash</span>
+        <span class="tool-tag">zap</span>
+        <span class="tool-tag">powerlevel10k</span>
+        <span class="tool-tag">nushell</span>
+      </div>
+    </div>
+
+    <div class="stack-category">
+      <div class="stack-label">Editor</div>
+      <div class="tool-tags">
+        <span class="tool-tag">neovim</span>
+        <span class="tool-tag">lazyvim</span>
+        <span class="tool-tag">neocodeium</span>
+        <span class="tool-tag">telescope</span>
+        <span class="tool-tag">mini-files</span>
+        <span class="tool-tag">mason</span>
+        <span class="tool-tag">lualine</span>
+      </div>
+    </div>
+
+    <div class="stack-category">
+      <div class="stack-label">Terminal</div>
+      <div class="tool-tags">
+        <span class="tool-tag">ghostty</span>
+        <span class="tool-tag">tmux</span>
+        <span class="tool-tag">tpm</span>
+        <span class="tool-tag">resurrect</span>
+        <span class="tool-tag">continuum</span>
+        <span class="tool-tag">floax</span>
+      </div>
+    </div>
+
+    <div class="stack-category">
+      <div class="stack-label">CLI Replacements</div>
+      <div class="tool-tags">
+        <span class="tool-tag cyan">ripgrep</span>
+        <span class="tool-tag cyan">fd</span>
+        <span class="tool-tag cyan">bat</span>
+        <span class="tool-tag cyan">fzf</span>
+        <span class="tool-tag cyan">zoxide</span>
+        <span class="tool-tag cyan">lsd</span>
+        <span class="tool-tag cyan">eza</span>
+        <span class="tool-tag cyan">git-delta</span>
+      </div>
+    </div>
+
+    <div class="stack-category">
+      <div class="stack-label">System</div>
+      <div class="tool-tags">
+        <span class="tool-tag cyan">htop</span>
+        <span class="tool-tag cyan">btop</span>
+        <span class="tool-tag cyan">gdu</span>
+        <span class="tool-tag cyan">fastfetch</span>
+        <span class="tool-tag cyan">chafa</span>
+        <span class="tool-tag cyan">jq</span>
+        <span class="tool-tag cyan">tlrc</span>
+        <span class="tool-tag cyan">tree</span>
+      </div>
+    </div>
+
+    <div class="stack-category">
+      <div class="stack-label">AI / Claude Code</div>
+      <div class="tool-tags">
+        <span class="tool-tag amber">claude-code</span>
+        <span class="tool-tag amber">mcp servers</span>
+        <span class="tool-tag amber">custom commands</span>
+        <span class="tool-tag amber">skills</span>
+        <span class="tool-tag amber">agents</span>
+        <span class="tool-tag amber">pipeline-ops</span>
+      </div>
+    </div>
+
+    <div class="stack-category">
+      <div class="stack-label">Package Managers</div>
+      <div class="tool-tags">
+        <span class="tool-tag">homebrew</span>
+        <span class="tool-tag">apt</span>
+        <span class="tool-tag">dnf</span>
+        <span class="tool-tag">pacman</span>
+        <span class="tool-tag">choco</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- Architecture -->
+<section id="architecture">
+  <div class="container">
+    <div class="section-header">// architecture</div>
+    <div class="section-title">Modular by <span class="accent">design.</span></div>
+
+    <div class="terminal">
+      <div class="terminal-bar">
+        <div class="terminal-dot red"></div>
+        <div class="terminal-dot yellow"></div>
+        <div class="terminal-dot green"></div>
+        <div class="terminal-title">~/repos/dotfiles</div>
+      </div>
+      <div class="terminal-body">
+        <div class="tree" id="file-tree"></div>
+      </div>
+    </div>
+
+    <div style="color: var(--text-dim); font-size: 12px; margin-top: 8px;">
+      Click directories to expand. Each module is independently installable.
+    </div>
+  </div>
+</section>
+
+<!-- Installation -->
+<section id="install">
+  <div class="container">
+    <div class="section-header">// installation</div>
+    <div class="section-title">Three ways to <span class="accent">get started.</span></div>
+
+    <div class="terminal" style="margin-bottom: 24px;">
+      <div class="terminal-bar">
+        <div class="terminal-dot red"></div>
+        <div class="terminal-dot yellow"></div>
+        <div class="terminal-dot green"></div>
+        <div class="terminal-title">bootstrap &mdash; one-liner</div>
+      </div>
+      <div class="terminal-body">
+        <span class="comment"># Clone and install in one command</span><br>
+        <span class="cmd">curl</span> <span class="flag">-fsSL</span> <span class="arg">https://raw.githubusercontent.com/danielpmo1371/dotfiles/main/bootstrap.sh</span> | <span class="cmd">bash</span>
+      </div>
+    </div>
+
+    <div class="terminal" style="margin-bottom: 24px;">
+      <div class="terminal-bar">
+        <div class="terminal-dot red"></div>
+        <div class="terminal-dot yellow"></div>
+        <div class="terminal-dot green"></div>
+        <div class="terminal-title">interactive &mdash; dialog TUI</div>
+      </div>
+      <div class="terminal-body">
+        <span class="comment"># Pick components and packages interactively</span><br>
+        <span class="cmd">./install.sh</span><br>
+        <br>
+        <span class="comment"># Choose a package profile:</span><br>
+        <span class="comment">#   Minimal  &rarr; git, curl, wget</span><br>
+        <span class="comment">#   Developer &rarr; + nvim, tmux, zsh, node, ripgrep, fzf, fd, bat, jq</span><br>
+        <span class="comment">#   Full     &rarr; + delta, lsd, zoxide, eza, chafa, htop, btop, gdu...</span><br>
+        <span class="comment">#   Custom   &rarr; hand-pick each package</span>
+      </div>
+    </div>
+
+    <div class="terminal">
+      <div class="terminal-bar">
+        <div class="terminal-dot red"></div>
+        <div class="terminal-dot yellow"></div>
+        <div class="terminal-dot green"></div>
+        <div class="terminal-title">CLI &mdash; targeted install</div>
+      </div>
+      <div class="terminal-body">
+        <span class="comment"># Install individual components</span><br>
+        <span class="cmd">./install.sh</span> <span class="flag">--tools</span>       <span class="comment"># dev tools</span><br>
+        <span class="cmd">./install.sh</span> <span class="flag">--zsh</span>         <span class="comment"># zsh + zap + p10k</span><br>
+        <span class="cmd">./install.sh</span> <span class="flag">--tmux</span>        <span class="comment"># tmux + TPM + plugins</span><br>
+        <span class="cmd">./install.sh</span> <span class="flag">--terminals</span>   <span class="comment"># ghostty config</span><br>
+        <span class="cmd">./install.sh</span> <span class="flag">--claude</span>      <span class="comment"># claude code CLI</span><br>
+        <span class="cmd">./install.sh</span> <span class="flag">--all</span>         <span class="comment"># everything</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- Cross-Platform -->
+<section id="platforms">
+  <div class="container">
+    <div class="section-header">// cross-platform</div>
+    <div class="section-title">Tested on <span class="accent">real distros.</span></div>
+
+    <div class="platform-grid">
+      <div class="platform-badge">
+        <div class="icon">&#63743;</div>
+        <div>
+          <div class="name">macOS</div>
+          <div class="detail">Homebrew &middot; primary target</div>
+        </div>
+      </div>
+      <div class="platform-badge">
+        <div class="icon">&#128039;</div>
+        <div>
+          <div class="name">Ubuntu</div>
+          <div class="detail">apt &middot; Docker e2e tested</div>
+        </div>
+      </div>
+      <div class="platform-badge">
+        <div class="icon">&#128039;</div>
+        <div>
+          <div class="name">Debian</div>
+          <div class="detail">apt &middot; Docker e2e tested</div>
+        </div>
+      </div>
+      <div class="platform-badge">
+        <div class="icon">&#128039;</div>
+        <div>
+          <div class="name">Fedora</div>
+          <div class="detail">dnf &middot; Docker e2e tested</div>
+        </div>
+      </div>
+      <div class="platform-badge">
+        <div class="icon">&#128039;</div>
+        <div>
+          <div class="name">Arch Linux</div>
+          <div class="detail">pacman &middot; supported</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="terminal" style="margin-top: 24px;">
+      <div class="terminal-bar">
+        <div class="terminal-dot red"></div>
+        <div class="terminal-dot yellow"></div>
+        <div class="terminal-dot green"></div>
+        <div class="terminal-title">e2e test suite</div>
+      </div>
+      <div class="terminal-body">
+        <span class="comment"># Run full test matrix</span><br>
+        <span class="cmd">./tests/test-docker.sh</span> <span class="arg">all</span><br><br>
+        <span class="comment"># Test single distro</span><br>
+        <span class="cmd">./tests/test-docker.sh</span> <span class="arg">ubuntu</span><br><br>
+        <span class="comment"># Validate symlinks</span><br>
+        <span class="cmd">./tests/validate-symlinks.sh</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Claude Code -->
+<section id="claude">
+  <div class="container">
+    <div class="section-header">// claude code integration</div>
+    <div class="section-title">AI-augmented <span class="accent">dev workflows.</span></div>
+
+    <p style="color: var(--text-dim); margin-bottom: 24px; font-size: 13px;">
+      Not just dotfiles &mdash; a programmable AI development environment. Custom commands, skills,
+      autonomous agents, and multi-agent teams that understand your entire stack.
+    </p>
+
+    <div class="claude-grid">
+
+      <div class="claude-item" onclick="toggleClaude(this)">
+        <div class="count">13</div>
+        <div class="label">Commands</div>
+        <div class="sub">Slash commands for common workflows</div>
+        <div class="claude-details"><div class="claude-details-inner">
+          /pipe-deploy &middot; /review-before-commit &middot; /review-branch &middot; /review-changes &middot; /setup-machine &middot; /test-all-distros &middot; /braindump &middot; /memory &middot; /talk &middot; /session-presentation &middot; /story-promp-session &middot; /plan-next-strategy &middot; /user-prompt-file-flow
+        </div></div>
+      </div>
+
+      <div class="claude-item" onclick="toggleClaude(this)">
+        <div class="count">10</div>
+        <div class="label">Skills</div>
+        <div class="sub">Auto-triggered domain expertise</div>
+        <div class="claude-details"><div class="claude-details-inner">
+          pipeline-ops &middot; test-dotfiles &middot; fetch-azdo-logs &middot; memory &middot; braindump &middot; skill-forge &middot; claude-agent-forge &middot; tit-for-tat &middot; archer-verification &middot; keybindings-help
+        </div></div>
+      </div>
+
+      <div class="claude-item" onclick="toggleClaude(this)">
+        <div class="count">2</div>
+        <div class="label">Agents</div>
+        <div class="sub">Autonomous task runners</div>
+        <div class="claude-details"><div class="claude-details-inner">
+          <strong>pipeline-runner</strong> &mdash; triggers CI/CD pipelines, monitors builds, fetches logs on failure, attempts auto-fix<br>
+          <strong>fetch-azdo-logs</strong> &mdash; fetches Azure DevOps build logs, finds errors, returns concise failure summary
+        </div></div>
+      </div>
+
+      <div class="claude-item" onclick="toggleClaude(this)">
+        <div class="count">3</div>
+        <div class="label">Agent Teams</div>
+        <div class="sub">Multi-agent parallel workflows</div>
+        <div class="claude-details"><div class="claude-details-inner">
+          <strong>/setup-machine</strong> &mdash; 4 agents install dotfiles in parallel<br>
+          <strong>/test-all-distros</strong> &mdash; 3 agents run Docker e2e tests simultaneously<br>
+          <strong>/review-changes</strong> &mdash; 3 agents review cross-platform compat, security, symlinks
+        </div></div>
+      </div>
+
+    </div>
+
+    <div class="terminal" style="margin-top: 24px;">
+      <div class="terminal-bar">
+        <div class="terminal-dot red"></div>
+        <div class="terminal-dot yellow"></div>
+        <div class="terminal-dot green"></div>
+        <div class="terminal-title">pipeline safety</div>
+      </div>
+      <div class="terminal-body">
+        <span class="comment"># Three-layer safety system for CI/CD</span><br>
+        <span class="arg">Layer 1:</span> <span class="cmd">pipeline-validator.sh</span>  <span class="comment"># blocks PRE/PRD deployments</span><br>
+        <span class="arg">Layer 2:</span> <span class="cmd">pipeline-guard.sh</span>      <span class="comment"># PreToolUse hook intercepts MCP calls</span><br>
+        <span class="arg">Layer 3:</span> <span class="cmd">pipeline-registry.sh</span>   <span class="comment"># CWD-based service detection</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <div style="margin-bottom: 12px; color: var(--green);">~/dotfiles</div>
+    <a href="https://github.com/danielpmo1371/dotfiles" target="_blank">GitHub</a>
+    &nbsp;&middot;&nbsp; MIT License
+    &nbsp;&middot;&nbsp; macOS &amp; Linux
+  </div>
+</footer>
+
+<script>
+// --- File tree data ---
+const treeData = {
+  name: 'dotfiles/', desc: '', children: [
+    { name: 'bootstrap.sh', desc: 'one-line remote installer' },
+    { name: 'install.sh', desc: 'main entry point (dialog + CLI)' },
+    { name: 'installers/', desc: '11 modular installer scripts', children: [
+      { name: 'brew.sh', desc: 'Homebrew with OS detection' },
+      { name: 'tools.sh', desc: 'CLI tools (ripgrep, fd, bat...)' },
+      { name: 'secrets.sh', desc: '~/.accessTokens template' },
+      { name: 'terminals.sh', desc: 'Ghostty configuration' },
+      { name: 'tmux.sh', desc: 'Tmux + TPM + plugins' },
+      { name: 'bash.sh', desc: 'Bash configuration' },
+      { name: 'zsh.sh', desc: 'Zsh + Zap plugin manager' },
+      { name: 'config-dirs.sh', desc: '~/.config symlinks' },
+      { name: 'claude.sh', desc: 'Claude Code CLI + settings' },
+      { name: 'mcp.sh', desc: 'MCP server configuration' },
+      { name: 'fonts.sh', desc: 'Nerd Fonts for Powerlevel10k' },
+    ]},
+    { name: 'lib/', desc: 'shared functions', children: [
+      { name: 'install-common.sh', desc: 'logging, symlinks, backups' },
+      { name: 'install-packages.sh', desc: 'cross-platform package abstraction' },
+      { name: 'dialog-ui.sh', desc: 'dialog TUI wrapper functions' },
+    ]},
+    { name: 'config/', desc: 'configuration files', children: [
+      { name: 'shell/', desc: 'shared shell configs (env, path, aliases, git)', children: [
+        { name: 'aliases.sh', desc: '150+ aliases for both bash and zsh' },
+        { name: 'env.sh', desc: 'environment variables' },
+        { name: 'path.sh', desc: 'PATH management' },
+        { name: 'git.sh', desc: 'git aliases and helpers' },
+      ]},
+      { name: 'bash/', desc: 'bash-specific (bashrc, bash_aliases)' },
+      { name: 'zsh/', desc: 'zsh-specific (zshrc, p10k)' },
+      { name: 'tmux/', desc: 'tmux.conf with TPM plugins' },
+      { name: 'nvim/', desc: 'LazyVim neovim config', children: [
+        { name: 'lua/plugins/', desc: '8 plugin configurations', children: [
+          { name: 'colorscheme.lua', desc: 'gruvbox theme' },
+          { name: 'git.lua', desc: 'git integration' },
+          { name: 'neocodeium.lua', desc: 'AI code completion' },
+          { name: 'lualine.lua', desc: 'statusline' },
+          { name: 'mason.lua', desc: 'LSP manager' },
+          { name: 'claudecode.lua', desc: 'Claude Code nvim bridge' },
+          { name: 'codecompanion.lua', desc: 'AI chat companion' },
+        ]},
+      ]},
+      { name: 'ghostty/', desc: 'Ghostty terminal emulator config' },
+      { name: 'claude/', desc: 'Claude Code settings', children: [
+        { name: 'commands/', desc: '13 custom slash commands' },
+        { name: 'skills/', desc: '10 auto-triggered skills' },
+        { name: 'agents/', desc: '2 autonomous agents' },
+        { name: 'hooks/', desc: 'pipeline safety hooks' },
+        { name: 'scripts/', desc: 'validator and registry scripts' },
+      ]},
+      { name: 'mcp/', desc: 'MCP server definitions' },
+    ]},
+    { name: 'tests/', desc: 'Docker-based e2e test suite', children: [
+      { name: 'test-docker.sh', desc: 'run full distro test matrix' },
+      { name: 'test-installer.sh', desc: 'validate single installer' },
+      { name: 'validate-symlinks.sh', desc: 'check all symlinks' },
+      { name: 'docker/', desc: 'Dockerfiles for Ubuntu, Debian, Fedora' },
+    ]},
+  ]
+};
+
+// --- Render tree ---
+function renderTree(node, depth = 0) {
+  const isDir = !!node.children;
+  const indent = '  '.repeat(depth);
+  const isFile = !isDir;
+  const nameClass = isFile ? 'name file' : 'name';
+
+  let html = `<div class="tree-node" ${isDir ? 'onclick="toggleTree(event, this)"' : ''}>`;
+  html += `<span class="prefix">${indent}</span>`;
+  if (isDir) {
+    html += `<span class="tree-toggle">&#9656;</span> `;
+  } else {
+    html += `<span style="display:inline-block;width:14px"></span> `;
+  }
+  html += `<span class="${nameClass}">${node.name}</span>`;
+  if (node.desc) {
+    html += ` <span class="desc">&mdash; ${node.desc}</span>`;
+  }
+
+  if (isDir) {
+    html += `<div class="tree-children">`;
+    for (const child of node.children) {
+      html += renderTree(child, depth + 1);
+    }
+    html += `</div>`;
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+document.getElementById('file-tree').innerHTML = renderTree(treeData);
+
+// --- Toggle tree ---
+function toggleTree(e, el) {
+  e.stopPropagation();
+  el.classList.toggle('open');
+}
+
+// --- Toggle cards ---
+function toggleCard(el) {
+  el.classList.toggle('expanded');
+}
+
+function toggleClaude(el) {
+  el.classList.toggle('expanded');
+}
+
+// --- Copy install command ---
+function copyInstall(el) {
+  const cmd = 'curl -fsSL https://raw.githubusercontent.com/danielpmo1371/dotfiles/main/bootstrap.sh | bash';
+  navigator.clipboard.writeText(cmd).then(() => {
+    const toast = document.getElementById('copy-toast');
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 1500);
+  });
+}
+
+// --- Scroll reveal ---
+const sections = document.querySelectorAll('section:not(.hero)');
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1 });
+
+sections.forEach(s => observer.observe(s));
+
+// --- Nav show on scroll ---
+const nav = document.getElementById('nav');
+window.addEventListener('scroll', () => {
+  if (window.scrollY > window.innerHeight * 0.5) {
+    nav.classList.add('visible');
+  } else {
+    nav.classList.remove('visible');
+  }
+});
+
+// --- Typing effect on hero ---
+(function() {
+  const el = document.querySelector('.tagline');
+  const text = el.textContent;
+  el.textContent = '';
+  let i = 0;
+  function type() {
+    if (i < text.length) {
+      el.textContent += text.charAt(i);
+      i++;
+      setTimeout(type, 40);
+    }
+  }
+  setTimeout(type, 600);
+})();
+</script>
+</body>
+</html>
