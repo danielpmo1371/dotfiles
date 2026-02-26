@@ -39,9 +39,9 @@ for field in SERVICE TYPE BRANCH; do
   fi
 done
 
-# Validation: type must be ci or cd
-if [[ "$TYPE" != "ci" && "$TYPE" != "cd" ]]; then
-  jq -n --arg reason "Invalid type: $TYPE. Must be 'ci' or 'cd'" \
+# Validation: type must be ci, cd, or terraform
+if [[ "$TYPE" != "ci" && "$TYPE" != "cd" && "$TYPE" != "terraform" ]]; then
+  jq -n --arg reason "Invalid type: $TYPE. Must be 'ci', 'cd', or 'terraform'" \
     '{"approved": false, "reason": $reason, "rule": "INVALID_TYPE"}'
   exit 2
 fi
@@ -152,6 +152,105 @@ if [[ "$TYPE" == "cd" ]]; then
       "project": $project,
       "branch": $branch,
       "stagesToSkip": $stagesToSkip,
+      "reason": $reason
+    }'
+  exit 0
+fi
+
+# ============================================================================
+# Rule 4: Terraform pipelines — plan only, NEVER apply
+# ============================================================================
+ALLOWED_TF_ENVS=("dev" "sit" "uat")
+ALLOWED_TF_LOCATIONS=("ae" "ase")
+
+if [[ "$TYPE" == "terraform" ]]; then
+  # Parse terraform-specific fields
+  TF_ENVIRONMENT=$(echo "$INPUT" | jq -r '.environment // empty')
+  TF_LOCATION=$(echo "$INPUT" | jq -r '.location // "ae"')
+
+  # Validate environment is provided
+  if [[ -z "$TF_ENVIRONMENT" ]]; then
+    jq -n '{"approved": false, "reason": "Terraform pipeline requires an environment parameter", "rule": "MISSING_ENVIRONMENT"}'
+    exit 1
+  fi
+
+  # Check environment against blocked list
+  TF_ENV_LOWER=$(echo "$TF_ENVIRONMENT" | tr '[:upper:]' '[:lower:]')
+  for blocked in "${BLOCKED_ENVS[@]}"; do
+    if [[ "$TF_ENV_LOWER" == "$blocked" ]]; then
+      jq -n \
+        --arg reason "BLOCKED: Environment '$TF_ENVIRONMENT' is blocked. PRE/PRD are NEVER allowed for terraform pipelines." \
+        '{"approved": false, "reason": $reason, "rule": "ENVIRONMENT_BLOCKLIST"}'
+      exit 1
+    fi
+  done
+
+  # Check environment is in allowed list
+  TF_ENV_ALLOWED=false
+  for allowed in "${ALLOWED_TF_ENVS[@]}"; do
+    if [[ "$TF_ENV_LOWER" == "$allowed" ]]; then
+      TF_ENV_ALLOWED=true
+      break
+    fi
+  done
+  if [[ "$TF_ENV_ALLOWED" == "false" ]]; then
+    jq -n \
+      --arg reason "BLOCKED: Environment '$TF_ENVIRONMENT' is not in allowed list. Allowed: ${ALLOWED_TF_ENVS[*]}" \
+      '{"approved": false, "reason": $reason, "rule": "ENVIRONMENT_NOT_ALLOWED"}'
+    exit 1
+  fi
+
+  # Validate location
+  TF_LOC_LOWER=$(echo "$TF_LOCATION" | tr '[:upper:]' '[:lower:]')
+  TF_LOC_ALLOWED=false
+  for allowed in "${ALLOWED_TF_LOCATIONS[@]}"; do
+    if [[ "$TF_LOC_LOWER" == "$allowed" ]]; then
+      TF_LOC_ALLOWED=true
+      break
+    fi
+  done
+  if [[ "$TF_LOC_ALLOWED" == "false" ]]; then
+    jq -n \
+      --arg reason "BLOCKED: Location '$TF_LOCATION' is not valid. Allowed: ${ALLOWED_TF_LOCATIONS[*]}" \
+      '{"approved": false, "reason": $reason, "rule": "LOCATION_NOT_ALLOWED"}'
+    exit 1
+  fi
+
+  # Normalize branch
+  REF_BRANCH="$BRANCH"
+  if [[ ! "$BRANCH" =~ ^refs/ ]]; then
+    REF_BRANCH="refs/heads/$BRANCH"
+  fi
+
+  # SAFETY: Always skip apply stage — terraform pipelines are PLAN ONLY
+  STAGES_TO_SKIP='["apply_travellerdirectives"]'
+
+  # Build templateParameters for the pipeline
+  TEMPLATE_PARAMS=$(jq -n \
+    --arg env "$TF_ENV_LOWER" \
+    --arg loc "$TF_LOC_LOWER" \
+    '{
+      "environment": $env,
+      "location": $loc,
+      "deployToggle": "deploy",
+      "requireManualApproval": "True",
+      "TF_LOG": "NONE"
+    }')
+
+  jq -n \
+    --arg pipelineId "$PIPELINE_ID" \
+    --arg project "$PROJECT" \
+    --arg branch "$REF_BRANCH" \
+    --argjson stagesToSkip "$STAGES_TO_SKIP" \
+    --argjson templateParameters "$TEMPLATE_PARAMS" \
+    --arg reason "Terraform PLAN-ONLY approved for environment: $TF_ENV_LOWER, location: $TF_LOC_LOWER (apply stage always skipped)" \
+    '{
+      "approved": true,
+      "pipelineId": ($pipelineId | tonumber),
+      "project": $project,
+      "branch": $branch,
+      "stagesToSkip": $stagesToSkip,
+      "templateParameters": $templateParameters,
       "reason": $reason
     }'
   exit 0
