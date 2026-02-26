@@ -182,3 +182,4 @@ alias cdh="cd ~"
 alias tm='task-master'
 alias taskmaster='task-master'
 export AZURE_DEVOPS_PAT=$(security find-generic-password -a "AZDO_PAT" -w 2>/dev/null)
+alias work='ta WORK'
