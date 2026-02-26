@@ -31,10 +31,31 @@ Display what was detected and ask user to confirm before proceeding.
 From the service info JSON, extract:
 - `ci.id` — CI pipeline definition ID
 - `cd.id` — CD pipeline definition ID (may be null)
+- `terraform.id` — Terraform pipeline definition ID (may be absent)
 - `project` — AzDO project name
 - `stages.allowed` — allowed deployment stages
 
+If the service has a `terraform` key, this is a **Terraform pipeline** — skip to **Step 2b**.
 If no CI or CD pipeline exists for the service, inform the user.
+
+### Step 2b: Terraform Pipeline Flow
+
+When the service has a `terraform` key (e.g., td-iac):
+
+1. Parse `$ARGUMENTS` for environment and location:
+   - If arguments contain an environment name (dev/sit/uat): use it
+   - If arguments contain a location (ae/ase): use it
+   - Otherwise: ask the user which environment (dev/sit/uat) and location (ae/ase, default: ae)
+2. Validate through pipeline-validator.sh with `type: "terraform"`:
+   ```bash
+   echo '{"service":"td-iac","type":"terraform","branch":"BRANCH","pipelineId":"802","project":"Travel Declaration","environment":"ENV","location":"LOC"}' | ~/.claude/scripts/pipeline-validator.sh
+   ```
+3. If approved, trigger via MCP using the validator's returned `templateParameters` and `stagesToSkip`
+4. Monitor using the same polling pattern as Step 4
+5. On failure, use fetch-azdo-logs agent for diagnosis + one auto-fix attempt
+6. Report plan results — skip to Step 8
+
+**CRITICAL**: Terraform pipelines are always PLAN ONLY. The apply stage is always skipped. This is enforced by the validator.
 
 ### Step 3: Validate and Trigger CI
 
@@ -102,3 +123,4 @@ Report:
 - **ALWAYS** use the current branch unless explicitly overridden
 - **MAXIMUM ONE** auto-fix retry per pipeline run
 - **CD requires explicit stage selection** from the allowed list
+- **Terraform pipelines are PLAN ONLY** — apply stage is always skipped

@@ -50,6 +50,7 @@ You are an autonomous pipeline deployment agent. You trigger CI/CD pipelines, mo
 - **ALWAYS** validate through pipeline-validator.sh before triggering
 - **MAXIMUM ONE** auto-fix retry
 - **CD requires explicit stage selection** from allowed list
+- **Terraform pipelines are PLAN ONLY** — apply stage is always skipped
 
 ## MCP Tools Required
 
@@ -76,8 +77,28 @@ When a pipeline fails:
 4. If you fix something, commit it and re-trigger the pipeline (ONCE only)
 5. If the fix doesn't work or you can't determine the issue, report the full diagnosis
 
+## Terraform Pipeline Handling
+
+When the detected service has a `terraform` key in the registry (instead of ci/cd), follow this flow:
+
+1. **Detect**: Service registry entry has `"terraform": { "id": 802, ... }` — this is a terraform pipeline
+2. **Parameters**: The user must specify `environment` (dev/sit/uat) and optionally `location` (ae/ase, default: ae)
+3. **Validate**: Send type `"terraform"` to pipeline-validator.sh with environment and location:
+   ```bash
+   echo '{"service":"td-iac","type":"terraform","branch":"BRANCH","pipelineId":"802","project":"Travel Declaration","environment":"sit","location":"ae"}' | ~/.claude/scripts/pipeline-validator.sh
+   ```
+4. **Trigger**: The validator returns `templateParameters` and `stagesToSkip`. Pass BOTH to the MCP call:
+   - `templateParameters`: `{"environment":"sit","location":"ae","deployToggle":"deploy","requireManualApproval":"True","TF_LOG":"NONE"}`
+   - `stagesToSkip`: `["apply_travellerdirectives"]` (ALWAYS — apply is never run)
+   - `resources.repositories.self.refName`: branch ref
+5. **Monitor**: Same polling pattern as CI — check build status every 30s
+6. **Report**: Report plan results. The build logs contain the terraform plan output.
+
+**CRITICAL**: Terraform pipelines are PLAN ONLY. The `apply_travellerdirectives` stage is ALWAYS skipped. This is enforced by the validator and the registry's `alwaysSkipStages` field. Never override this.
+
 ## Output Format
 
+### CI/CD Pipeline Run
 ```
 ## Pipeline Run Summary
 
@@ -98,4 +119,21 @@ When a pipeline fails:
 ### Links
 - CI: {url}
 - CD: {url}
+```
+
+### Terraform Plan Run
+```
+## Terraform Plan Summary
+
+**Service:** td-iac
+**Branch:** {branch}
+**Environment:** {environment}
+**Location:** {location}
+**Result:** {succeeded/failed} (Build #{number})
+
+### Plan Output
+{Summary of plan changes if available from logs}
+
+### Links
+- Build: {url}
 ```
