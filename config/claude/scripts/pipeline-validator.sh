@@ -223,7 +223,8 @@ if [[ "$TYPE" == "terraform" ]]; then
   fi
 
   # SAFETY: Always skip apply stage — terraform pipelines are PLAN ONLY
-  STAGES_TO_SKIP='["apply_travellerdirectives"]'
+  # Also skip the temporary KV access policy stage (not needed for plan)
+  STAGES_TO_SKIP='["RemoveThisStageWhenOtherPipelinesUsesHostedAgents","apply_travellerdirectives"]'
 
   # Build templateParameters for the pipeline
   TEMPLATE_PARAMS=$(jq -n \
