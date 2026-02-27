@@ -69,8 +69,10 @@
   .header h1 { font-size: 24px; font-weight: 700; background: linear-gradient(135deg, var(--tf-purple), var(--tf-purple-light)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
   .header-meta { font-size: 13px; color: var(--text-muted); }
   .header-right { display: flex; align-items: center; gap: 12px; }
-  .theme-toggle { background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 8px 12px; border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; transition: all 0.2s; }
-  .theme-toggle:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .theme-switcher { display: flex; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); overflow: hidden; }
+  .theme-btn { background: transparent; border: none; color: var(--text-muted); padding: 8px 14px; font-size: 13px; cursor: pointer; transition: all 0.2s; font-weight: 500; }
+  .theme-btn:hover { color: var(--text-primary); }
+  .theme-btn.active { background: var(--tf-purple); color: white; }
 
   /* Summary Cards */
   .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 32px; }
@@ -219,15 +221,14 @@ const PLAN_DATA = __PLAN_DATA__;
   // Theme
   var savedTheme = localStorage.getItem('tf-plan-theme') || 'dark';
   document.documentElement.setAttribute('data-theme', savedTheme);
-  function toggleTheme() {
-    var cur = document.documentElement.getAttribute('data-theme');
-    var nxt = cur === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', nxt);
-    localStorage.setItem('tf-plan-theme', nxt);
-    var btn = document.getElementById('theme-btn');
-    if (btn) btn.textContent = nxt === 'dark' ? 'Light Mode' : 'Dark Mode';
+  function setTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    localStorage.setItem('tf-plan-theme', t);
+    document.querySelectorAll('.theme-btn').forEach(function(b) {
+      b.classList.toggle('active', b.getAttribute('data-theme') === t);
+    });
   }
-  window.__toggleTheme = toggleTheme;
+  window.__setTheme = setTheme;
 
   // Sort resources: destroy-first, then by address
   data.resources.sort(function(a, b) {
@@ -251,14 +252,20 @@ const PLAN_DATA = __PLAN_DATA__;
   });
 
   // State
-  var activeFilter = 'all';
+  var allActions = ['destroy','replace','update','create','import','move','read'];
+  var presentActions = allActions.filter(function(a) { return data.resources.some(function(r) { return r.action === a; }); });
+  var activeFilters = {};
+  presentActions.forEach(function(a) { activeFilters[a] = true; });
   var activeModule = null;
   var searchQuery = '';
   var expandedRows = {};
 
+  function allFiltersActive() { return presentActions.every(function(a) { return activeFilters[a]; }); }
+  function noFiltersActive() { return presentActions.every(function(a) { return !activeFilters[a]; }); }
+
   function getFiltered() {
     return data.resources.filter(function(r) {
-      if (activeFilter !== 'all' && r.action !== activeFilter) return false;
+      if (!activeFilters[r.action]) return false;
       if (activeModule && (r.module || 'root') !== activeModule) return false;
       if (searchQuery) {
         var q = searchQuery.toLowerCase();
@@ -297,7 +304,10 @@ const PLAN_DATA = __PLAN_DATA__;
     h += '<svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg"><path fill="#7B42BC" d="M77.941 44.5L64.258 0 49.951 44.5 0 44.5 40.274 71.975 26.783 128 64.258 99.675 101.217 128 88.218 71.975 128 44.5z"/></svg>';
     h += '<div><h1>Terraform Plan Report</h1>';
     h += '<div class="header-meta">Source: ' + esc(data.metadata.source) + ' &middot; ' + esc(data.metadata.generated) + '</div></div></div>';
-    h += '<div class="header-right"><button class="theme-toggle" id="theme-btn" onclick="window.__toggleTheme()">' + (curTheme === 'dark' ? 'Light Mode' : 'Dark Mode') + '</button></div></div>';
+    h += '<div class="header-right"><div class="theme-switcher">';
+    h += '<button class="theme-btn' + (curTheme==='dark'?' active':'') + '" data-theme="dark" onclick="window.__setTheme(\'dark\')">Dark</button>';
+    h += '<button class="theme-btn' + (curTheme==='light'?' active':'') + '" data-theme="light" onclick="window.__setTheme(\'light\')">Light</button>';
+    h += '</div></div></div>';
 
     // Summary cards
     var cards = [
@@ -322,9 +332,11 @@ const PLAN_DATA = __PLAN_DATA__;
     h += '<div class="filter-bar">';
     h += '<input type="text" class="search-input" id="search-input" placeholder="Search resources..." value="' + esc(searchQuery) + '">';
     h += '<div class="filter-pills">';
-    [{k:'all',l:'All',n:data.resources.length},{k:'destroy',l:'Destroy',n:s.destroy},{k:'replace',l:'Replace',n:s.replace||0},{k:'update',l:'Update',n:s.update},{k:'create',l:'Create',n:s.create},{k:'import',l:'Import',n:s.import||0},{k:'move',l:'Move',n:s.move||0},{k:'read',l:'Read',n:s.read||0}].forEach(function(f) {
-      if (f.k !== 'all' && f.n === 0) return;
-      h += '<span class="filter-pill' + (activeFilter===f.k?' active':'') + '" data-filter="' + f.k + '">' + f.l + '<span class="count">' + f.n + '</span></span>';
+    var isAll = allFiltersActive();
+    h += '<span class="filter-pill' + (isAll?' active':'') + '" data-filter="all">All<span class="count">' + data.resources.length + '</span></span>';
+    [{k:'destroy',l:'Destroy',n:s.destroy},{k:'replace',l:'Replace',n:s.replace||0},{k:'update',l:'Update',n:s.update},{k:'create',l:'Create',n:s.create},{k:'import',l:'Import',n:s.import||0},{k:'move',l:'Move',n:s.move||0},{k:'read',l:'Read',n:s.read||0}].forEach(function(f) {
+      if (f.n === 0) return;
+      h += '<span class="filter-pill' + (activeFilters[f.k]?' active':'') + '" data-filter="' + f.k + '">' + f.l + '<span class="count">' + f.n + '</span></span>';
     });
     h += '</div></div>';
 
@@ -420,7 +432,21 @@ const PLAN_DATA = __PLAN_DATA__;
       if (ns) { ns.focus(); ns.setSelectionRange(searchQuery.length, searchQuery.length); }
     });
     document.querySelectorAll('.filter-pill').forEach(function(p) {
-      p.addEventListener('click', function() { activeFilter = p.getAttribute('data-filter'); render(); });
+      p.addEventListener('click', function() {
+        var f = p.getAttribute('data-filter');
+        if (f === 'all') {
+          // Toggle all: if all active, deselect all; otherwise select all
+          var setTo = !allFiltersActive();
+          presentActions.forEach(function(a) { activeFilters[a] = setTo; });
+        } else {
+          activeFilters[f] = !activeFilters[f];
+        }
+        // If nothing selected, select all (prevent empty view)
+        if (noFiltersActive()) {
+          presentActions.forEach(function(a) { activeFilters[a] = true; });
+        }
+        render();
+      });
     });
     document.querySelectorAll('.module-item').forEach(function(item) {
       item.addEventListener('click', function() { activeModule = item.getAttribute('data-module') || null; render(); });
