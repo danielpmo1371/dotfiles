@@ -3,7 +3,7 @@
     "type": "http",
     "url": "http://memory-mcp:8000/mcp"
   },
-  "browser": {
+  "browser-network": {
     "type": "sse",
     "url": "http://10.0.0.102:3002/sse"
   },
@@ -30,7 +30,7 @@
     "command": "npx",
     "args": ["-y", "u/kazuph/mcp-fetch"]
   },
-  "browsermcp": {
+  "browser-local": {
     "type": "stdio",
     "command": "npx",
     "args": ["@browsermcp/mcp@latest"]
