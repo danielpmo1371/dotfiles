@@ -17,7 +17,21 @@ BLOCKED_ENVS=("pre" "prd" "prod" "pre-prod" "production")
 ALLOWED_CD_STAGES=("dry" "dev" "dry_deploy" "sit" "sit_deploy" "test" "uat" "uat_deploy" "stage" "npe" "npe_deploy")
 # ============================================================================
 
+# Logging
+VALIDATOR_LOG_DIR="$HOME/.claude/logs"
+mkdir -p "$VALIDATOR_LOG_DIR"
+VALIDATOR_LOG="$VALIDATOR_LOG_DIR/pipeline-validator.log"
+VALIDATOR_TIMESTAMP=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+log_validator() {
+  echo "[$VALIDATOR_TIMESTAMP] $1" >> "$VALIDATOR_LOG"
+}
+
 INPUT=$(cat)
+
+# Log the incoming request
+log_validator "=== VALIDATOR REQUEST ==="
+log_validator "Input: $INPUT"
 
 # Parse fields
 SERVICE=$(echo "$INPUT" | jq -r '.service // empty')
@@ -67,7 +81,7 @@ if [[ "$TYPE" == "ci" ]]; then
     REF_BRANCH="refs/heads/$BRANCH"
   fi
 
-  jq -n \
+  CI_OUTPUT=$(jq -n \
     --arg pipelineId "$PIPELINE_ID" \
     --arg project "$PROJECT" \
     --arg branch "$REF_BRANCH" \
@@ -79,7 +93,12 @@ if [[ "$TYPE" == "ci" ]]; then
       "branch": $branch,
       "stagesToSkip": [],
       "reason": $reason
-    }'
+    }')
+
+  log_validator "=== VALIDATOR OUTPUT (ci) ==="
+  log_validator "Output: $CI_OUTPUT"
+
+  echo "$CI_OUTPUT"
   exit 0
 fi
 
@@ -140,7 +159,7 @@ if [[ "$TYPE" == "cd" ]]; then
 
   STAGES_LIST=$(IFS=','; echo "${STAGES_ARRAY[*]}")
 
-  jq -n \
+  CD_OUTPUT=$(jq -n \
     --arg pipelineId "$PIPELINE_ID" \
     --arg project "$PROJECT" \
     --arg branch "$REF_BRANCH" \
@@ -153,7 +172,12 @@ if [[ "$TYPE" == "cd" ]]; then
       "branch": $branch,
       "stagesToSkip": $stagesToSkip,
       "reason": $reason
-    }'
+    }')
+
+  log_validator "=== VALIDATOR OUTPUT (cd) ==="
+  log_validator "Output: $CD_OUTPUT"
+
+  echo "$CD_OUTPUT"
   exit 0
 fi
 
@@ -238,7 +262,7 @@ if [[ "$TYPE" == "terraform" ]]; then
       "TF_LOG": "NONE"
     }')
 
-  jq -n \
+  VALIDATOR_OUTPUT=$(jq -n \
     --arg pipelineId "$PIPELINE_ID" \
     --arg project "$PROJECT" \
     --arg branch "$REF_BRANCH" \
@@ -253,6 +277,11 @@ if [[ "$TYPE" == "terraform" ]]; then
       "stagesToSkip": $stagesToSkip,
       "templateParameters": $templateParameters,
       "reason": $reason
-    }'
+    }')
+
+  log_validator "=== VALIDATOR OUTPUT (terraform) ==="
+  log_validator "Output: $VALIDATOR_OUTPUT"
+
+  echo "$VALIDATOR_OUTPUT"
   exit 0
 fi

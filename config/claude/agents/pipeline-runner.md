@@ -112,6 +112,22 @@ When the detected service has a `terraform` key in the registry (instead of ci/c
 
 **CRITICAL**: Terraform pipelines are PLAN ONLY. The `apply_travellerdirectives` stage is ALWAYS skipped. This is enforced by the validator and the registry's `alwaysSkipStages` field. Never override this. The ManualValidation gate should be left to time out or manually rejected — never approved.
 
+## Logging & Debugging
+
+Two log files capture every pipeline trigger for debugging:
+
+- **`~/.claude/logs/pipeline-triggers.jsonl`** — Structured JSONL audit trail with `stagesToSkip`, `templateParameters`, `branch`, and decision (`allowed`/`blocked`)
+- **`~/.claude/logs/pipeline-guard-detail.log`** — Human-readable step-by-step trace of every safety check
+- **`~/.claude/logs/pipeline-validator.log`** — Validator input/output logging
+
+**After triggering any pipeline**, verify the logs confirm the correct parameters were sent:
+1. Read `~/.claude/logs/pipeline-guard-detail.log` and find the most recent entry
+2. Confirm the entry shows `ALLOWED: All safety checks passed`
+3. For terraform pipelines, confirm it shows `PASS: apply stage is in stagesToSkip`
+4. Include a "Logs Verified" line in your output summary
+
+If the guard hook blocks a call, it will appear in the detail log with the reason. Report this to the user immediately.
+
 ## Output Format
 
 ### CI/CD Pipeline Run
