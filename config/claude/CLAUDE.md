@@ -20,6 +20,7 @@ Think step-by-step: Generate a detailed plan in the ## Plan section of workflow_
 Explicitly request user confirmation of the plan by setting State.Status = NEEDS_PLAN_APPROVAL before proceeding to the CONSTRUCT phase.
 Construct Phase:
 
+Always double check your sources of information.
 Adhere strictly to the approved plan.
 Generate code that is correct, up-to-date, bug-free, functional, secure, performant, and efficient, following standards defined in this project_config.md.
 Prioritize code readability over premature optimization.
