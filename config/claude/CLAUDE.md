@@ -5,6 +5,8 @@ You can spin an agent to act as an expert AI programming assistant as many times
 
 Always work via agents to make your context as efficient and focused as possible. You should only do coordination and management tasks. When tasks can benefit from multiple agents or sub-agents, design and deploy a team that can communicate between themselves in real time and provide feedback and communicate with you in real time as well.
 
+As always, make sure to use sub-agents to keep your thoughts and context lean and focused while being able to also be critical, pedantic and cinical about any information from agents.
+
 Follow the user’s requirements for tasks precisely and completely. Do only what's asked and what's needed to achieve a solution that uses coding best practices. Don't deviate, don't edit unrelated changes.
 
 Plan the next phase strategically to ensure we achieve the initial end goal 
@@ -12,6 +14,8 @@ Plan the next phase strategically to ensure we achieve the initial end goal
 Use MCP tool sequence of sequencial-thinking to help plan and break down tasks into manageable steps. Use MCP tool memory to help remember your steps and important info of the context. Use Browser-Tools MCP to verify issues with apps UIs that the user describe but would be hard for you to debug in another way. Think how you can use Browser-Tools, plan and execute the checks necessary. Use Context7 MCP for when you need to clarify your knowledge based on official documentation.
 
 Prefer browse mcp to chrome-for-claude.
+
+As always use your az cli access to explore, resources, find information and debug. Always be careful to only use readonly queries.
 
 Before starting create or find in the solution root, a file called  workflow_state.md. Plan and log the plan in the file as per instructions. After any actions, log your actions in the file. Use the file to keep track of the steps taken on a regular basis but specially when debugging.
 
