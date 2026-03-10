@@ -2,9 +2,9 @@
 
 ## State
 - **Status**: CONSTRUCT
-- **Phase**: Build public repo from scratch
-- **Public Repo**: `/Users/daniel/repos/dotfiles-public` → `nuvemlabs/dotfiles`
-- **Private Repo**: Current repo stays at `danielpmo1371/dotfiles` (cleaned later)
+- **Phase**: Create reusable learning system from judgment error analysis
+- **Previous Work**: Comprehensive error analysis + safety protocols added
+- **Scope**: Layer 2 (Learning Skill) + Layer 3 (Reference Docs) - Skip Layer 1 (hooks to avoid bloat)
 
 ## Decisions (Approved)
 - D1: PATs — revoke AFTER new solution is ready (user decision)
@@ -15,26 +15,65 @@
 - D6: History — Fresh repo (no surgical scrub)
 - D7: Migration — Build public first, test, then clean private. Never break current setup
 
-## Plan
+## Plan: Learning System Integration
 
-### Phase 1: Build Public Repo (Current Phase)
-1. Create repo at /Users/daniel/repos/dotfiles-public with git init
-2. Create full directory structure
-3. Copy all clean files (no changes needed)
-4. Launch 3 parallel agents:
-   - config-builder: clean all config/ files
-   - scripts-builder: clean scripts, installers, entry points
-   - infra-docs: create new infrastructure (template.sh, overlay.sh, gitleaks, docs)
-5. Review and verify with gitleaks
+### Analysis: Best Approach
 
-### Phase 2: Test
-6. Run Docker e2e test on public repo (Ubuntu)
-7. Verify install.sh works standalone without private overlay
+After reviewing the previous agent's work, I recommend **OPTION 5: Combination Strategy**
 
-### Phase 3: Private Repo Cleanup (Future)
-8. Branch current repo, strip to overlay-only structure
-9. Test overlay integration
-10. Merge, scrub history, revoke PATs
+**Rationale:**
+1. **Prevention (Hook)**: Catches mistakes BEFORE they happen
+2. **Learning (Skill)**: Guides through analysis AFTER mistakes
+3. **Reference (Docs)**: Existing docs/learning/ stays as knowledge base
+
+**Architecture:**
+- PreToolUse Hook: `file-ownership-guard.sh` - blocks edits to non-repo files
+- Skill: `learn-from-mistake` - guides post-mortem analysis
+- Supporting: Keep existing docs/learning/ as reference library
+
+### Phase 1: Create Prevention Hook
+**File**: `config/claude/hooks/file-ownership-guard.sh`
+- Intercepts Edit/Write tool calls
+- Validates file is tracked in git or symlinked to repo
+- Warns about installation directories
+- Provides helpful guidance on finding source
+- Exit 0 = allow, exit 2 = block with reason
+
+**Features:**
+- Check `git ls-files --error-unmatch <path>`
+- Check `readlink -f <path>` for symlinks
+- Pattern matching for known install dirs (`~/.local/lib/`, etc.)
+- Clear error messages explaining what to do instead
+
+### Phase 2: Create Learning Skill
+**File**: `config/claude/skills/learn-from-mistake/SKILL.md`
+- Triggers when user says "I made a mistake", "that was wrong", etc.
+- Guides through structured analysis process
+- Creates documentation in docs/learning/
+- Updates CLAUDE.md with new safeguards
+- Stores in MCP memory
+- Uses previous agent's work as template
+
+**Workflow:**
+1. Understand what happened
+2. Root cause analysis (mental model failure)
+3. Identify red flags that were missed
+4. Document proper workflow
+5. Create/update safety rules
+6. Store in persistent memory
+7. Generate summary and analysis docs
+
+### Phase 3: Hook Configuration
+**File**: `config/claude/hooks/config.json`
+- Add file-ownership-guard to PreToolUse hooks array
+- Configure to run before Edit and Write tools
+- Set appropriate priority
+
+### Phase 4: Documentation & Integration
+- Update CLAUDE.md to reference the new assets
+- Update docs/learning/README.md with skill usage
+- Create examples in skill directory
+- Add to installer (already handled via symlinks)
 
 ## File Categorization
 
@@ -121,3 +160,22 @@
   - Updated CLAUDE.md (project + global) with External Dependency Safety Rules
   - Stored lesson in MCP memory with tags
   - New protocol: Always verify file ownership with git ls-files before editing
+- [2026-03-11] LEARNING SYSTEM INTEGRATION (Planning)
+  - Analyzed previous agent's excellent work (467+ lines of documentation)
+  - Designed combination strategy: Prevention hook + Learning skill
+  - Plan created: docs/plans/2026-03-11-learning-system-integration.md (682 lines)
+  - User decision: Skip Layer 1 (hooks) to avoid hook bloat
+  - Approved scope: Layer 2 (learn-from-mistake skill) + Layer 3 (docs/learning/ enhancement)
+- [2026-03-11] LEARNING SYSTEM INTEGRATION (Implementation Complete)
+  - Layer 2: Created learn-from-mistake skill (2001 lines total)
+    - SKILL.md (451 lines): 8-step guided process, auto-discoverable
+    - TEMPLATES.md (438 lines): Copy-paste templates for all doc types
+    - REFERENCE.md (681 lines): Detailed guides for each step
+    - EXAMPLES.md (431 lines): Real incident from 2026-03-11
+  - Layer 3: Enhanced docs/learning/ knowledge base
+    - Updated README.md with skill usage instructions
+    - Linked to skill templates and examples
+    - Made historical incidents easily discoverable
+  - Integration: Updated CLAUDE.md (project) with learning skill reference
+  - Skill is auto-discoverable: triggers on "I made a mistake", "that was wrong", etc.
+  - Total documentation for learning system: 2600+ lines (skill + existing incidents)

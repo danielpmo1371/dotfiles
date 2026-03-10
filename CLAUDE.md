@@ -121,6 +121,28 @@ Test scripts in `tests/` that teammates (or manual runs) can use:
 - `tests/test-docker.sh <distro|all>` - Builds Docker image and runs full e2e test
 - `tests/validate-symlinks.sh` - Checks all expected symlinks exist and point correctly
 
+## Learning from Mistakes
+
+When judgment errors occur, use the **systematic learning skill** to transform mistakes into improvements:
+
+**Skill**: `/learn-from-mistake`
+- Auto-triggers when you say "I made a mistake" or "that was wrong"
+- Guides structured 8-step post-mortem analysis
+- Creates comprehensive documentation in `docs/learning/`
+- Updates CLAUDE.md with new safeguards
+- Stores lessons in MCP persistent memory
+
+**Process**:
+1. Fix the mistake properly first
+2. Let skill guide you through root cause analysis
+3. Create analysis + summary documentation
+4. Determine appropriate safeguard level (docs → process → automation → architecture)
+5. Commit all learning artifacts
+
+**Templates**: `config/claude/skills/learn-from-mistake/TEMPLATES.md`
+**Examples**: `config/claude/skills/learn-from-mistake/EXAMPLES.md`
+**Historical incidents**: `docs/learning/`
+
 ## External Dependency Safety Rules
 
 **CRITICAL: Never edit files outside this repository's git control**
