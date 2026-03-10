@@ -43,6 +43,38 @@ Create unit tests, end-to-end tests. Don't be shy on console logs or logs to fil
 Good practices:
 - never use hard coded values or magic values. apply good practices and good judgement.
 
+## File Editing Safety Protocol
+
+**MANDATORY CHECK: Before editing ANY file, verify code ownership**
+
+Run ONE of these checks:
+
+```bash
+# Method 1: Is it tracked in current git repo?
+git ls-files --error-unmatch <file_path> 2>/dev/null
+# If this fails, STOP and investigate
+
+# Method 2: Is it a symlink pointing to the repo?
+readlink -f <file_path>
+# Target should point to repo directory
+```
+
+**Installation Directory Warning Signs:**
+- `~/.local/lib/` → Installed libraries (find source repo)
+- `~/.local/bin/` → Installed executables (find source repo)
+- `~/.config/` → MAY be symlinked (verify first)
+- `~/.cache/` → Generated files (never edit)
+- `/usr/local/` → System packages (never edit)
+
+**External Dependency Decision Tree:**
+1. Found bug in `~/.local/lib/foo/` → Find source repo, fix there, re-install
+2. Found bug in system package → Report upstream or fork
+3. Found bug in dotfiles symlink → Edit source in `config/` (after readlink check)
+
+**Never assume a file is authoritative just because it exists and has a bug.**
+
+Editing installed code = next install loses the fix. Always fix at the source.
+
 ## Communication
 - Never mention generated with claude or co-authored-by claude in commit messages or files
 - After finishing tasks: `ttalk "{20-word summary}"` for completion updates
