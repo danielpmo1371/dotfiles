@@ -121,6 +121,34 @@ Test scripts in `tests/` that teammates (or manual runs) can use:
 - `tests/test-docker.sh <distro|all>` - Builds Docker image and runs full e2e test
 - `tests/validate-symlinks.sh` - Checks all expected symlinks exist and point correctly
 
+## External Dependency Safety Rules
+
+**CRITICAL: Never edit files outside this repository's git control**
+
+Before editing ANY file, verify it's tracked in git or symlinked to the repo:
+
+```bash
+# Method 1: Check if tracked in repo
+git ls-files --error-unmatch <file_path> 2>/dev/null
+
+# Method 2: If symlink, verify target is in repo
+readlink -f <file_path>  # Should point to repo directory
+```
+
+**Common External Dependencies:**
+- `nuvemlabs/secrets` → Source: `~/repos/secrets/` → Installed: `~/.local/lib/secrets/`
+- System packages (brew, apt, etc.) → Never edit installed files
+- Symlinked configs → Edit source in `config/`, not `~/.config/`
+
+**If you find a bug in an external dependency:**
+1. Find the SOURCE repository (check `installers/` scripts for clone paths)
+2. Edit and commit the fix in the source repo
+3. Re-run the installer to apply: `./install.sh --<component>`
+4. Never edit files in `~/.local/lib/`, `~/.local/bin/`, or other install dirs
+
+**Exception:** Symlinked files are OK to edit (e.g., `~/.config/nvim/` → `dotfiles/config/nvim/`)
+- Use `readlink -f <path>` to verify the target is in this repo
+
 ## Adding New Configurations
 
 1. Create config in appropriate `config/<tool>/` directory
