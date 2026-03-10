@@ -76,6 +76,49 @@ Each incident follows this template:
 
 ---
 
+## Creating New Incident Documentation
+
+### Use the `/learn-from-mistake` Skill
+
+When a mistake occurs, use the systematic learning skill for guided post-mortem analysis:
+
+**Invocation**:
+- Let Claude auto-detect when you say "I made a mistake" or "that was wrong"
+- Or invoke manually (skill will auto-suggest when appropriate)
+
+**What It Does**:
+1. **Guides through 8-step process** (incident capture → root cause → red flags → proper workflow → documentation → safeguards → memory → verification)
+2. **Creates comprehensive docs** (analysis + summary in `docs/learning/`)
+3. **Determines appropriate safeguards** (Level 1-4 based on severity/frequency)
+4. **Updates CLAUDE.md** (adds safety protocols if needed)
+5. **Stores in MCP memory** (with queryable tags)
+6. **Creates git commits** (all artifacts version controlled)
+
+**Templates Available**:
+- `config/claude/skills/learn-from-mistake/TEMPLATES.md` - Copy-paste templates
+- `config/claude/skills/learn-from-mistake/REFERENCE.md` - Detailed guides
+- `config/claude/skills/learn-from-mistake/EXAMPLES.md` - Real incidents
+
+**Process** (brief):
+1. Fix the mistake first (if not already done)
+2. Invoke the skill
+3. Follow the structured workflow
+4. Review generated documentation
+5. Commit to dotfiles repo
+
+### Manual Process (Without Skill)
+
+If you prefer to create documentation manually:
+
+1. Copy templates from `config/claude/skills/learn-from-mistake/TEMPLATES.md`
+2. Follow the 8-step process in the skill
+3. Create analysis and summary documents
+4. Update CLAUDE.md if appropriate
+5. Store in MCP memory (if available)
+6. Commit all artifacts
+
+---
+
 ## How to Use This Documentation
 
 ### For Future Self
@@ -90,6 +133,7 @@ These incidents are:
 - Stored in MCP memory (queryable)
 - Referenced in CLAUDE.md (enforced)
 - Used as examples in safety rules
+- Accessible via `/learn-from-mistake` skill
 
 ### For Team
 Use as case studies for:
