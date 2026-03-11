@@ -102,15 +102,36 @@ HELP_TEXT="
   Esc             Close popup (session persists)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  HELP
+  HELP & ASK CLAUDE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  Cmd+e  ?        Show this help popup
+  Cmd+e  ?        Menu: [h] Help  [a] Ask Claude
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  Press q or Esc to close...
+  Press q to close (or type a question for Claude after closing)
 "
 
-# Display the help text in a popup
-tmux display-popup -E -w 80% -h 90% "echo '$HELP_TEXT' | less -R"
+SCRIPTS_DIR="$HOME/repos/dotfiles/util-scripts"
+SESSION_NAME="claude-popup"
+DOTFILES_DIR="$HOME/repos/dotfiles"
+
+# Display help in a popup, then prompt to ask Claude
+tmux display-popup -E -w 80% -h 90% "bash -c '
+echo \"$HELP_TEXT\" | less -R
+
+# After less exits, offer Ask Claude prompt
+printf \"\n\033[1;33m Ask Claude:\033[0m \"
+read -r question
+if [ -n \"\$question\" ]; then
+    # Ensure claude session exists
+    if ! tmux has-session -t $SESSION_NAME 2>/dev/null; then
+        tmux new-session -d -s $SESSION_NAME -c $DOTFILES_DIR claude
+        sleep 2
+    fi
+    # Send question to claude session
+    tmux send-keys -t $SESSION_NAME \"\$question\" Enter
+    # Schedule claude popup to open after this one closes
+    tmux run-shell -b \"sleep 0.3 && $SCRIPTS_DIR/tmux-claude-popup.sh\"
+fi
+'"
