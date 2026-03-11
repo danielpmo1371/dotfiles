@@ -179,3 +179,43 @@ After reviewing the previous agent's work, I recommend **OPTION 5: Combination S
   - Integration: Updated CLAUDE.md (project) with learning skill reference
   - Skill is auto-discoverable: triggers on "I made a mistake", "that was wrong", etc.
   - Total documentation for learning system: 2600+ lines (skill + existing incidents)
+- [2026-03-11] CRITICAL FIX: learn-from-mistake Skill Context Issues (COMPLETE)
+  - Problem identified: skill uses context:fork but references relative paths without context
+  - Used skill-forge to review: validation passes but manual review found context ambiguity
+  - Critical issue: Agent in forked context doesn't know it should work in dotfiles repo
+  - Affected paths: docs/learning/, CLAUDE.md, workflow_state.md (all relative without anchor)
+  - Meta-issue: skill-forge skill exists but wasn't used during creation (ironic!)
+  - Created comprehensive review: skill-forge-review-learn-from-mistake.md (185 lines)
+  - Applied Priority 1 fixes:
+    - Added Environment Context section to SKILL.md (61 lines with repo detection + path table)
+    - Updated Step 5 with explicit path examples ($DOTFILES_REPO anchor)
+    - Updated Step 6 to distinguish project vs global CLAUDE.md
+    - Updated Integration Points with full paths
+    - Fixed EXAMPLES.md: removed hardcoded /Users/daniel paths
+    - Fixed REFERENCE.md: updated cross-referencing diagram with $DOTFILES_REPO
+  - Re-validated: 21 pass, 1 warning (512 lines, acceptable for critical fix)
+  - Skill now provides clear context for forked agents
+  - Next: Use /learn-from-mistake to document the skill-forge-not-used mistake
+- [2026-03-11] TERRAFORM PLAN VERIFICATION FAILURE ANALYSIS
+  - Identified critical verification error: 39 destroys in build 270486 (SIT/AE) marked as PASS
+  - Created analysis: docs/learning/incident-2026-03-11-terraform-destroys-missed.md
+  - Created summary: docs/learning/SUMMARY-2026-03-11-terraform-destroys.md
+  - Enhanced td-iac MEMORY.md with "Terraform Plan Verification Protocol -- HARD GATE" section
+  - Updated docs/learning/README.md with incident entry
+  - New protocol: Destroy count is FIRST check, >0 = automatic FAIL, no exceptions
+  - MCP memory not available for storage (tools not loaded)
+  - Project: td-iac, Story 193236, Branch: feature/193236-Refactor-ServiceBus
+
+## LEARN-FROM-MISTAKE SESSION: Skill-Forge Not Used
+- [2026-03-11] Starting systematic learning analysis
+- Mistake: Created learn-from-mistake skill without using skill-forge for validation
+- Impact: Context ambiguity issues requiring Priority 1 fixes after creation
+- Status: Fixed (61+ lines of context setup added)
+- Date: 2026-03-11
+- Incident analyzed using /learn-from-mistake skill (all 8 steps completed)
+- Analysis document: docs/learning/incident-2026-03-11-skill-forge-not-used.md (created)
+- Summary document: docs/learning/SUMMARY-2026-03-11-skill-forge.md (created)
+- Safeguard: Skill Creation Protocol added to ~/.claude/CLAUDE.md (Level 2 checklist)
+- Documentation: docs/learning/README.md updated with new incident
+- MCP memory: Stored with tags (lesson-learned, skill-creation, expertise-bias, etc.)
+- Files ready to commit

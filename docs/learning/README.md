@@ -35,6 +35,50 @@ When things go wrong, we don't just fix them—we **learn from them** and **prev
 
 ---
 
+### 2026-03-11: skill-forge Not Used During Skill Creation
+
+**What Happened**: Created complex 2001-line skill (`learn-from-mistake`) without using `skill-forge` validation tool, despite it being available and designed for this exact purpose.
+
+**Why It Matters**: Used `context: fork` but made path assumptions without establishing environment context. Forked agent wouldn't know to work in dotfiles repo. Required 61+ lines of fixes after creation.
+
+**Documents**:
+- `incident-2026-03-11-skill-forge-not-used.md` - Comprehensive root cause analysis
+- `SUMMARY-2026-03-11-skill-forge.md` - Executive summary and outcomes
+
+**Outcome**:
+- ✅ Environment Context section added to skill (61 lines)
+- ✅ Path clarifications throughout (relative → anchored)
+- ✅ Skill Creation Protocol added to global CLAUDE.md
+- ✅ Hardcoded paths removed from examples
+- ✅ Context ambiguity resolved
+
+**Key Lesson**: Expertise can blind you to the need for systematic processes. Use validation tools ESPECIALLY when confident you don't need them. Confidence = red flag for MORE scrutiny, not less.
+
+**Meta-irony**: Creating a skill about systematic learning from mistakes while not using systematic skill-creation process.
+
+---
+
+### 2026-03-11: Terraform Plan Destroys Missed (td-iac)
+
+**What Happened**: Agent reviewed terraform plan output for build 270486 (SIT/AE) and marked it as PASS despite 39 destroy actions in the plan. The destroys were Service Bus application-level resources (subscriptions, rules, SAS policies) that would have been deleted from Azure on apply.
+
+**Why It Matters**: 39 Azure resources could have been destroyed, breaking live Service Bus message routing for function apps. The project MEMORY.md explicitly documents destroys as requiring `removed` blocks, not approval.
+
+**Documents**:
+- `incident-2026-03-11-terraform-destroys-missed.md` - Comprehensive root cause analysis
+- `SUMMARY-2026-03-11-terraform-destroys.md` - Executive summary and outcomes
+
+**Outcome**:
+- Enhanced MEMORY.md with "Terraform Plan Verification Protocol -- HARD GATE" section
+- Destroy count > 0 codified as automatic FAIL -- no exceptions
+- Mandatory verification sequence documented (destroys first, then everything else)
+- Lesson stored in MCP persistent memory
+- No Azure resources were harmed (destroys caught before apply)
+
+**Key Lesson**: Terraform destroys are a binary signal, not a nuance. Zero = proceed. Non-zero = FAIL. Period.
+
+---
+
 ## Learning Process
 
 Each incident follows this template:
@@ -66,10 +110,14 @@ Each incident follows this template:
 ## Files in This Directory
 
 ### Analyses
-- `judgment-error-analysis.md` - Deep dive into root causes and failure modes
+- `judgment-error-analysis.md` - Deep dive into root causes and failure modes (external dep edit)
+- `incident-2026-03-11-skill-forge-not-used.md` - Root cause analysis (skill creation without validation)
+- `incident-2026-03-11-terraform-destroys-missed.md` - Root cause analysis (terraform plan verification)
 
 ### Summaries
-- `LEARNING-SUMMARY-YYYY-MM-DD.md` - Executive summary of incident and outcomes
+- `LEARNING-SUMMARY-2026-03-11.md` - Executive summary (external dep edit)
+- `SUMMARY-2026-03-11-skill-forge.md` - Executive summary (skill-forge not used)
+- `SUMMARY-2026-03-11-terraform-destroys.md` - Executive summary (terraform plan verification)
 
 ### Supporting Docs
 - Referenced in main `/docs/` or `/` (e.g., `DEPENDENCIES.md`)
@@ -147,9 +195,11 @@ Use as case studies for:
 
 | Date | Incident | Lines of Doc | Mechanisms Added | Memory Stored |
 |------|----------|--------------|------------------|---------------|
-| 2026-03-11 | External Dep Edit | 467 | 5 | ✅ |
+| 2026-03-11 | External Dep Edit | 467 | 5 | Yes |
+| 2026-03-11 | skill-forge Not Used | ~550 | 1 (checklist) | Pending |
+| 2026-03-11 | Terraform Destroys Missed | ~350 | 3 | Yes |
 
-**Total Learning Documentation**: 467+ lines
+**Total Learning Documentation**: 1,400+ lines
 
 ---
 
