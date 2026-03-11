@@ -414,21 +414,22 @@ git ls-files file.sh
 
 ### Cross-Referencing
 
-**Create a Web of Documentation**:
+**Create a Web of Documentation** (all paths relative to dotfiles repo root):
 ```
-docs/learning/README.md
-├── Links to all incidents
-├── Categorizes by type
-└── Points to TEMPLATES.md
-
-docs/learning/incident-YYYY-MM-DD.md
-├── References SUMMARY-YYYY-MM-DD.md
-├── References related incidents
-└── Links to affected files
-
-CLAUDE.md
-├── References docs/learning/
-└── Cites specific incidents as examples
+$DOTFILES_REPO/
+├── docs/learning/README.md
+│   ├── Links to all incidents
+│   ├── Categorizes by type
+│   └── Points to skill TEMPLATES.md
+├── docs/learning/incident-YYYY-MM-DD.md
+│   ├── References SUMMARY-YYYY-MM-DD.md
+│   ├── References related incidents
+│   └── Links to affected files
+├── CLAUDE.md (project-level)
+│   ├── References docs/learning/
+│   └── Cites specific incidents as examples
+└── workflow_state.md
+    └── Logs incident in ## Log section
 ```
 
 ---
