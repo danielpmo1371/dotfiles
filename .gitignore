@@ -2,6 +2,9 @@
 *Tokens
 tmp/
 
+# Claude Code runtime state (contains oauthAccount, userID, etc.)
+config/claude/claude.json
+
 # npm cache directories
 config/configstore/
 
