@@ -112,6 +112,61 @@ Editing installed code = next install loses the fix. Always fix at the source.
 - **When you don't know enough, say so and gather information.** Don't present options that include potentially destructive actions alongside safe ones as if they're equivalent. If the information needed to make a safe recommendation isn't available, stop and ask — don't guess.
 - **The user's primary environment is a Proxmox server with ZFS.** Development workloads run in LXC containers, not VMs. Docker runs inside LXC containers. Storage expansion should be done via Proxmox host-side ZFS datasets bind-mounted into containers.
 
+## Skill Creation Protocol
+
+**MANDATORY: Before creating or editing ANY Claude Code skill**
+
+### Pre-Creation Checklist
+
+1. **Check tool availability**: Is `skill-forge` skill available? (review skills list)
+2. **Assess complexity** - Any of these trigger MANDATORY skill-forge use:
+   - [ ] Skill >500 lines total (including reference files)
+   - [ ] Uses `context: fork` (isolated execution)
+   - [ ] Multiple reference files (TEMPLATES, REFERENCE, EXAMPLES)
+   - [ ] Complex integrations (MCP, git, external tools)
+3. **Even simple skills (<200 lines)**: skill-forge is RECOMMENDED as best practice
+
+### Creation Workflow
+
+1. **Draft**: Create skill in `config/claude/skills/<name>/SKILL.md` following patterns
+2. **Self-review**: Trigger patterns clear? Progressive disclosure? Paths explicit?
+3. **Invoke skill-forge**: Use `/skill-forge` or Skill tool (NOT optional if complexity thresholds met)
+4. **Review output**:
+   - Read BOTH automated validation AND manual review sections
+   - Understand WHY each issue matters (don't just fix mechanically)
+   - Note Priority 1 (critical), Priority 2 (important), Priority 3 (nice to have)
+5. **Apply fixes**: Priority 1 immediately, then Priority 2
+6. **Re-validate**: If major changes (>50 lines), run skill-forge again
+7. **Test context**: For `context: fork`, test in isolated environment (not just current session)
+8. **Document**: Update project CLAUDE.md with skill reference
+9. **Commit**: Atomic commit with clear message
+
+### Red Flags (Mandatory skill-forge Use)
+
+These thoughts/situations trigger MANDATORY skill-forge validation:
+
+- "I've done this before, I know the patterns" ← **expertise bias**
+- "Manual review is enough" ← **process dismissal**
+- "This is simple, no need for tools" ← **underestimating complexity**
+- Using `context: fork` without explicit environment setup
+- Creating skill about systematic process while skipping systematic creation ← **meta-blindness**
+
+**CRITICAL**: Do not skip skill-forge due to confidence or familiarity. Expertise bias is highest when you think you don't need validation. **Confidence = red flag for MORE scrutiny, not less.**
+
+### Common Mistakes to Avoid
+
+1. **Context ambiguity**: `context: fork` skills must establish repo/directory context explicitly
+2. **Path assumptions**: Never assume CWD or repo location - use detection scripts
+3. **Hardcoded paths**: Avoid `/Users/username/...` - use `~` or environment variables
+4. **Relative paths without anchors**: Use `$REPO_ROOT/path` not just `path`
+5. **Skipping execution testing**: Test in ACTUAL context (fork vs normal), not just manual review
+
+### Learning References
+
+- **Incident Analysis**: `~/repos/dotfiles/docs/learning/incident-2026-03-11-skill-forge-not-used.md`
+- **Summary**: `~/repos/dotfiles/docs/learning/SUMMARY-2026-03-11-skill-forge.md`
+- **Lesson**: Expertise can blind you to need for systematic processes - use tools ESPECIALLY when confident
+
 ## Claude Code Preferences
 - Use TodoWrite tool for multi-step tasks to track progress
 - Mark todos as completed immediately after finishing
