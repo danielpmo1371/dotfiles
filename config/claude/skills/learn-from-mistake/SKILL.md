@@ -27,6 +27,53 @@ When a mistake is identified:
 4. **Review outputs**: Analysis + summary docs in `docs/learning/`
 5. **Commit**: Save to git for future reference
 
+## Environment Context
+
+**CRITICAL:** This skill operates in the dotfiles repository context and creates documentation there.
+
+### Before Starting
+
+1. **Detect and navigate to dotfiles repository:**
+   ```bash
+   # Try common locations in order
+   DOTFILES_REPO=""
+   for dir in ~/repos/dotfiles ~/.dotfiles ~/dotfiles; do
+     if [ -d "$dir/.git" ] && [ -f "$dir/install.sh" ]; then
+       DOTFILES_REPO="$dir"
+       break
+     fi
+   done
+
+   # Verify detection
+   if [ -z "$DOTFILES_REPO" ]; then
+     echo "ERROR: Cannot find dotfiles repository"
+     echo "Expected locations: ~/repos/dotfiles, ~/.dotfiles, ~/dotfiles"
+     exit 1
+   fi
+
+   echo "Using dotfiles repo at: $DOTFILES_REPO"
+   cd "$DOTFILES_REPO"
+   ```
+
+2. **Verify required structure:**
+   ```bash
+   [ -d docs/learning ] || mkdir -p docs/learning
+   [ -f workflow_state.md ] || echo "# Workflow State" > workflow_state.md
+   ```
+
+### Path Conventions Used in This Skill
+
+When you see these paths in the instructions:
+
+| Path | Means | Example |
+|------|-------|---------|
+| `docs/learning/incident-*.md` | In dotfiles repo | `$DOTFILES_REPO/docs/learning/incident-2026-03-11.md` |
+| `CLAUDE.md` | Project-level (in repo root) | `$DOTFILES_REPO/CLAUDE.md` |
+| `~/.claude/CLAUDE.md` | Global user instructions | `~/.claude/CLAUDE.md` |
+| `workflow_state.md` | In repo root | `$DOTFILES_REPO/workflow_state.md` |
+
+**NEVER use hardcoded absolute paths with specific usernames** - always use `~` or `$DOTFILES_REPO`.
+
 ## When to Use
 
 **Trigger Scenarios**:
@@ -174,11 +221,15 @@ Date: YYYY-MM-DD
 
 **Goal**: Create permanent documentation in `docs/learning/`
 
+**Pre-requisite:** Ensure you're in the dotfiles repo root (run Environment Context setup above if needed)
+
 Create two files:
 
 #### A. Analysis Document (Comprehensive)
 
-**File**: `docs/learning/incident-YYYY-MM-DD-short-name.md`
+**File**: `docs/learning/incident-YYYY-MM-DD-short-name.md` (relative to repo root)
+
+**Full path**: `$DOTFILES_REPO/docs/learning/incident-YYYY-MM-DD-short-name.md`
 
 **Contents**:
 - The error (what was done wrong)
@@ -188,13 +239,17 @@ Create two files:
 - Learning mechanisms implemented (from Step 6)
 - Takeaway (one key lesson)
 
-**Template**: See `docs/learning/judgment-error-analysis.md`
+**Template**: See [TEMPLATES.md](TEMPLATES.md) "Template 1: Analysis Document"
+
+**Example**: See existing file `docs/learning/judgment-error-analysis.md` in repo
 
 **Length**: 150-250 lines (comprehensive but focused)
 
 #### B. Summary Document (Executive)
 
-**File**: `docs/learning/SUMMARY-YYYY-MM-DD.md`
+**File**: `docs/learning/SUMMARY-YYYY-MM-DD.md` (relative to repo root)
+
+**Full path**: `$DOTFILES_REPO/docs/learning/SUMMARY-YYYY-MM-DD.md`
 
 **Contents**:
 - What/Why/Impact (3-5 sentences)
@@ -204,7 +259,9 @@ Create two files:
 - Commits (links to git commits)
 - Key takeaway
 
-**Template**: See `docs/learning/LEARNING-SUMMARY-2026-03-11.md`
+**Template**: See [TEMPLATES.md](TEMPLATES.md) "Template 2: Summary Document"
+
+**Example**: See existing file `docs/learning/LEARNING-SUMMARY-2026-03-11.md` in repo
 
 **Length**: 100-150 lines (executive summary)
 
@@ -250,8 +307,9 @@ Low Frequency + Low Severity = Level 1
 **Implementation**:
 
 For Level 1 (Documentation):
-- Add to project `CLAUDE.md` OR global `~/.claude/CLAUDE.md`
-- Add to `docs/learning/README.md`
+- Add to project `CLAUDE.md` (in repo root: `$DOTFILES_REPO/CLAUDE.md`) OR
+- Add to global `~/.claude/CLAUDE.md` (outside repo)
+- Add to `docs/learning/README.md` (in repo: `$DOTFILES_REPO/docs/learning/README.md`)
 - Create/update reference docs
 
 For Level 2 (Process):
@@ -415,12 +473,15 @@ All commits made, workflow_state.md updated, lesson complete.
 
 This skill integrates with:
 
-- **`docs/learning/`**: Knowledge base and templates
+- **Dotfiles Repository**: All documentation created in `$DOTFILES_REPO/docs/learning/`
+- **`docs/learning/`**: Knowledge base and templates (in dotfiles repo)
 - **CLAUDE.md**: Safety protocols and rules
-- **workflow_state.md**: Incident logging
-- **MCP Memory**: Persistent lesson storage
-- **DEPENDENCIES.md**: External dependency tracking
-- **Git**: Version control for all learning artifacts
+  - Project: `$DOTFILES_REPO/CLAUDE.md`
+  - Global: `~/.claude/CLAUDE.md`
+- **workflow_state.md**: Incident logging (in repo root: `$DOTFILES_REPO/workflow_state.md`)
+- **MCP Memory**: Persistent lesson storage (if MCP server available)
+- **DEPENDENCIES.md**: External dependency tracking (create in repo root if needed)
+- **Git**: Version control for all learning artifacts (in dotfiles repo)
 
 ## Success Criteria
 

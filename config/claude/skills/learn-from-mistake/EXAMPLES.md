@@ -22,8 +22,8 @@ Edited installed library at `~/.local/lib/secrets/secrets.sh` instead of source 
 ### Full Documentation
 
 See the comprehensive analysis at:
-- **Analysis**: `/Users/daniel/repos/dotfiles/docs/learning/judgment-error-analysis.md` (216 lines)
-- **Summary**: `/Users/daniel/repos/dotfiles/docs/learning/LEARNING-SUMMARY-2026-03-11.md` (251 lines)
+- **Analysis**: `docs/learning/judgment-error-analysis.md` (in dotfiles repo, 216 lines)
+- **Summary**: `docs/learning/LEARNING-SUMMARY-2026-03-11.md` (in dotfiles repo, 251 lines)
 
 ### The 8-Step Process Applied
 
@@ -364,7 +364,7 @@ As more incidents are documented, maintain this index:
 
 | Date | Short Name | Severity | Category | Docs |
 |------|------------|----------|----------|------|
-| 2026-03-11 | external-dep-edit | High | File editing, External deps | [Analysis](../../../docs/learning/judgment-error-analysis.md), [Summary](../../../docs/learning/LEARNING-SUMMARY-2026-03-11.md) |
+| 2026-03-11 | external-dep-edit | High | File editing, External deps | Analysis: `docs/learning/judgment-error-analysis.md`, Summary: `docs/learning/LEARNING-SUMMARY-2026-03-11.md` |
 
 ---
 
