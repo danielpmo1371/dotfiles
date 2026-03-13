@@ -1,0 +1,59 @@
+{
+  "name": "sdlc-framework",
+  "version": "1.0.0",
+  "description": "SDLC orchestration framework for Claude Code. Use when starting work on user stories, bugs, or tasks. Handles bootstrap, scope discovery, planning, execution, verification, and delivery through intelligent Team Lead and specialist agents.",
+  "author": "Daniel Paiva",
+  "license": "MIT",
+
+  "dependencies": {
+    "required": {
+      "superpowers": ">=4.3.0",
+      "feature-dev": "*",
+      "pr-review-toolkit": "*"
+    },
+    "recommended": {
+      "pipeline-ops": "*",
+      "code-review-suite": "*",
+      "session-reporting": "*",
+      "memory-management": "*",
+      "learning-tools": "*"
+    }
+  },
+
+  "integration": {
+    "detects": [
+      "pipeline-ops",
+      "code-review-suite",
+      "session-reporting",
+      "memory-management",
+      "learning-tools"
+    ],
+    "gracefulDegradation": true
+  },
+
+  "components": {
+    "agents": [
+      "team-lead",
+      "bootstrap-specialist",
+      "scope-analyst",
+      "audit-specialist",
+      "planning-architect",
+      "implementation-engineer",
+      "qa-specialist",
+      "reporter",
+      "retrospective-analyst"
+    ],
+    "skills": [
+      "sdlc-orchestrator",
+      "phase-manager"
+    ],
+    "commands": [
+      "sdlc-start",
+      "sdlc-resume",
+      "sdlc-status"
+    ],
+    "hooks": [
+      "work-item-detector"
+    ]
+  }
+}
