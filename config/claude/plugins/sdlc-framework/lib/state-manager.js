@@ -10,6 +10,14 @@ class StateManager {
   }
 
   initialize({ mode, complexity }) {
+    // Validate inputs
+    if (!mode || typeof mode !== 'string') {
+      throw new Error('mode is required and must be a string');
+    }
+    if (!complexity || typeof complexity !== 'string') {
+      throw new Error('complexity is required and must be a string');
+    }
+
     const template = this._loadTemplate();
     const content = template
       .replace(/{work_item_id}/g, this.workItemId)
@@ -26,6 +34,10 @@ class StateManager {
   }
 
   updatePhase(phaseNum, status, summary) {
+    if (!fs.existsSync(this.statePath)) {
+      throw new Error('State file not initialized. Call initialize() first.');
+    }
+
     let content = fs.readFileSync(this.statePath, 'utf8');
 
     // Update phase checkbox
@@ -55,6 +67,10 @@ class StateManager {
   }
 
   async logDecision(phase, decision, rationale, decidedBy) {
+    if (!fs.existsSync(this.statePath)) {
+      throw new Error('State file not initialized. Call initialize() first.');
+    }
+
     const timestamp = new Date().toISOString();
 
     // Update file (insert into Key Decisions section, not Current State)
@@ -74,16 +90,21 @@ class StateManager {
 
     // Store in Memory MCP (if client available)
     if (this.memoryClient) {
-      await this.memoryClient.store({
-        content: `${this.workItemId} Phase ${phase} decision: ${decision}. Rationale: ${rationale}`,
-        tags: ['sdlc', this.workItemId, `phase:${phase}`, 'decision'],
-        memory_type: 'decision',
-        metadata: {
-          phase,
-          decided_by: decidedBy,
-          timestamp
-        }
-      });
+      try {
+        await this.memoryClient.store({
+          content: `${this.workItemId} Phase ${phase} decision: ${decision}. Rationale: ${rationale}`,
+          tags: ['sdlc', this.workItemId, `phase:${phase}`, 'decision'],
+          memory_type: 'decision',
+          metadata: {
+            phase,
+            decided_by: decidedBy,
+            timestamp
+          }
+        });
+      } catch (error) {
+        console.warn(`Failed to store decision in Memory MCP: ${error.message}`);
+        // Continue -- file write already succeeded
+      }
     }
   }
 
