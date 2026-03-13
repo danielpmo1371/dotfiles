@@ -59,4 +59,72 @@ describe('StateManager', () => {
     assert.strictEqual(mockMemory[0].tags.includes('sdlc'), true);
     assert.strictEqual(mockMemory[0].tags.includes('US#12345'), true);
   });
+
+  it('should throw error if mode or complexity is missing', () => {
+    const manager = new StateManager(testDir, 'US#12345', 'TestStory');
+
+    assert.throws(() => {
+      manager.initialize({ mode: undefined, complexity: 'medium' });
+    }, /mode is required/);
+
+    assert.throws(() => {
+      manager.initialize({ mode: 'autonomous', complexity: undefined });
+    }, /complexity is required/);
+  });
+
+  it('should handle Memory MCP failure gracefully', async () => {
+    const manager = new StateManager(testDir, 'US#12345', 'TestStory');
+    manager.initialize({ mode: 'autonomous', complexity: 'medium' });
+
+    // Mock failing Memory MCP
+    manager.setMemoryClient({
+      store: async () => { throw new Error('Network error'); }
+    });
+
+    // Should not throw
+    await manager.logDecision(2, 'Test decision', 'Test rationale', 'user');
+
+    // But file should still be updated
+    const content = fs.readFileSync(manager.statePath, 'utf8');
+    assert.ok(content.includes('Test decision'));
+  });
+
+  it('should throw error if updatePhase called before initialize', () => {
+    const manager = new StateManager(testDir, 'US#12345', 'TestStory');
+
+    assert.throws(() => {
+      manager.updatePhase(1, 'completed', 'Done');
+    }, /State file not initialized/);
+  });
+
+  it('should throw error if logDecision called before initialize', async () => {
+    const manager = new StateManager(testDir, 'US#12345', 'TestStory');
+
+    await assert.rejects(
+      manager.logDecision(1, 'Test', 'Test', 'user'),
+      /State file not initialized/
+    );
+  });
+
+  it('should write decision to file content', async () => {
+    const manager = new StateManager(testDir, 'US#12345', 'TestStory');
+    manager.initialize({ mode: 'autonomous', complexity: 'medium' });
+
+    await manager.logDecision(2, 'Include 3 repos only', 'Architect confirmed scope', 'user');
+
+    const content = fs.readFileSync(manager.statePath, 'utf8');
+    assert.ok(content.includes('Include 3 repos only'), 'Should include decision text');
+    assert.ok(content.includes('Architect confirmed scope'), 'Should include rationale');
+  });
+
+  it('should work without memory client', async () => {
+    const manager = new StateManager(testDir, 'US#12345', 'TestStory');
+    manager.initialize({ mode: 'autonomous', complexity: 'medium' });
+
+    // No setMemoryClient call -- should not crash
+    await manager.logDecision(2, 'Test decision', 'Test rationale', 'user');
+
+    const content = fs.readFileSync(manager.statePath, 'utf8');
+    assert.ok(content.includes('Test decision'));
+  });
 });
