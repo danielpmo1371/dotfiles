@@ -1,7 +1,7 @@
 # Ghostty Configuration
 
 # Window transparency - 0.95 means 95% opaque (5% transparent)
-background-opacity = 0.25
+# background-opacity = 0.85
 
 # Shaders
 # custom-shader = ~/.config/ghostty/shaders/water.glsl
@@ -43,7 +43,7 @@ background-opacity = 0.25
 # custom-shader = ~/.config/ghostty/shaders/water.glsl
 # custom-shader = ~/.config/ghostty/shaders/inside-the-matrix.glsl
 # custom-shader = ~/.config/ghostty/shaders/smoke-and-ghost.glsl
-# cinema # custom-shader-animation = always
+custom-shader-animation = always
 
 font-family = "SF Mono"
 font-size = 19

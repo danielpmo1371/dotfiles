@@ -125,9 +125,10 @@ alias pip=pip3
 # ─────────────────────────────────────────────────────────────────────────────
 #   System Info & Image Display
 # ─────────────────────────────────────────────────────────────────────────────
-# System info with custom logo
-alias fetch='~/repos/dotfiles/util-scripts/neofetch-apple.sh'
-alias neofetch='~/repos/dotfiles/util-scripts/neofetch-apple.sh'
+# System info - use native fastfetch (clean ASCII art)
+alias fetch='fastfetch'
+# Neofetch still available if installed
+# Custom image versions available in util-scripts/ if needed
 
 # Manual image display - auto-display disabled in tmux due to compatibility issues
 # if command -v chafa &>/dev/null; then
