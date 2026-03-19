@@ -123,8 +123,12 @@ alias python=python3
 alias pip=pip3
 
 # ─────────────────────────────────────────────────────────────────────────────
-#   Image Display (chafa)
+#   System Info & Image Display
 # ─────────────────────────────────────────────────────────────────────────────
+# System info with custom logo
+alias fetch='~/repos/dotfiles/util-scripts/neofetch-apple.sh'
+alias neofetch='~/repos/dotfiles/util-scripts/neofetch-apple.sh'
+
 # Manual image display - auto-display disabled in tmux due to compatibility issues
 # if command -v chafa &>/dev/null; then
 #     # Show image with automatic format detection and size limit (max 1/4 terminal width)
