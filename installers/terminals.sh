@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Terminal emulators configuration installer
-# Handles: Ghostty, and other terminal emulators
+# Handles: Ghostty, Kitty, and other terminal emulators
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -25,13 +25,20 @@ install_ghostty() {
     fi
 }
 
+install_kitty() {
+    log_info "Configuring Kitty..."
+
+    # Symlink config directory to ~/.config/kitty
+    link_config_dirs "kitty"
+}
+
 install_terminals() {
     log_header "Terminal Emulators"
 
     install_ghostty
+    install_kitty
 
     # Add other terminals here as needed:
-    # install_kitty
     # install_alacritty
     # install_wezterm
 
@@ -43,6 +50,7 @@ install_terminals() {
     if [[ "$OSTYPE" == "darwin"* ]]; then
         echo "    + macOS Application Support symlinked"
     fi
+    echo "  - Kitty (~/.config/kitty)"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
