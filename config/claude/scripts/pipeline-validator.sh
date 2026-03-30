@@ -125,11 +125,13 @@ if [[ "$TYPE" == "cd" ]]; then
   done
 
   # Check each requested stage is in allowed list
+  # Uses prefix matching: "sitae" matches allowed prefix "sit", "dryae" matches "dry", etc.
+  # This supports composite stage names like {env}{region} (e.g., sitae, uatase)
   for stage in "${STAGES_ARRAY[@]}"; do
     stage_lower=$(echo "$stage" | tr '[:upper:]' '[:lower:]')
     found=false
     for allowed in "${ALLOWED_CD_STAGES[@]}"; do
-      if [[ "$stage_lower" == "$allowed" ]]; then
+      if [[ "$stage_lower" == "$allowed" || "$stage_lower" == "${allowed}"* ]]; then
         found=true
         break
       fi
