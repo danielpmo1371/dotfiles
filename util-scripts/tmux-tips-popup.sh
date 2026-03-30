@@ -76,6 +76,33 @@ TIPS=(
   "LazyVim is your neovim base — plugins defined in config/nvim/lua/plugins/."
   "Your neovim uses LazyVim defaults plus custom keymaps in config/keymaps.lua."
 
+  # ── Claude Skills ──
+  "Type /braindump to start a brainstorming session — captures ideas and organizes notes."
+  "Type /memory to search and recall persistent memories across Claude sessions."
+  "Type /skill-forge to create, review, and optimize Claude Code skills."
+  "Type /claude-agent-forge to build agents using the Anthropic Agent SDK."
+  "Type /test-dotfiles to run Docker e2e tests for dotfiles across Linux distros."
+  "Type /pipeline-ops to trigger, monitor, and manage Azure DevOps pipelines."
+  "Type /fetch-azdo-logs to interactively debug Azure DevOps pipeline failures."
+  "Type /learn-from-mistake after errors — guides post-mortem analysis and safeguards."
+  "Type /conversation-history to search past Claude Code sessions for context."
+  "Type /tit-for-tat for rapid, succinct back-and-forth communication style."
+
+  # ── Claude Commands ──
+  "Type /review-before-commit to get a pre-commit code review from Claude."
+  "Type /review-branch to review all work done on the current branch."
+  "Type /plan-next-strategy to plan the next phase of your project strategically."
+  "Type /pipe-deploy to trigger CI/CD pipelines with safety checks and monitoring."
+  "Type /session-presentation to generate an HTML presentation of your session."
+
+  # ── Claude Agent Teams ──
+  "Type /setup-machine to spawn 4 agents installing dotfiles in parallel."
+  "Type /test-all-distros to spawn 3 agents testing Docker e2e on Ubuntu, Debian, Fedora."
+  "Type /review-changes to spawn 3 agents for pre-commit review (compat, security, symlinks)."
+  "Agent teams use tmux split panes — enable with CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1."
+  "The pipeline-runner agent autonomously triggers, monitors, and recovers CI/CD pipelines."
+  "The fetch-azdo-logs agent fetches pipeline logs and summarizes failures automatically."
+
   # ── Tmux Sessions ──
   "Type 'ta <name>' to attach to a session, 'tn <name>' to create one."
   "Type 'tl' to list sessions, 'tk <name>' to kill one."
