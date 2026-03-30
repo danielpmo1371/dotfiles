@@ -28,5 +28,5 @@ if [[ -f "$SECRETS_LIB" ]]; then
     export AZURE_DEVOPS_PAT="$AZDO_PAT"
     export AZURE_DEVOPS_EXT_PAT="$AZDO_PAT"
     export ADO_MCP_AUTH_TOKEN="$AZDO_PAT"
-    export CLAUDE_CODE_OAUTH_TOKEN="$(secret CLAUDE_CODE_OAUTH_TOKEN 2>/dev/null)"
+    # export CLAUDE_CODE_OAUTH_TOKEN="$(secret CLAUDE_CODE_OAUTH_TOKEN 2>/dev/null)"
 fi
