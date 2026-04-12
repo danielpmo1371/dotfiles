@@ -2,7 +2,7 @@ return {
 	-- Telescope
 	{
 		"nvim-telescope/telescope.nvim",
-		branch = "0.1.x",
+		tag = "0.2.2",
 		dependencies = {
 			"nvim-lua/plenary.nvim",
 			"nvim-tree/nvim-web-devicons",
