@@ -1,0 +1,9 @@
+{
+  "hooks": [
+    {
+      "event": "UserPromptSubmit",
+      "type": "prompt",
+      "script": "Check if the user's message contains a work item reference pattern: 'US#' followed by digits, 'Bug#' followed by digits, 'Task#' followed by digits, a bare '#' followed by 5+ digits, or an Azure DevOps URL containing '_workitems/edit/'. If a match is found, check whether a 'user_story-{ID}-*/' folder already exists in the current working directory. If a folder exists, append a suggestion: '[SDLC] Detected work item reference {ID}. An existing workflow was found — consider using /sdlc-resume {ID} to continue.' If no folder exists, append: '[SDLC] Detected work item reference {ID}. Consider using /sdlc-start {ID} to begin an SDLC workflow.' If no work item reference is found, do nothing (pass through without modification)."
+    }
+  ]
+}
