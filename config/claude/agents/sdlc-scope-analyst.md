@@ -1,0 +1,1 @@
+../plugins/sdlc-framework/agents/scope-analyst.md

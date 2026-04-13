@@ -1,0 +1,1 @@
+../plugins/sdlc-framework/agents/reporter.md
