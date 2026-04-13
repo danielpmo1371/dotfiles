@@ -1,0 +1,1 @@
+../plugins/sdlc-framework/agents/planning-architect.md
