@@ -165,7 +165,7 @@ Some phases have hard dependencies that must be validated:
 | 5 (Reporting) | Phases 1-4 outputs |
 | 6 (Planning) | Phase 1 output minimum; Phase 2 output if medium/complex |
 | 7 (Execution) | Phase 6 output (execution-plan.md) |
-| 8 (Verification) | Phase 7 output (implementation-log.md) |
+| 8 (Verification) | Phase 7 output (execution-log.md) |
 | 9 (PR/Delivery) | Phase 8 passed (all verifications green) |
 | 10 (Retrospective) | Phase 8 or 9 complete |
 

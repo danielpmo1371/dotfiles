@@ -25,6 +25,7 @@ model: sonnet
 color: green
 tools:
   - Read
+  - Write
   - Grep
   - Glob
   - Bash

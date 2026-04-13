@@ -27,7 +27,7 @@ const PHASE_DESCRIPTIONS = {
   6:  { name: 'Planning',         specialist: 'Planning Architect',        estimatedDuration: '10-20 min', description: 'Design implementation approach, create execution plan, identify risks and mitigation strategies.' },
   7:  { name: 'Execution',        specialist: 'Implementation Engineer',   estimatedDuration: '30-120 min', description: 'Implement changes according to the approved plan, writing code and tests.' },
   8:  { name: 'Verification',     specialist: 'QA Specialist',             estimatedDuration: '10-30 min', description: 'Run tests, verify acceptance criteria, validate build integrity, and confirm no regressions.' },
-  9:  { name: 'PR/Delivery',      specialist: 'Implementation Engineer',   estimatedDuration: '10-15 min', description: 'Create pull request, run pre-commit hooks, prepare for code review and delivery.' },
+  9:  { name: 'PR/Delivery',      specialist: 'Reporter',                  estimatedDuration: '10-15 min', description: 'Create pull request, run pre-commit hooks, prepare for code review and delivery.' },
   10: { name: 'Retrospective',    specialist: 'Retrospective Analyst',     estimatedDuration: '5-10 min',  description: 'Capture lessons learned, update documentation, store patterns for future reference.' }
 };
 
@@ -185,6 +185,16 @@ class PhaseIntelligence {
         return noStop;
       }
 
+      case 4: {
+        if (results.architecturalTradeoffs) {
+          return { stop: true, reason: 'Architectural trade-offs require stakeholder input', severity: 'warning' };
+        }
+        if (results.scopeGrew) {
+          return { stop: true, reason: 'Scope grew significantly from audit findings', severity: 'warning' };
+        }
+        return noStop;
+      }
+
       case 6: {
         if (results.multipleApproaches) {
           return { stop: true, reason: 'Multiple implementation approaches identified — user decision needed', severity: 'warning' };
@@ -211,6 +221,13 @@ class PhaseIntelligence {
       case 8: {
         if (results.anyFailures) {
           return { stop: true, reason: 'Verification failures detected', severity: 'critical' };
+        }
+        return noStop;
+      }
+
+      case 10: {
+        if (results.criticalIncidents) {
+          return { stop: true, reason: 'Critical incidents detected during workflow', severity: 'critical' };
         }
         return noStop;
       }

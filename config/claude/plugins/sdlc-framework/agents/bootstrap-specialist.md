@@ -56,7 +56,7 @@ user_story-{id}-{SanitizedTitle}/
   01-bootstrap/
   02-scope-discovery/
   03-audit/
-  04-reserved/
+  04-scope-refinement/
   05-reporting/
   06-planning/
   07-execution/

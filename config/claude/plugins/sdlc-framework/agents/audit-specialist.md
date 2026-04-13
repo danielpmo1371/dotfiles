@@ -116,7 +116,7 @@ grep -rn "password\|secret\|api[_-]key\|connection[_-]string" --include="*.cs" -
 
 - If a command fails (e.g., missing SDK), log the error and continue with other scans
 - If a repo directory doesn't exist, skip it and note in the report
-- Never modify any files during audit — this is read-only analysis
+- Never modify source code files during audit — only write analysis output files
 - If scan output is excessively large, summarize and include raw output in collapsible sections
 
 ## Reporting

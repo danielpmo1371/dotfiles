@@ -138,7 +138,7 @@ Each phase reads outputs from prior phases stored in numbered folders:
 - `01-bootstrap/story-context.md` — requirements, AC, stakeholders → feeds all subsequent phases
 - `02-scope-discovery/scope-analysis.md` — affected repos, files, blast radius → feeds Audit, Planning
 - `03-audit/audit-summary.md` — dependency state, security findings → feeds Planning
-- `04-reserved/scope-refinement.md` — refined scope after audit → feeds Planning
+- `04-scope-refinement/scope-refinement.md` — refined scope after audit → feeds Planning
 - `05-reporting/` — stakeholder reports (informational, no downstream dependency)
 - `06-planning/execution-plan.md` — step-by-step implementation plan → feeds Execution
 - `07-execution/execution-log.md` — what was built, commits, branches → feeds Verification, PR

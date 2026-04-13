@@ -7,8 +7,8 @@
     "test": "mocha tests/**/*.test.js"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Daniel Paiva",
+  "license": "MIT",
   "type": "commonjs",
   "devDependencies": {
     "mocha": "^11.7.5"

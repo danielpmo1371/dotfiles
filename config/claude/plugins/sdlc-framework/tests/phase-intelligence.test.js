@@ -137,7 +137,7 @@ describe('PhaseIntelligence', () => {
       assert.strictEqual(result, 'complex');
     });
 
-    it('should return "complex" at boundary (affectedFiles exactly 10 is not complex)', () => {
+    it('should return "medium" when affectedFiles is exactly 10 (boundary)', () => {
       const result = pi.assessComplexity({
         affectedFiles: 10,
         affectedRepos: 1,
@@ -149,7 +149,7 @@ describe('PhaseIntelligence', () => {
       assert.strictEqual(result, 'medium');
     });
 
-    it('should return "complex" at boundary (affectedRepos exactly 3 is not complex)', () => {
+    it('should return "medium" when affectedRepos is exactly 3 (boundary)', () => {
       const result = pi.assessComplexity({
         affectedFiles: 1,
         affectedRepos: 3,
@@ -359,18 +359,38 @@ describe('PhaseIntelligence', () => {
       assert.strictEqual(result.stop, true);
     });
 
-    // Autonomous mode - phases with no stop conditions
-    it('should not stop at phase 4 in autonomous mode', () => {
+    // Autonomous mode - Phase 4 (Scope Refinement)
+    it('should stop at phase 4 when architecturalTradeoffs', () => {
+      const result = pi.shouldStop(4, { architecturalTradeoffs: true }, 'autonomous');
+      assert.strictEqual(result.stop, true);
+      assert.strictEqual(result.severity, 'warning');
+    });
+
+    it('should stop at phase 4 when scopeGrew', () => {
+      const result = pi.shouldStop(4, { scopeGrew: true }, 'autonomous');
+      assert.strictEqual(result.stop, true);
+      assert.strictEqual(result.severity, 'warning');
+    });
+
+    it('should not stop at phase 4 when no issues', () => {
       const result = pi.shouldStop(4, {}, 'autonomous');
       assert.strictEqual(result.stop, false);
     });
 
+    // Autonomous mode - Phase 5 (Reporting) — always advances
     it('should not stop at phase 5 in autonomous mode', () => {
       const result = pi.shouldStop(5, {}, 'autonomous');
       assert.strictEqual(result.stop, false);
     });
 
-    it('should not stop at phase 10 in autonomous mode', () => {
+    // Autonomous mode - Phase 10 (Retrospective)
+    it('should stop at phase 10 when criticalIncidents', () => {
+      const result = pi.shouldStop(10, { criticalIncidents: true }, 'autonomous');
+      assert.strictEqual(result.stop, true);
+      assert.strictEqual(result.severity, 'critical');
+    });
+
+    it('should not stop at phase 10 when no critical incidents', () => {
       const result = pi.shouldStop(10, {}, 'autonomous');
       assert.strictEqual(result.stop, false);
     });
