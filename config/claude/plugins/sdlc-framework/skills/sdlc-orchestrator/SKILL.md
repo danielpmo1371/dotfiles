@@ -69,12 +69,12 @@ If `.sdlc.json` is not found, proceed with defaults (the Team Lead will ask for 
 
 ## Spawning the Team Lead
 
-Use the Task tool with `subagent_type: "general-purpose"` and `model: "opus"`:
+Use the Task tool with `subagent_type: "sdlc-team-lead"` and `model: "opus"`:
 
 ```
 Task tool parameters:
   name: "sdlc-team-lead"
-  subagent_type: "general-purpose"
+  subagent_type: "sdlc-team-lead"
   model: "opus"
   prompt: |
     You are the SDLC Team Lead. Orchestrate the full SDLC workflow.

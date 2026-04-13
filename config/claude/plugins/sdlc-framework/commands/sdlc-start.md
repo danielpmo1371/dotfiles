@@ -78,7 +78,7 @@ Project Config: {PROJECT_CONFIG or "none"}
 Working Directory: {CWD}
 
 Instructions:
-1. Begin Phase 1 (Bootstrap) — spawn the bootstrap-specialist agent
+1. Begin Phase 1 (Bootstrap) — spawn the sdlc-bootstrap-specialist agent
 2. The bootstrap specialist should:
    a. Fetch work item {WORK_ITEM_ID} from Azure DevOps via MCP
    b. Create folder structure: user_story-{WORK_ITEM_ID}-{sanitized_title}/

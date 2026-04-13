@@ -12,16 +12,16 @@
 
 | # | Phase | Specialist Agent | Model | Est. Duration | Description |
 |---|---|---|---|---|---|
-| 1 | Bootstrap | `bootstrap-specialist` | Sonnet | 5-10 min | Fetch work item from AZDO, create folder scaffold, initialize workflow state |
-| 2 | Scope Discovery | `scope-analyst` | Sonnet | 10-20 min | Identify affected repos, map dependencies, assess blast radius |
-| 3 | Audit | `audit-specialist` | Sonnet | 15-30 min | Run package audits, security scans, code quality checks on affected areas |
-| 4 | Scope Refinement | `scope-analyst` | Sonnet | 10-15 min | Refine scope based on audit findings, adjust estimates, flag new risks |
-| 5 | Reporting | `reporter` | Sonnet | 5-10 min | Generate stakeholder report summarizing phases 1-4 findings |
-| 6 | Planning | `planning-architect` | Opus | 10-20 min | Design solution architecture, create execution plan with steps |
-| 7 | Execution | `implementation-engineer` | Sonnet | 30-120 min | Implement changes per approved plan, commit incrementally |
-| 8 | Verification | `qa-specialist` | Sonnet | 10-30 min | Run tests, verify acceptance criteria, confirm no regressions |
-| 9 | PR/Delivery | `reporter` | Sonnet | 10-15 min | Create PR with description, run pre-commit hooks, prepare for review |
-| 10 | Retrospective | `retrospective-analyst` | Sonnet | 5-10 min | Extract lessons learned, update memory, write retrospective |
+| 1 | Bootstrap | `sdlc-bootstrap-specialist` | Sonnet | 5-10 min | Fetch work item from AZDO, create folder scaffold, initialize workflow state |
+| 2 | Scope Discovery | `sdlc-scope-analyst` | Sonnet | 10-20 min | Identify affected repos, map dependencies, assess blast radius |
+| 3 | Audit | `sdlc-audit-specialist` | Sonnet | 15-30 min | Run package audits, security scans, code quality checks on affected areas |
+| 4 | Scope Refinement | `sdlc-scope-analyst` | Sonnet | 10-15 min | Refine scope based on audit findings, adjust estimates, flag new risks |
+| 5 | Reporting | `sdlc-reporter` | Sonnet | 5-10 min | Generate stakeholder report summarizing phases 1-4 findings |
+| 6 | Planning | `sdlc-planning-architect` | Opus | 10-20 min | Design solution architecture, create execution plan with steps |
+| 7 | Execution | `sdlc-implementation-engineer` | Sonnet | 30-120 min | Implement changes per approved plan, commit incrementally |
+| 8 | Verification | `sdlc-qa-specialist` | Sonnet | 10-30 min | Run tests, verify acceptance criteria, confirm no regressions |
+| 9 | PR/Delivery | `sdlc-reporter` | Sonnet | 10-15 min | Create PR with description, run pre-commit hooks, prepare for review |
+| 10 | Retrospective | `sdlc-retrospective-analyst` | Sonnet | 5-10 min | Extract lessons learned, update memory, write retrospective |
 
 ## Specialist Agents
 
@@ -114,10 +114,12 @@ The Team Lead auto-advances unless these conditions are met:
 | 1 (Bootstrap) | Requirements unclear, conflicting stakeholders, missing AC |
 | 2 (Scope) | Blast radius >10 files, >5 repos affected, unfamiliar subsystems |
 | 3 (Audit) | Any CRITICAL/HIGH findings, >50 total issues |
+| 4 (Refinement) | Architectural trade-offs requiring stakeholder input, scope grew significantly |
 | 6 (Planning) | Multiple valid approaches with trade-offs, HIGH risk items |
 | 7 (Execution) | Build failures, test failures, merge conflicts |
 | 8 (Verification) | Any verification failures |
 | 9 (PR/Delivery) | Pre-commit hook failures, review feedback |
+| 10 (Retrospective) | Critical incidents detected during workflow |
 
 ### Guided Mode
 
@@ -160,18 +162,18 @@ user_story-{id}-{SanitizedTitle}/
   03-audit/
     audit-summary.md
     per-repo/
-  04-reserved/
+  04-scope-refinement/
   05-reporting/
-    stakeholder-report.md
+    status-report.md
   06-planning/
     execution-plan.md
   07-execution/
-    implementation-log.md
+    execution-log.md
     {repo-worktrees}/
   08-verification/
-    test-results.md
+    verification-report.md
   09-pr-delivery/
-    pr-links.md
+    pr-description.md
   10-retrospective/
     retrospective.md
 ```
