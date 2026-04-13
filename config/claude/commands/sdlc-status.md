@@ -1,0 +1,1 @@
+../plugins/sdlc-framework/commands/sdlc-status.md
