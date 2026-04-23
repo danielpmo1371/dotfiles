@@ -16,27 +16,18 @@ The test script is at: $CWD/tests/test-docker.sh
 Spawn 3 teammates. Each teammate builds and tests a different distro. These are fully independent - no dependencies between them.
 
 **Teammate 1 - "ubuntu-tester"**: Test on Ubuntu 22.04
-- Build: `docker build -f tests/docker/Dockerfile.ubuntu -t dotfiles-test-ubuntu .`
-- Run full install: `docker run --rm dotfiles-test-ubuntu bash -c "./install.sh --all 2>&1"`
-- Run validation: `docker run --rm dotfiles-test-ubuntu bash tests/test-installer.sh all`
-- If test-installer.sh doesn't exist, manually validate:
-  - Check symlinks: ~/.bashrc, ~/.zshrc, ~/.tmux.conf, ~/.config/nvim
-  - Check tools installed: git, nvim, tmux, chafa, rg
-  - Check shell configs source without errors
+- Run: `bash tests/test-docker.sh ubuntu` from the repo root
+- This script handles build, install, and validation in a single container session
 - Report: pass/fail for each installer component with error details
 
 **Teammate 2 - "debian-tester"**: Test on Debian
-- Build: `docker build -f tests/docker/Dockerfile.debian -t dotfiles-test-debian .`
-- Run full install: `docker run --rm dotfiles-test-debian bash -c "./install.sh --all 2>&1"`
-- Run validation: `docker run --rm dotfiles-test-debian bash tests/test-installer.sh all`
-- Same validation steps as ubuntu-tester
+- Run: `bash tests/test-docker.sh debian` from the repo root
+- This script handles build, install, and validation in a single container session
 - Report: pass/fail for each installer component with error details
 
 **Teammate 3 - "fedora-tester"**: Test on Fedora
-- Build: `docker build -f tests/docker/Dockerfile.fedora -t dotfiles-test-fedora .`
-- Run full install: `docker run --rm dotfiles-test-fedora bash -c "./install.sh --all 2>&1"`
-- Run validation: `docker run --rm dotfiles-test-fedora bash tests/test-installer.sh all`
-- Same validation steps as ubuntu-tester
+- Run: `bash tests/test-docker.sh fedora` from the repo root
+- This script handles build, install, and validation in a single container session
 - Report: pass/fail for each installer component with error details
 
 ### Completion
