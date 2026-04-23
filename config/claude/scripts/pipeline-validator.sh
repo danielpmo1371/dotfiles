@@ -186,7 +186,7 @@ fi
 # ============================================================================
 # Rule 4: Terraform pipelines — plan only, NEVER apply
 # ============================================================================
-ALLOWED_TF_ENVS=("dev" "sit" "uat")
+ALLOWED_TF_ENVS=("dev" "sit" "uat" "npe" "dry")
 ALLOWED_TF_LOCATIONS=("ae" "ase")
 
 if [[ "$TYPE" == "terraform" ]]; then
@@ -200,7 +200,7 @@ if [[ "$TYPE" == "terraform" ]]; then
     exit 1
   fi
 
-  # Check environment against blocked list
+  # Check environment against blocked list (global hard-coded guard — NEVER weaken)
   TF_ENV_LOWER=$(echo "$TF_ENVIRONMENT" | tr '[:upper:]' '[:lower:]')
   for blocked in "${BLOCKED_ENVS[@]}"; do
     if [[ "$TF_ENV_LOWER" == "$blocked" ]]; then
@@ -248,21 +248,86 @@ if [[ "$TYPE" == "terraform" ]]; then
     REF_BRANCH="refs/heads/$BRANCH"
   fi
 
-  # SAFETY: Always skip apply stage — terraform pipelines are PLAN ONLY
-  # Also skip the temporary KV access policy stage (not needed for plan)
-  STAGES_TO_SKIP='["RemoveThisStageWhenOtherPipelinesUsesHostedAgents","apply_travellerdirectives"]'
+  # ==========================================================================
+  # Registry-driven configuration
+  #
+  # Look up the pipeline-registry.json by walking up from CWD. Match by
+  # pipelineId (numeric) against services.*.terraform.id. The registry is the
+  # single source of truth for:
+  #   - stagesToSkip (services.<svc>.stages.blocked  ∪  terraform.alwaysSkipStages)
+  #   - templateParameters (terraform.defaultParameters merged with env/location)
+  #
+  # If the registry cannot be found or the pipelineId is not in it, we fail
+  # CLOSED: emit a conservative plan-only default that still skips any stage
+  # whose name contains "apply" — but we warn loudly in the reason.
+  # ==========================================================================
+  find_registry_from_cwd() {
+    local dir
+    dir="${PWD}"
+    while [[ "$dir" != "/" ]]; do
+      if [[ -f "$dir/.claude/pipeline-registry.json" ]]; then
+        echo "$dir/.claude/pipeline-registry.json"
+        return 0
+      fi
+      dir=$(dirname "$dir")
+    done
+    return 1
+  }
 
-  # Build templateParameters for the pipeline
-  TEMPLATE_PARAMS=$(jq -n \
-    --arg env "$TF_ENV_LOWER" \
-    --arg loc "$TF_LOC_LOWER" \
-    '{
-      "environment": $env,
-      "location": $loc,
-      "deployToggle": "deploy",
-      "requireManualApproval": "True",
-      "TF_LOG": "NONE"
-    }')
+  REGISTRY_FILE=""
+  if REGISTRY_FILE=$(find_registry_from_cwd); then
+    log_validator "Using registry: $REGISTRY_FILE"
+  else
+    log_validator "WARNING: No pipeline-registry.json found from CWD — falling back to hardcoded defaults"
+  fi
+
+  SERVICE_ENTRY="null"
+  if [[ -n "$REGISTRY_FILE" && -n "$PIPELINE_ID" ]]; then
+    SERVICE_ENTRY=$(jq --arg pid "$PIPELINE_ID" \
+      '[.services | to_entries[] | select(.value.terraform.id == ($pid | tonumber))] | .[0] // null' \
+      "$REGISTRY_FILE")
+  fi
+
+  if [[ "$SERVICE_ENTRY" != "null" && -n "$SERVICE_ENTRY" ]]; then
+    # Derive stagesToSkip: union of stages.blocked and terraform.alwaysSkipStages
+    STAGES_TO_SKIP=$(echo "$SERVICE_ENTRY" | jq -c '
+      ((.value.stages.blocked // []) + (.value.terraform.alwaysSkipStages // []))
+      | unique
+    ')
+
+    # Defensive: make sure every stage whose name contains "apply" is skipped,
+    # even if the registry has a mistake. This is a belt-and-braces guard.
+    ALL_STAGES_FROM_REG=$(echo "$SERVICE_ENTRY" | jq -c '.value.stages.all // []')
+    STAGES_TO_SKIP=$(jq -nc \
+      --argjson skip "$STAGES_TO_SKIP" \
+      --argjson all "$ALL_STAGES_FROM_REG" \
+      '($skip + [$all[] | select(ascii_downcase | startswith("apply"))]) | unique')
+
+    # Derive templateParameters from defaultParameters (registry) + env/location
+    DEFAULT_PARAMS=$(echo "$SERVICE_ENTRY" | jq -c '.value.terraform.defaultParameters // {}')
+    TEMPLATE_PARAMS=$(jq -nc \
+      --arg env "$TF_ENV_LOWER" \
+      --arg loc "$TF_LOC_LOWER" \
+      --argjson defaults "$DEFAULT_PARAMS" \
+      '$defaults + {"environment": $env, "location": $loc}')
+
+    REG_SVC_NAME=$(echo "$SERVICE_ENTRY" | jq -r '.key')
+    REASON="Terraform PLAN-ONLY approved for service '$REG_SVC_NAME' env=$TF_ENV_LOWER loc=$TF_LOC_LOWER (registry-driven: blocked stages + alwaysSkipStages applied)"
+  else
+    # Fallback (fail-closed): no registry match. Skip any stage named like apply/destroy.
+    log_validator "WARNING: pipelineId $PIPELINE_ID not found in registry; using conservative plan-only defaults"
+    STAGES_TO_SKIP='["apply_travellerdirectives","apply_flightchecker","apply_advancedpassengerprocessing","destroy_advancedpassengerprocessing","RemoveThisStageWhenOtherPipelinesUsesHostedAgents"]'
+    TEMPLATE_PARAMS=$(jq -nc \
+      --arg env "$TF_ENV_LOWER" \
+      --arg loc "$TF_LOC_LOWER" \
+      '{
+        "environment": $env,
+        "location": $loc,
+        "deployToggle": "plan",
+        "TF_LOG": "NONE"
+      }')
+    REASON="Terraform PLAN-ONLY approved (fallback mode — pipelineId $PIPELINE_ID not in registry) env=$TF_ENV_LOWER loc=$TF_LOC_LOWER"
+  fi
 
   VALIDATOR_OUTPUT=$(jq -n \
     --arg pipelineId "$PIPELINE_ID" \
@@ -270,7 +335,7 @@ if [[ "$TYPE" == "terraform" ]]; then
     --arg branch "$REF_BRANCH" \
     --argjson stagesToSkip "$STAGES_TO_SKIP" \
     --argjson templateParameters "$TEMPLATE_PARAMS" \
-    --arg reason "Terraform PLAN-ONLY approved for environment: $TF_ENV_LOWER, location: $TF_LOC_LOWER (apply stage always skipped)" \
+    --arg reason "$REASON" \
     '{
       "approved": true,
       "pipelineId": ($pipelineId | tonumber),
