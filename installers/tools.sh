@@ -57,6 +57,7 @@ install_tools() {
     install_package "chafa" "chafa" "chafa" || log_warn "Failed to install chafa, continuing..."
     install_package "htop" "htop" "htop" || log_warn "Failed to install htop, continuing..."
     install_package "btop" "btop" "btop" || log_warn "Failed to install btop, continuing..."
+    install_package "lazydocker" "lazydocker" "lazydocker" || log_warn "Failed to install lazydocker, continuing..."
     install_package "tree" "tree" "tree" || log_warn "Failed to install tree, continuing..."
     install_package "gdu" "gdu" "gdu" || log_warn "Failed to install gdu, continuing..."
     if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -76,6 +77,7 @@ install_tools() {
     echo "  node, npm                      - JavaScript runtime (for Claude Code)"
     echo "  rg, fd, bat, delta, lsd, zoxide - modern replacements"
     echo "  fzf, jq, chafa, htop, tree     - utilities"
+    echo "  lazydocker                     - docker TUI"
     echo ""
     echo "To reset package manager preference: rm ~/.dotfiles_pkg_manager"
 }
