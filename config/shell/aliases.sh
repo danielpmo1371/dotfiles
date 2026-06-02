@@ -19,6 +19,24 @@ alias ..='cd ..'
 alias ...='cd ../..'
 
 # ─────────────────────────────────────────────────────────────────────────────
+#   Custom terminal commands behaviour
+# ─────────────────────────────────────────────────────────────────────────────
+# Override rm to move to a bin folder
+rm() {
+    # Ensure the bin directory exists before moving files
+    mkdir -p "$HOME/bin"
+    
+    # Check if any arguments were provided to prevent errors
+    if [ $# -eq 0 ]; then
+        echo "rm: missing operand"
+        return 1
+    fi
+    
+    # Move all provided arguments/files into the bin directory
+    mv "$@" "$HOME/bin/"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 #   Editor & Config
 # ─────────────────────────────────────────────────────────────────────────────
 alias n='nvim'
