@@ -43,6 +43,8 @@
 # custom-shader = ~/.config/ghostty/shaders/water.glsl
 # custom-shader = ~/.config/ghostty/shaders/inside-the-matrix.glsl
 # custom-shader = ~/.config/ghostty/shaders/smoke-and-ghost.glsl
+# custom-shader = ~/.config/ghostty/shaders/candidates/cursor_blaze.glsl
+# custom-shader = ~/.config/ghostty/shaders/inside-the-matrix.glsl
 custom-shader-animation = always
 
 font-family = "SF Mono"
