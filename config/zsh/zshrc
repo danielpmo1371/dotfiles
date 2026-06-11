@@ -34,8 +34,8 @@ setopt autocd              # cd by typing directory name
 setopt extendedglob        # Extended globbing
 setopt nomatch             # Error on no glob matches
 setopt notify              # Report background job status immediately
-setopt inc_append_history  # Add commands to history immediately
-setopt share_history       # Share history between sessions
+setopt inc_append_history  # Add commands to history file immediately (don't wait for shell exit)
+setopt no_share_history    # Don't pull other sessions' commands into this one's in-memory history
 setopt hist_ignore_dups    # Don't store duplicates
 setopt hist_ignore_space   # Don't store commands starting with space
 
