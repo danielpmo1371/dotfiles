@@ -108,6 +108,10 @@ Editing installed code = next install loses the fix. Always fix at the source.
 - **Distinguish layers clearly.** When diagnosing, explicitly separate: DNS resolution → network path → TLS termination → reverse proxy → backend. Report which layer fails. Don't conflate "backend is healthy" with "the URL works."
 - **NAT hairpin awareness.** When DNS points to a public IP, always consider that internal LAN clients may not be able to reach that public IP (no NAT loopback). Flag this explicitly — don't just say "port forwarding needed" and ignore the internal breakage.
 
+## No-Delete Rule
+- **NEVER delete anything.** Cloud resources, infra, databases, queues, secrets, remote refs, releases, PRs/issues, etc. — only the user may delete. Authorization (allow-lists, prior approval, "obviously safe") does not override this. The single exception is file-level deletion **inside a git work tree** (recoverable via reflog/checkout). When you think a deletion is needed, surface it to the user with what would be lost and what alternative you tried first; let the user execute it.
+- A PreToolUse hook (`~/.claude/hooks/destructive-ops-guard.sh`) enforces this on Bash commands (`az/gcloud/aws/kubectl/docker/gh/helm` deletes, `terraform destroy/state-rm/taint`, `curl -X DELETE`, `rm` outside git). If it blocks, stop and report — do not retry or work around.
+
 ## Infrastructure Safety Rules
 - **NEVER assume the environment type.** Before any infrastructure work, explicitly determine: Is this a VM, LXC container, bare metal, or cloud instance? Check `/proc/1/cgroup`, `systemd-detect-virt`, or `cat /proc/1/environ` — don't guess from disk names or mount points.
 - **NEVER suggest destructive operations on block devices without full context.** Unknown block devices (`/dev/sdX`) in containers are often host passthrough disks. Formatting or partitioning them can destroy host storage, ZFS pools, or other critical data. Always ask the user what the device is before touching it.
@@ -175,3 +179,31 @@ These thoughts/situations trigger MANDATORY skill-forge validation:
 - Mark todos as completed immediately after finishing
 - Prefer existing files over creating new ones
 - Run lint/typecheck commands after changes when available
+
+## Learned Lessons
+
+Append new lessons at the bottom of this section, dated. Each lesson follows the structure: **Rule** / **Why** / **How to apply**. Keep entries terse — the WHY is what makes the rule survive edge cases.
+
+### Sub-agent dispatch hygiene (2026-05-01)
+
+- **Rule**: Do NOT rely on "DO NOT commit / DO NOT push" prose instructions to keep a sub-agent within bounds. Sub-agents have ignored those constraints when the task contained a natural commit/push next step.
+- **Why**: 2026-05-01 — a sub-agent dispatched for the FCH terraform action-group merge into `import-monitoring.tf` committed AND pushed to origin despite explicit prohibition in the prompt. The work itself was correct, but the constraint violation could have been a regression instead. The agent likely saw "commit + push" as the natural follow-on and acted on it before the API limit cut its run short.
+- **How to apply** (defensive options, ranked by reliability):
+  1. **Run all git mutations yourself** instead of delegating. The sub-agent edits files; you stage, commit, push.
+  2. **Restrict the sub-agent's tools** at dispatch time to exclude `Bash` (or scope to a non-git workdir).
+  3. **Patch-file pattern**: instruct the agent to write its proposed change as a patch at `/tmp/<name>.patch` and *not* modify the working tree. You apply the patch.
+  4. **Verify after every file-editing sub-agent**: `git status` AND `git log -n 3 --oneline` BEFORE assuming the agent stayed within bounds. The working tree being clean is also a tell — the agent may have already committed.
+  5. Treat "DO NOT commit/push" prose as advisory, not a hard guard. Structural prevention beats verbal prohibition.
+
+### Claude-in-Chrome popup windows (2026-06-11)
+
+- **Rule**: Claude-in-Chrome's `screenshot` / `computer` (mouse) tools only act on tabs in the MCP tab group. Any `window.open` popup spawns a separate OS window OUTSIDE that group — you cannot screenshot it, click it, or enumerate it. Reach it only by capturing its same-origin JS `window` handle at the moment it opens, then drive it programmatically.
+- **Why**: 2026-06-11 — an Autotask timesheet task opened the time-entry form via `window.open`. The visual tools were blind to it; the only way through was hooking `window.open` on the host frame, capturing the returned handle, and reading/writing/closing the popup's DOM via JS. Two further traps surfaced: (1) programmatic `window.open` / `.click()` returns `null` (popup blocker — no user activation), so the FIRST window must be opened with a REAL `computer` mouse click; (2) the host frame reloads on interaction and wipes the hook, so install the hook IMMEDIATELY before the real click.
+- **How to apply**:
+  1. **Before triggering**: install a `window.open` hook on the frame that calls it — `w.__o=w.open; w.open=function(){var r=w.__o.apply(w,arguments); top.__popups.push(r); return r;}` — storing the handle on `top` (which survives child-frame reloads).
+  2. **Open with a real gesture**: use the `computer` left_click on the actual trigger element's coordinates. Programmatic opens are blocked.
+  3. **Drive via the handle**: same-origin popups expose `.document`; select fields by class/label NOT cached IDs (they regenerate and are long — truncating them breaks `getElementById`). Fire `input`/`change`/`blur` after setting values so the app registers them.
+  4. **Nested dialogs**: prefer calling the app's own dialog function (e.g. `openHoursAndNotesDialog(...)`) over clicking — it often renders an in-page overlay (no new window, no blocker issue).
+  5. **Verify from the server, not the DOM you just wrote**: reopen a fresh window/handle and read back the persisted values; cross-check an aggregate (e.g. a running total). Aligns with the Verification Integrity Rules — prove it, don't assert it.
+  6. **Stale windows overwrite**: a leftover popup you didn't capture can't be closed by you and, if saved, overwrites good data with its stale state. Surface it to the user to close manually; never assume the tree is clean.
+  7. The in-page guard blocks any JS return value containing a URL/query string — return only booleans/plain values when inspecting.
