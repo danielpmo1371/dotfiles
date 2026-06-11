@@ -3,6 +3,10 @@ description: Trigger CI/CD pipelines for the current service. Auto-detects servi
 allowed-tools: Bash(*), Read(*), Grep(*), Glob(*)
 ---
 
+## Dependencies
+
+This command depends on the AZDO pipeline guard hooks at `~/.claude/hooks/pipeline-guard.sh` and `~/.claude/hooks/pipeline-trigger-guard.sh`, plus the supporting scripts in `~/.claude/scripts/` (`pipeline-validator.sh`, `pipeline-registry.sh`). All are installed by `installers/claude-azdo-pipeline-hooks.sh` (auto-invoked by `./install.sh --claude`) and the whole-dir `scripts` symlink from `claude.sh`.
+
 ## Pipeline Deploy: $ARGUMENTS
 
 ### Step 1: Detect Service and Branch
