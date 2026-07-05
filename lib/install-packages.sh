@@ -138,13 +138,9 @@ install_homebrew() {
         fi
     fi
 
-    # Homebrew's official install script with error handling
-    if is_non_interactive; then
-        # Non-interactive installation
-        NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    else
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    fi
+    # Homebrew's official install script — always non-interactive so the
+    # installer never blocks on its "Press RETURN to continue" prompt.
+    NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
     local install_result=$?
     if [[ $install_result -ne 0 ]]; then
@@ -206,24 +202,25 @@ is_manager_installed() {
 }
 
 # Get the best available package manager for non-interactive mode
-# Prefers brew when available (modern packages) over native managers (often outdated)
+# On Linux, prefer the native manager (apt/dnf/...) for speed; on macOS use brew.
 get_native_package_manager() {
-    # Prefer brew on all platforms when available (modern, consistent versions)
+    # On Linux, prefer native package managers (fast, no bottle compiling)
+    if [[ "$OSTYPE" != darwin* ]]; then
+        local native_managers=("apt" "dnf" "yum" "pacman" "zypper" "apk")
+        for mgr in "${native_managers[@]}"; do
+            if command -v "$mgr" &> /dev/null; then
+                echo "$mgr"
+                return 0
+            fi
+        done
+    fi
+
+    # macOS (or Linux with no native manager): use brew if available
     if find_brew &> /dev/null; then
         ensure_brew_in_path
         echo "brew"
         return 0
     fi
-
-    # Fall back to native package managers
-    local native_managers=("apt" "dnf" "yum" "pacman" "zypper" "apk")
-
-    for mgr in "${native_managers[@]}"; do
-        if command -v "$mgr" &> /dev/null; then
-            echo "$mgr"
-            return 0
-        fi
-    done
 
     return 1
 }
@@ -438,6 +435,21 @@ install_package() {
             return 1
             ;;
     esac
+
+    local rc=$?
+
+    # Fallback: if a native manager couldn't provide the package, try Homebrew
+    # when it's available. Some modern tools (git-delta, lsd, fastfetch, ...)
+    # aren't in older apt/dnf repos; brew fills those gaps without forcing the
+    # slow all-brew path for the common tools that native managers do provide.
+    if [[ $rc -ne 0 && "$manager" != "brew" ]] && find_brew &> /dev/null; then
+        log_warn "$package unavailable via $manager — falling back to brew"
+        ensure_brew_in_path
+        brew install "$brew_pkg"
+        rc=$?
+    fi
+
+    return $rc
 }
 
 # Install multiple packages
@@ -455,7 +467,6 @@ install_common_tools() {
     # Format: install_package "command" "brew" "apt" "pacman" "npm" "cargo" "choco" "zypper" "apk"
     # Most packages have the same name across managers, so we only specify differences
     install_package "tmux"
-    install_package "chafa"
     install_package "fzf"
     install_package "rg" "ripgrep" "ripgrep" "ripgrep" "" "ripgrep"
     install_package "fd" "fd" "fd-find" "fd" "" "fd-find"
