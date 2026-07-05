@@ -129,7 +129,6 @@ These are installed but not "owned" by this repo:
 - `ripgrep` (fast grep)
 - `fzf` (fuzzy finder)
 - `jq` (JSON processor)
-- `chafa` (terminal image viewer)
 
 ### Package Manager Used
 - macOS: Homebrew (`brew`)

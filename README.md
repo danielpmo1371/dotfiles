@@ -24,7 +24,7 @@ cd ~/repos/dotfiles
 - **Terminal**: Ghostty configuration
 - **Tmux**: Config with TPM and plugins (gruvbox, resurrect, continuum, floax)
 - **Neovim**: LazyVim-based configuration
-- **CLI Tools**: ripgrep, fd, bat, fzf, zoxide, lsd, jq, chafa, htop
+- **CLI Tools**: ripgrep, fd, bat, fzf, zoxide, lsd, jq, htop
 - **Claude Code**: CLI settings, custom commands, and skills
 
 ## Installation Options
