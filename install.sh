@@ -12,6 +12,7 @@
 # Installation Order & Dependencies:
 #   1. brew.sh       - Homebrew package manager - no dependencies
 #   2. tools.sh      - Base dev tools (git, nvim, chafa, etc.) - no dependencies
+#   2b. casks.sh     - macOS GUI apps via Brewfile - requires: brew (macOS only)
 #   3. secrets.sh    - Create ~/.accessTokens template - no dependencies
 #   4. terminals.sh  - Terminal emulators (Ghostty, etc.) - no dependencies
 #   5. fonts.sh      - Nerd Fonts for Powerlevel10k - requires: curl
@@ -161,6 +162,7 @@ CLI MODE
   ./install.sh --all        Install everything
   ./install.sh --brew       Install Homebrew
   ./install.sh --tools      Install CLI tools
+  ./install.sh --casks      Install macOS GUI apps (Brewfile)
   ./install.sh --zsh        Configure Zsh
   ./install.sh --bash       Configure Bash
   ./install.sh --tmux       Install Tmux + plugins
@@ -168,6 +170,7 @@ CLI MODE
   ./install.sh --fonts      Install Nerd Fonts
   ./install.sh --claude     Install Claude Code CLI
   ./install.sh --mcp        Configure MCP servers
+  ./install.sh --llm        Install llm CLI + Groq plugin (fast `q` query)
 
 OPTIONS
   --dialog    Force dialog mode
@@ -215,6 +218,7 @@ select_components() {
     result=$(dialog_checklist "Select Components" \
         "brew:Homebrew package manager:on" \
         "tools:CLI tools and utilities:on" \
+        "casks:macOS GUI apps (Brewfile):off" \
         "zsh:Zsh shell + plugins:off" \
         "bash:Bash configuration:off" \
         "tmux:Tmux + TPM plugins:off" \
@@ -223,7 +227,8 @@ select_components() {
         "claude:Claude Code CLI + config:off" \
         "mcp:MCP server configuration:off" \
         "memory-hooks:MCP memory service hooks:off" \
-        "logging-hooks:Session logging hooks:off") || result=""
+        "logging-hooks:Session logging hooks:off" \
+        "claude-azdo-pipeline-hooks:Claude AZDO pipeline guard hooks:off") || result=""
 
     # Parse space-separated result into array
     read -ra SELECTED_COMPONENTS <<< "$result"
@@ -350,11 +355,18 @@ get_component_targets() {
         logging-hooks)
             echo "symlink:$root/config/claude/hooks/logging:$HOME/.claude/hooks/logging"
             ;;
+        claude-azdo-pipeline-hooks)
+            echo "symlink:$root/config/claude/hooks/pipeline-guard.sh:$HOME/.claude/hooks/pipeline-guard.sh"
+            echo "symlink:$root/config/claude/hooks/pipeline-trigger-guard.sh:$HOME/.claude/hooks/pipeline-trigger-guard.sh"
+            ;;
         fonts)
             echo "download:::Nerd Fonts (MesloLGS NF)"
             ;;
         brew)
             echo "install:::Homebrew package manager"
+            ;;
+        casks)
+            echo "install:::macOS GUI apps from config/brew/Brewfile (brew bundle)"
             ;;
     esac
 }
@@ -497,6 +509,7 @@ run_dialog_installation() {
 
         log_info "Running $comp installer..."
         case "$comp" in
+            casks)     run_installer "casks.sh" "install_casks" ;;
             zsh)       run_installer "zsh.sh" "install_zsh_config" ;;
             bash)      run_installer "bash.sh" "install_bash_config" ;;
             tmux)      run_installer "tmux.sh" "install_tmux" ;;
@@ -509,6 +522,7 @@ run_dialog_installation() {
             mcp)          run_installer "mcp.sh" "main" ;;
             memory-hooks) run_installer "memory-hooks.sh" "main" ;;
             logging-hooks) run_installer "logging-hooks.sh" "main" ;;
+            claude-azdo-pipeline-hooks) run_installer "claude-azdo-pipeline-hooks.sh" "main" ;;
             *)            continue ;;
         esac
         echo ""
@@ -573,6 +587,7 @@ show_help() {
     echo "  --all          Install everything"
     echo "  --brew         Install Homebrew"
     echo "  --tools        Install common dev tools"
+    echo "  --casks        Install macOS GUI apps from Brewfile (macOS only)"
     echo "  --secrets      Create ~/.accessTokens template"
     echo "  --tmux         Install tmux and plugins"
     echo "  --bash         Install bash configuration"
@@ -583,8 +598,10 @@ show_help() {
     echo "  --config-dirs  Symlink config directories"
     echo "  --claude       Install Claude Code settings"
     echo "  --mcp          Install MCP configuration"
+    echo "  --llm          Install llm CLI + Groq plugin (powers the 'q' quick-query)"
     echo "  --memory-hooks Install MCP memory hooks"
     echo "  --logging-hooks Install session logging hooks"
+    echo "  --claude-azdo-pipeline-hooks  Install Claude AZDO pipeline guard hooks"
     echo ""
     echo "Backup & Restore:"
     echo "  --restore      Interactive restore from backup"
@@ -632,6 +649,12 @@ install_all() {
         log_warn "Tools installation had failures, continuing..."
         ((failures++))
         failed_components+="  - tools\n"
+    }
+    # Install macOS GUI apps from Brewfile (no-op on Linux)
+    run_installer "casks.sh" "install_casks" || {
+        log_warn "Casks installation had failures, continuing..."
+        ((failures++))
+        failed_components+="  - casks\n"
     }
     # Create secrets template
     run_installer "secrets.sh" "install_secrets" || {
@@ -704,6 +727,12 @@ install_all() {
         ((failures++))
         failed_components+="  - logging-hooks\n"
     }
+    # Install Claude AZDO pipeline guard hooks
+    run_installer "claude-azdo-pipeline-hooks.sh" "main" || {
+        log_warn "Claude AZDO pipeline hooks installation failed, continuing..."
+        ((failures++))
+        failed_components+="  - claude-azdo-pipeline-hooks\n"
+    }
 
     log_header "Installation Complete"
 
@@ -755,6 +784,14 @@ main() {
                     log_warn "Tools installation had failures, continuing..."
                     ((failures++))
                     failed_components+="  - tools\n"
+                }
+                ;;
+            --casks)
+                # Install macOS GUI apps from Brewfile
+                run_installer "casks.sh" "install_casks" || {
+                    log_warn "Casks installation had failures, continuing..."
+                    ((failures++))
+                    failed_components+="  - casks\n"
                 }
                 ;;
             --secrets)
@@ -825,6 +862,14 @@ main() {
                     failed_components+="  - mcp\n"
                 }
                 ;;
+            --llm)
+                # Install the `llm` CLI + Groq plugin (powers the `q` quick-query)
+                run_installer "llm.sh" "install_llm" || {
+                    log_warn "LLM CLI installation failed, continuing..."
+                    ((failures++))
+                    failed_components+="  - llm\n"
+                }
+                ;;
             --memory-hooks)
                 # Install memory hooks for MCP memory service
                 run_installer "memory-hooks.sh" "main" || {
@@ -847,6 +892,14 @@ main() {
                     log_warn "Logging hooks installation failed, continuing..."
                     ((failures++))
                     failed_components+="  - logging-hooks\n"
+                }
+                ;;
+            --claude-azdo-pipeline-hooks)
+                # Install Claude AZDO pipeline guard hooks
+                run_installer "claude-azdo-pipeline-hooks.sh" "main" || {
+                    log_warn "Claude AZDO pipeline hooks installation failed, continuing..."
+                    ((failures++))
+                    failed_components+="  - claude-azdo-pipeline-hooks\n"
                 }
                 ;;
             --all)
