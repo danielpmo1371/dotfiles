@@ -13,10 +13,10 @@ The dotfiles repo is at: $CWD
 Spawn 4 teammates with these roles. Use delegate mode (Shift+Tab) so you coordinate without implementing directly.
 
 **Teammate 1 - "base-setup"**: Install foundational tools, secrets template, and terminal emulators.
-- Run `./install.sh --tools` to install dev tools (git, nvim, ripgrep, chafa, etc.)
+- Run `./install.sh --tools` to install dev tools (git, nvim, ripgrep, etc.)
 - Run `./install.sh --secrets` to create ~/.accessTokens template
 - Run `./install.sh --terminals` to install terminal emulator configs (Ghostty)
-- Validate: confirm all tools are available via `which git nvim chafa rg`
+- Validate: confirm all tools are available via `which git nvim rg`
 - Report any package manager issues or missing dependencies
 
 **Teammate 2 - "shell-config"**: Install all shell configurations.

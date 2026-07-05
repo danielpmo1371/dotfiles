@@ -125,7 +125,7 @@ The test harness (`tests/test-installer.sh`) validates these components:
 
 | Component | What It Checks |
 |-----------|---------------|
-| `tools` | 13 CLI commands exist (git, nvim, tmux, zsh, curl, node, npm, rg, fzf, jq, chafa, htop, tree) |
+| `tools` | 12 CLI commands exist (git, nvim, tmux, zsh, curl, node, npm, rg, fzf, jq, htop, tree) |
 | `secrets` | Config-only installer ran |
 | `terminals` | Ghostty config symlink + source file |
 | `fonts` | 4 MesloLGS NF font files installed |
