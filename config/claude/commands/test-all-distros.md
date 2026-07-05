@@ -13,19 +13,24 @@ The test script is at: $CWD/tests/test-docker.sh
 
 ### Team Structure
 
-Spawn 3 teammates. Each teammate builds and tests a different distro. These are fully independent - no dependencies between them.
+Spawn 4 teammates. Each teammate builds and tests a different distro. These are fully independent - no dependencies between them.
 
-**Teammate 1 - "ubuntu-tester"**: Test on Ubuntu 22.04
+**Teammate 1 - "arch-tester"**: Test on Arch Linux (default candidate)
+- Run: `bash tests/test-docker.sh arch` from the repo root
+- This script handles build, install, and validation in a single container session
+- Report: pass/fail for each installer component with error details
+
+**Teammate 2 - "ubuntu-tester"**: Test on Ubuntu 22.04
 - Run: `bash tests/test-docker.sh ubuntu` from the repo root
 - This script handles build, install, and validation in a single container session
 - Report: pass/fail for each installer component with error details
 
-**Teammate 2 - "debian-tester"**: Test on Debian
+**Teammate 3 - "debian-tester"**: Test on Debian
 - Run: `bash tests/test-docker.sh debian` from the repo root
 - This script handles build, install, and validation in a single container session
 - Report: pass/fail for each installer component with error details
 
-**Teammate 3 - "fedora-tester"**: Test on Fedora
+**Teammate 4 - "fedora-tester"**: Test on Fedora
 - Run: `bash tests/test-docker.sh fedora` from the repo root
 - This script handles build, install, and validation in a single container session
 - Report: pass/fail for each installer component with error details
