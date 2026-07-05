@@ -54,7 +54,6 @@ install_tools() {
     # Utilities
     log_info "Installing utilities..."
     install_package "jq" "jq" "jq" || log_warn "Failed to install jq, continuing..."
-    install_package "chafa" "chafa" "chafa" || log_warn "Failed to install chafa, continuing..."
     install_package "htop" "htop" "htop" || log_warn "Failed to install htop, continuing..."
     install_package "btop" "btop" "btop" || log_warn "Failed to install btop, continuing..."
     install_package "lazydocker" "lazydocker" "lazydocker" || log_warn "Failed to install lazydocker, continuing..."
@@ -76,7 +75,7 @@ install_tools() {
     echo "  tmux, nvim, git, zsh, curl     - essentials"
     echo "  node, npm                      - JavaScript runtime (for Claude Code)"
     echo "  rg, fd, bat, delta, lsd, zoxide - modern replacements"
-    echo "  fzf, jq, chafa, htop, tree     - utilities"
+    echo "  fzf, jq, htop, tree            - utilities"
     echo "  lazydocker                     - docker TUI"
     echo ""
     echo "To reset package manager preference: rm ~/.dotfiles_pkg_manager"
