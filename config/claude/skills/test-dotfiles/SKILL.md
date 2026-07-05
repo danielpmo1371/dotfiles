@@ -1,6 +1,6 @@
 ---
 name: test-dotfiles
-description: Run Docker-based e2e tests for dotfiles installation across Linux distros (Ubuntu, Debian, Fedora). Use when testing installers, validating symlinks, or verifying cross-platform compatibility after changes.
+description: Run Docker-based e2e tests for dotfiles installation across Linux distros (Arch [default], Ubuntu, Debian, Fedora). Use when testing installers, validating symlinks, or verifying cross-platform compatibility after changes.
 allowed-tools: Bash, Read, Grep, Glob
 user-invocable: true
 ---
@@ -17,7 +17,8 @@ When invoked without arguments, run all three distros. When invoked with a distr
 
 ### Arguments
 
-- `(none)` or `all` - Test all distros (Ubuntu, Debian, Fedora)
+- `(none)` - Test the default distro (Arch)
+- `all` - Test all distros (Arch, Ubuntu, Debian, Fedora)
 - `ubuntu` - Test Ubuntu 22.04 only
 - `debian` - Test Debian 12 only
 - `fedora` - Test Fedora 39 only
