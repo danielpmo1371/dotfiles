@@ -27,6 +27,8 @@ Trigger a deployment for the current service and branch:
 - `AZDO_PAT` environment variable set
 - Project-level `.claude/pipeline-registry.json` in a parent directory
 - Azure DevOps MCP server configured
+- AZDO pipeline guard hooks installed: `~/.claude/hooks/pipeline-guard.sh` and `~/.claude/hooks/pipeline-trigger-guard.sh` — installed by `installers/claude-azdo-pipeline-hooks.sh` (auto-invoked by `./install.sh --claude`) or directly via `./install.sh --claude-azdo-pipeline-hooks`
+- Validator/registry scripts in `~/.claude/scripts/` — delivered by the whole-dir `scripts` symlink from `claude.sh`
 
 ## Available Scripts
 
