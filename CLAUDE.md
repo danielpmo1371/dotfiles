@@ -14,6 +14,7 @@ Personal dotfiles repository with modular installation system. Supports macOS an
 
 # Individual components
 ./install.sh --tools        # Dev tools (git, nvim, chafa, ripgrep, etc.)
+./install.sh --casks        # macOS GUI apps from config/brew/Brewfile (macOS only)
 ./install.sh --secrets      # Create ~/.accessTokens template
 ./install.sh --tmux         # Tmux + TPM + plugins (requires: git)
 ./install.sh --bash         # Bash configuration
@@ -22,6 +23,8 @@ Personal dotfiles repository with modular installation system. Supports macOS an
 ./install.sh --fonts        # Nerd Fonts for Powerlevel10k (requires: curl)
 ./install.sh --config-dirs  # Symlink nvim to ~/.config/
 ./install.sh --claude       # Claude Code CLI and settings (requires: node, npm)
+./install.sh --claude-azdo-pipeline-hooks  # Pipeline guard hooks (auto-run by --claude)
+./install.sh --llm          # llm CLI + Groq plugin, powers the `q` quick-query (requires: python3)
 
 # After shell config changes
 source ~/.zshrc  # or ~/.bashrc
@@ -37,6 +40,7 @@ lib/                 # Shared functions
   install-common.sh  # Logging, symlink helpers, backup utilities
   install-packages.sh # Cross-platform package installation
 config/              # Configuration files organized by tool
+  brew/              # Brewfile for macOS GUI apps (casks)
   shell/             # Shared configs sourced by both bash and zsh
   bash/              # Bash-specific (bashrc, bash_aliases, bash_path)
   zsh/               # Zsh-specific (zshrc)
@@ -49,7 +53,9 @@ config/              # Configuration files organized by tool
 ### Key Patterns
 
 **Installation Flow**: `install.sh` dispatches to `installers/*.sh` scripts which source `lib/install-common.sh` for utilities. Order matters for `--all`:
-1. tools.sh → secrets.sh → terminals.sh → fonts.sh → tmux.sh → bash.sh → zsh.sh → config-dirs.sh → claude.sh
+1. tools.sh → casks.sh (macOS only) → secrets.sh → terminals.sh → fonts.sh → tmux.sh → bash.sh → zsh.sh → config-dirs.sh → claude.sh
+
+**Casks (macOS GUI apps)**: Declared in `config/brew/Brewfile`, installed by `installers/casks.sh` via `brew bundle`. To add an app, add a `cask "name"` line to the Brewfile and run `./install.sh --casks`. No-op on Linux.
 
 **Symlink Strategy**:
 - `config/` subdirs symlink to `~/.config/` via `link_config_dirs()`
@@ -57,6 +63,8 @@ config/              # Configuration files organized by tool
 - Claude files use `link_target_files()` to `~/.claude/`
 
 **Shell Config**: Modular design where `~/.zshrc` and `~/.bashrc` source shared files from `config/shell/` (env.sh, path.sh, aliases.sh, git.sh, tmux.sh).
+
+**Quick AI query (`q`)**: The `q` function (`config/shell/aliases.sh`) is a one-shot query over the `llm` CLI, optimized for low time-to-first-token (defaults to Groq's `llama-3.1-8b-instant`). Provider is a one-var switch: `AI_PROVIDER` in `env.sh` (`groq|gemini|openai|claude`) maps to a model id in the function; `AI_MODEL` pins a specific id. The Groq key lives in the keychain (`secret_set GROQ_API_KEY ...`) and is exported as `LLM_GROQ_KEY` by `secrets.sh`. Installed via `./install.sh --llm` (standalone, not part of `--all` since it needs an API key).
 
 **Package Manager**: Auto-detects available managers, prompts user on first run, caches choice in `~/.dotfiles_pkg_manager`.
 
@@ -74,9 +82,12 @@ Settings symlinked from `config/claude/` to `~/.claude/`:
 - `scripts/pipeline-validator.sh` - Hard safety rules for pipeline triggers (blocks PRE/PRD)
 - `scripts/pipeline-registry.sh` - CWD-based service detection and pipeline ID resolution
 - `hooks/pipeline-guard.sh` - PreToolUse hook intercepting direct MCP pipeline calls
+- `hooks/pipeline-trigger-guard.sh` - PreToolUse Bash hook blocking direct curl/az/gh trigger attempts
 - `commands/pipe-deploy.md` - `/pipe-deploy` command for CI/CD orchestration
 - `agents/pipeline-runner.md` - Autonomous pipeline trigger/monitor/recovery agent
 - `skills/pipeline-ops/` - Auto-discoverable skill matching "deploy", "run pipeline" etc.
+
+The two `pipeline-*-guard.sh` files are not delivered by the whole-dir symlinks (because `~/.claude/hooks/` is shared with `memory-hooks` and `logging-hooks`). They are installed by `installers/claude-azdo-pipeline-hooks.sh`, which is auto-invoked by `installers/claude.sh` (i.e. by `./install.sh --claude`) and can also be run standalone via `./install.sh --claude-azdo-pipeline-hooks`. Their `PreToolUse` registration in `settings.json` is delivered through the existing `settings.json` whole-file symlink.
 
 Local files (not synced): `settings.local.json`, `.credentials.json`
 

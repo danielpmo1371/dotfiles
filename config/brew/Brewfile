@@ -1,0 +1,46 @@
+# Homebrew Brewfile - macOS GUI applications (casks)
+# Installed via: ./install.sh --casks (runs `brew bundle` against this file)
+#
+# To add a new app:
+#   1. Add a `cask "name"` line here (find names with `brew search --cask <app>`)
+#   2. Run ./install.sh --casks
+#
+# To capture apps installed manually on this machine:
+#   brew bundle dump --casks --file=- | diff config/brew/Brewfile -
+
+# Taps
+tap "nikitabobko/tap"
+
+# Window management
+cask "nikitabobko/tap/aerospace"
+
+# Browsers
+cask "brave-browser"
+cask "chromium"
+cask "microsoft-edge"
+
+# Development
+cask "anaconda"
+cask "android-platform-tools"
+cask "bruno"
+cask "docker-desktop"
+cask "dotnet-sdk"
+cask "dotnet-sdk@8"
+cask "flutter"
+cask "github"
+cask "isimulator"
+cask "orbstack"
+cask "postman"
+cask "powershell"
+cask "sublime-text"
+cask "warp"
+cask "zulu@11"
+
+# Utilities
+cask "drawio"
+cask "little-snitch"
+cask "monitorcontrol"
+cask "slack"
+
+# Fonts
+cask "font-hack-nerd-font"
