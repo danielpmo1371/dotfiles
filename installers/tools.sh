@@ -24,51 +24,54 @@ install_tools() {
     log_info "Using package manager: $manager"
     echo ""
 
-    # Essential tools
-    log_info "Installing essential tools..."
-    install_package "tmux" "tmux" "tmux" || log_warn "Failed to install tmux, continuing..."
-    install_package "nvim" "neovim" "neovim" || log_warn "Failed to install neovim, continuing..."
-    install_package "git" "git" "git" || log_warn "Failed to install git, continuing..."
-    install_package "zsh" "zsh" "zsh" || log_warn "Failed to install zsh, continuing..."
-    install_package "curl" "curl" "curl" || log_warn "Failed to install curl, continuing..."
-    install_package "tldr" "tlrc" "tldr" || log_warn "Failed to install tldr, continuing..."
+    # All base tools install in ONE batch transaction per manager (installing
+    # them one-by-one makes pacman/apt re-run post-transaction hooks per package,
+    # which dominated install time). install_packages_fast batches, then recovers
+    # any straggler individually (correct per-manager name + on-demand brew
+    # fallback for tools the native repo lacks).
+    #
+    # Spec format: "cmd|brew_pkg|apt_pkg|pacman_pkg" (empty fields take defaults;
+    # pacman defaults to the apt name, so only override where Arch differs).
+    log_info "Installing base tools..."
+    local specs=(
+        "tmux|tmux|tmux|"
+        "nvim|neovim|neovim|"
+        "git|git|git|"
+        "zsh|zsh|zsh|"
+        "curl|curl|curl|"
+        "tldr|tlrc|tldr|"
+        "node|node|nodejs|"
+        "rg|ripgrep|ripgrep|"
+        "fd|fd|fd-find|fd"
+        "bat|bat|bat|"
+        "delta|git-delta|git-delta|"
+        "lsd|lsd|lsd|"
+        "zoxide|zoxide|zoxide|"
+        "fzf|fzf|fzf|"
+        "jq|jq|jq|"
+        "htop|htop|htop|"
+        "btop|btop|btop|"
+        "lazydocker|lazydocker|lazydocker|"
+        "tree|tree|tree|"
+        "gdu|gdu|gdu|"
+        "fastfetch|fastfetch|fastfetch|"
+    )
+    # Platform-specific desktop notifier
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        specs+=("terminal-notifier|terminal-notifier|terminal-notifier|")
+    else
+        specs+=("notify-send|libnotify|libnotify-bin|libnotify")
+    fi
+    # toilet removed: the Arch package drags in libcaca -> mesa -> llvm-libs
+    # (~300 MB) for a cosmetic ASCII-art banner. Not worth it.
 
-    # Node.js and npm (required for Claude Code)
-    # Note: On most systems, 'node' command may not exist after install, check 'nodejs' too
-    install_package "node" "node" "nodejs" || log_warn "Failed to install node, continuing..."
-    # npm is sometimes separate package on apt-based systems
+    install_packages_fast "${specs[@]}"
+
+    # npm is sometimes a separate package on apt-based systems (node above pulls
+    # it on most, but Debian/Ubuntu split it out).
     if ! command -v npm &> /dev/null; then
         install_package "npm" "npm" "npm" || log_warn "Failed to install npm, continuing..."
     fi
-
-    # Modern CLI replacements
-    log_info "Installing modern CLI tools..."
-    install_package "rg" "ripgrep" "ripgrep" "" "ripgrep" || log_warn "Failed to install ripgrep, continuing..."
-    install_package "fd" "fd" "fd-find" "fd" "fd-find" || log_warn "Failed to install fd, continuing..."
-    install_package "bat" "bat" "bat" "" "bat" || log_warn "Failed to install bat, continuing..."
-    install_package "delta" "git-delta" "git-delta" "" "git-delta" || log_warn "Failed to install git-delta, continuing..."
-    install_package "lsd" "lsd" "lsd" "" "lsd" || log_warn "Failed to install lsd, continuing..."
-    install_package "zoxide" "zoxide" "zoxide" "" "zoxide" || log_warn "Failed to install zoxide, continuing..."
-    install_package "fzf" "fzf" "fzf" || log_warn "Failed to install fzf, continuing..."
-
-    # Utilities
-    log_info "Installing utilities..."
-    install_package "jq" "jq" "jq" || log_warn "Failed to install jq, continuing..."
-    install_package "htop" "htop" "htop" || log_warn "Failed to install htop, continuing..."
-    install_package "btop" "btop" "btop" || log_warn "Failed to install btop, continuing..."
-    install_package "lazydocker" "lazydocker" "lazydocker" || log_warn "Failed to install lazydocker, continuing..."
-    install_package "tree" "tree" "tree" || log_warn "Failed to install tree, continuing..."
-    install_package "gdu" "gdu" "gdu" || log_warn "Failed to install gdu, continuing..."
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        install_package "terminal-notifier" "terminal-notifier" || log_warn "Failed to install terminal-notifier, continuing..."
-    else
-        install_package "notify-send" "libnotify" "libnotify-bin" "libnotify" || log_warn "Failed to install libnotify, continuing..."
-    fi
-    install_package "fastfetch" "fastfetch" "fastfetch" || log_warn "Failed to install fastfetch, continuing..."
-    # toilet removed: the Arch package drags in libcaca -> mesa -> llvm-libs
-    # (~300 MB) for a cosmetic ASCII-art banner. Not worth it.
-    # install_package "toilet" "toilet" "toilet" || log_warn "Failed to install toilet, continuing..."
-    # install calcure with pipx install calcure # calendar
 
     echo ""
     log_info "Tools installation complete"
