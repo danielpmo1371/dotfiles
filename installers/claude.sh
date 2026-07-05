@@ -148,6 +148,21 @@ install_claude_config() {
     # Generate/update settings.local.json for MCP memory service
     ensure_settings_local
 
+    # Install AZDO pipeline guard hooks that the pipeline-runner agent,
+    # pipe-deploy command, and pipeline-ops skill depend on.
+    # The hooks/ directory itself is not a whole symlink (it's shared with
+    # memory-hooks and logging-hooks), so the per-file symlinks must be
+    # created by a dedicated installer.
+    local pipeline_hooks_installer="$DOTFILES_ROOT/installers/claude-azdo-pipeline-hooks.sh"
+    if [[ -x "$pipeline_hooks_installer" ]]; then
+        log_info "Installing Claude AZDO pipeline guard hooks (dependency)..."
+        if ! "$pipeline_hooks_installer"; then
+            log_warn "Claude AZDO pipeline hooks installer reported failures"
+        fi
+    else
+        log_warn "claude-azdo-pipeline-hooks.sh not found or not executable: $pipeline_hooks_installer"
+    fi
+
     echo ""
     log_info "Claude settings installation complete"
     echo ""
@@ -156,6 +171,8 @@ install_claude_config() {
         echo "  - $item"
     done
     echo "  - ~/.claude.json (user-level MCP config)"
+    echo "  - ~/.claude/hooks/pipeline-guard.sh (AZDO pipeline guard)"
+    echo "  - ~/.claude/hooks/pipeline-trigger-guard.sh (AZDO pipeline guard)"
     echo ""
     echo "Local items (not synced):"
     echo "  - settings.local.json (per-machine permissions)"
