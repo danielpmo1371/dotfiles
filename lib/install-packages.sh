@@ -438,18 +438,91 @@ install_package() {
 
     local rc=$?
 
-    # Fallback: if a native manager couldn't provide the package, try Homebrew
-    # when it's available. Some modern tools (git-delta, lsd, fastfetch, ...)
-    # aren't in older apt/dnf repos; brew fills those gaps without forcing the
-    # slow all-brew path for the common tools that native managers do provide.
-    if [[ $rc -ne 0 && "$manager" != "brew" ]] && find_brew &> /dev/null; then
-        log_warn "$package unavailable via $manager — falling back to brew"
-        ensure_brew_in_path
-        brew install "$brew_pkg"
-        rc=$?
+    # Fallback: if a native manager couldn't provide the package, use Homebrew.
+    # Some modern tools (git-delta, lsd, ...) aren't in older apt/dnf repos.
+    # Homebrew is bootstrapped on demand here (not up front), so distros whose
+    # native manager already has everything (e.g. Arch/pacman) never pay for it.
+    if [[ $rc -ne 0 && "$manager" != "brew" ]]; then
+        if ! find_brew &> /dev/null; then
+            log_warn "$package not in $manager repos — bootstrapping Homebrew for fallback tools"
+            _bootstrap_homebrew_for_fallback
+        fi
+        if find_brew &> /dev/null; then
+            log_warn "$package unavailable via $manager — falling back to brew"
+            ensure_brew_in_path
+            brew install "$brew_pkg"
+            rc=$?
+        fi
     fi
 
     return $rc
+}
+
+# Bootstrap Homebrew on demand for the fallback path. Uses the dedicated
+# brew.sh installer, which handles OS build dependencies and runs Homebrew's
+# installer non-interactively.
+_bootstrap_homebrew_for_fallback() {
+    local root
+    root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    if [[ -f "$root/installers/brew.sh" ]]; then
+        source "$root/installers/brew.sh" && install_brew || log_warn "Homebrew bootstrap failed"
+    else
+        install_homebrew || log_warn "Homebrew bootstrap failed"
+    fi
+}
+
+# Batch-install packages for speed, then fall back to per-package install for
+# any that remain (correct per-manager name + on-demand brew fallback).
+# Each argument is a spec: "cmd|brew_pkg|apt_pkg|pacman_pkg" (trailing fields
+# may be empty to accept install_package's defaults).
+install_packages_fast() {
+    local manager
+    manager=$(get_preferred_manager)
+    if [[ -z "$manager" ]]; then
+        log_error "No package manager available"
+        return 1
+    fi
+    update_package_manager "$manager"
+
+    local -a specs=("$@")
+    local -a batch=()
+    local spec cmd brew apt pac name
+    for spec in "${specs[@]}"; do
+        IFS='|' read -r cmd brew apt pac <<< "$spec"
+        command -v "$cmd" &> /dev/null && continue
+        case "$manager" in
+            brew)                   name="${brew:-$cmd}" ;;
+            pacman)                 name="${pac:-${apt:-$cmd}}" ;;
+            apt|dnf|yum|zypper|apk) name="${apt:-$cmd}" ;;
+            *)                      name="${apt:-$cmd}" ;;
+        esac
+        [[ -n "$name" ]] && batch+=("$name")
+    done
+
+    # One transaction for the whole set. Best-effort: if it aborts (e.g. a name
+    # missing from this manager's repos), the per-package pass below recovers.
+    if [[ ${#batch[@]} -gt 0 ]]; then
+        log_info "Batch-installing ${#batch[@]} package(s) via $manager..."
+        case "$manager" in
+            brew)   ensure_brew_in_path; brew install "${batch[@]}" || true ;;
+            apt)    run_privileged apt install -y "${batch[@]}" || true ;;
+            dnf)    run_privileged dnf install -y "${batch[@]}" || true ;;
+            yum)    run_privileged yum install -y "${batch[@]}" || true ;;
+            pacman) run_privileged pacman -S --noconfirm --needed "${batch[@]}" || true ;;
+            zypper) run_privileged zypper install -y "${batch[@]}" || true ;;
+            apk)    run_privileged apk add "${batch[@]}" || true ;;
+            choco)  choco install -y "${batch[@]}" || true ;;
+            scoop)  scoop install "${batch[@]}" || true ;;
+        esac
+    fi
+
+    # Recover any stragglers individually (handles per-manager name quirks and
+    # triggers the on-demand Homebrew fallback for tools the native repo lacks).
+    for spec in "${specs[@]}"; do
+        IFS='|' read -r cmd brew apt pac <<< "$spec"
+        command -v "$cmd" &> /dev/null && continue
+        install_package "$cmd" "$brew" "$apt" "$pac" || log_warn "Failed to install $cmd, continuing..."
+    done
 }
 
 # Install multiple packages
