@@ -2,7 +2,9 @@
 
 # Docker-based e2e test runner for dotfiles
 # Usage: ./tests/test-docker.sh <distro|all>
-# Distros: ubuntu, debian, fedora
+# Distros: arch (default), ubuntu, debian, fedora
+# Arch is the default candidate: pacman ships current package versions, so tools
+# install natively (fast) without the Homebrew fallback older distros need.
 
 set -euo pipefail
 
@@ -65,24 +67,24 @@ test_distro() {
 }
 
 # Main dispatch
-distro="${1:-all}"
+distro="${1:-arch}"
 overall_exit=0
 
 echo -e "${BLUE}Dotfiles Docker E2E Test Runner${NC}"
 echo "Dotfiles root: $DOTFILES_ROOT"
 
 case "$distro" in
-    ubuntu|debian|fedora)
+    arch|ubuntu|debian|fedora)
         test_distro "$distro" || overall_exit=1
         ;;
     all)
-        for d in ubuntu debian fedora; do
+        for d in arch ubuntu debian fedora; do
             test_distro "$d" || overall_exit=1
         done
         ;;
     *)
         echo "Unknown distro: $distro"
-        echo "Usage: $0 <ubuntu|debian|fedora|all>"
+        echo "Usage: $0 <arch|ubuntu|debian|fedora|all>"
         exit 1
         ;;
 esac
