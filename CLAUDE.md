@@ -13,7 +13,7 @@ Personal dotfiles repository with modular installation system. Supports macOS an
 ./install.sh
 
 # Individual components
-./install.sh --tools        # Dev tools (git, nvim, chafa, ripgrep, etc.)
+./install.sh --tools        # Dev tools (git, nvim, ripgrep, etc.)
 ./install.sh --casks        # macOS GUI apps from config/brew/Brewfile (macOS only)
 ./install.sh --secrets      # Create ~/.accessTokens template
 ./install.sh --tmux         # Tmux + TPM + plugins (requires: git)
@@ -116,7 +116,7 @@ Claude Code Agent Teams are enabled for parallel work on this repo. Teams coordi
 | Command | What it does |
 |---------|-------------|
 | `/setup-machine` | Spawns 4 teammates to install dotfiles in parallel (base tools, shells, dev env, claude/mcp) |
-| `/test-all-distros` | Spawns 3 teammates to run Docker e2e tests on Ubuntu, Debian, and Fedora simultaneously |
+| `/test-all-distros` | Spawns 4 teammates to run Docker e2e tests on Arch, Ubuntu, Debian, and Fedora simultaneously |
 | `/review-changes` | Spawns 3 teammates for pre-commit review (cross-platform compat, security, symlink validation) |
 
 ### Configuration
