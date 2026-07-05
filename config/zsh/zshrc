@@ -135,7 +135,7 @@ if command -v zoxide &> /dev/null; then
 fi
 
 # FZF
-source <(fzf --zsh)
+command -v fzf &>/dev/null && source <(fzf --zsh)
 # Open in tmux popup if on tmux, otherwise use --height mode
 export FZF_DEFAULT_OPTS="--height 40% --tmux center,75% \
     --preview 'fzf-preview.sh {}' --bind 'focus:transform-header:file --brief {}'"
@@ -160,12 +160,16 @@ export FZF_DEFAULT_OPTS="--height 40% --tmux center,75% \
     # (( ${+functions[p10k-instant-prompt-finalize]} )) && p10k-instant-prompt-finalize
     # show-start
 # fi
-# Cached neofetch (regenerates once per day)
-_neofetch_cache="$HOME/.cache/neofetch-cache"
-if [[ ! -f "$_neofetch_cache" ]] || [[ $(find "$_neofetch_cache" -mtime +1 2>/dev/null) ]]; then
-    neofetch > "$_neofetch_cache" 2>/dev/null
+# Cached system-info banner (regenerates once per day; uses fastfetch)
+if command -v fastfetch &>/dev/null; then
+    _fetch_cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}"
+    _fetch_cache="$_fetch_cache_dir/fastfetch-cache"
+    [[ -d "$_fetch_cache_dir" ]] || mkdir -p "$_fetch_cache_dir"
+    if [[ ! -f "$_fetch_cache" ]] || [[ -n $(find "$_fetch_cache" -mtime +1 2>/dev/null) ]]; then
+        fastfetch > "$_fetch_cache" 2>/dev/null
+    fi
+    cat "$_fetch_cache" 2>/dev/null
 fi
-cat "$_neofetch_cache" 2>/dev/null
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Profiling output
