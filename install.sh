@@ -590,7 +590,6 @@ show_help() {
     echo "  --tmux         Install tmux and plugins"
     echo "  --bash         Install bash configuration"
     echo "  --zsh          Install zsh configuration"
-    echo "  --nushell      Install nushell configuration"
     echo "  --terminals    Install terminal emulators config"
     echo "  --fonts        Install Nerd Fonts for Powerlevel10k"
     echo "  --config-dirs  Symlink config directories"
@@ -684,12 +683,13 @@ install_all() {
         ((failures++))
         failed_components+="  - zsh\n"
     }
-    # Install shell-specific configs
-    run_installer "nushell.sh" "install_nushell_config" || {
-        log_warn "Nushell config installation failed, continuing..."
-        ((failures++))
-        failed_components+="  - terminals\n"
-    }
+    # Nushell removed from the default install (heavy: nu is ~246 MB via brew,
+    # and starship duplicates the Powerlevel10k prompt). Left commented on purpose.
+    # run_installer "nushell.sh" "install_nushell_config" || {
+    #     log_warn "Nushell config installation failed, continuing..."
+    #     ((failures++))
+    #     failed_components+="  - nushell\n"
+    # }
     # Install terminal emulators config (before tmux - tmux needs terminal keybindings)
     run_installer "terminals.sh" "install_terminals" || {
         log_warn "Terminals installation failed, continuing..."
@@ -825,13 +825,14 @@ main() {
                     failed_components+="  - zsh\n"
                 }
                 ;;
-            --nushell)
-                run_installer "nushell.sh" "install_nushell_config" || {
-                    log_warn "Nushell config installation failed, continuing..."
-                    ((failures++))
-                    failed_components+="  - terminals\n"
-                }
-                ;;
+            # --nushell removed (heavy/niche). Left commented on purpose.
+            # --nushell)
+            #     run_installer "nushell.sh" "install_nushell_config" || {
+            #         log_warn "Nushell config installation failed, continuing..."
+            #         ((failures++))
+            #         failed_components+="  - nushell\n"
+            #     }
+            #     ;;
             --terminals)
                 # Install terminal emulators config (before tmux - tmux needs terminal keybindings)
                 run_installer "terminals.sh" "install_terminals" || {
