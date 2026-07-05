@@ -11,7 +11,7 @@
 #
 # Installation Order & Dependencies:
 #   1. brew.sh       - Homebrew package manager - no dependencies
-#   2. tools.sh      - Base dev tools (git, nvim, chafa, etc.) - no dependencies
+#   2. tools.sh      - Base dev tools (git, nvim, ripgrep, etc.) - no dependencies
 #   2b. casks.sh     - macOS GUI apps via Brewfile - requires: brew (macOS only)
 #   3. secrets.sh    - Create ~/.accessTokens template - no dependencies
 #   4. terminals.sh  - Terminal emulators (Ghostty, etc.) - no dependencies
@@ -38,7 +38,7 @@ source "$SCRIPT_DIR/lib/install-packages.sh"
 # Profile package lists
 PROFILE_MINIMAL="git curl wget"
 PROFILE_DEVELOPER="git curl wget nvim tmux zsh node npm ripgrep fzf fd bat jq"
-PROFILE_FULL="git curl wget nvim tmux zsh node npm ripgrep fzf fd bat jq git-delta lsd zoxide eza chafa htop btop tree gdu notifications fastfetch tlrc"
+PROFILE_FULL="git curl wget nvim tmux zsh node npm ripgrep fzf fd bat jq git-delta lsd zoxide eza htop btop tree gdu notifications fastfetch tlrc"
 
 # All available packages with descriptions
 # Format: "package:description"
@@ -60,7 +60,6 @@ ALL_PACKAGES=(
     "lsd:Modern ls"
     "zoxide:Smart cd"
     "eza:Modern ls alternative"
-    "chafa:Terminal image viewer"
     "htop:Process viewer"
     "btop:Resource monitor"
     "tree:Directory tree"
@@ -179,7 +178,7 @@ OPTIONS
 PROFILES
   Minimal:   git, curl, wget
   Developer: + nvim, tmux, zsh, node, npm, ripgrep, fzf, fd, bat, jq
-  Full:      + git-delta, lsd, zoxide, eza, chafa, htop, btop, etc."
+  Full:      + git-delta, lsd, zoxide, eza, htop, btop, etc."
 
     dialog_textbox "Help" "$help_text"
 }
@@ -558,7 +557,6 @@ install_single_package() {
         lsd)        install_package "lsd" ;;
         zoxide)     install_package "zoxide" ;;
         eza)        install_package "eza" ;;
-        chafa)      install_package "chafa" ;;
         htop)       install_package "htop" ;;
         btop)       install_package "btop" ;;
         tree)       install_package "tree" ;;
@@ -765,6 +763,9 @@ main() {
     if should_use_dialog "$@"; then
         run_dialog_mode
     else
+        # CLI mode (explicit flags) runs unattended: never block on interactive
+        # prompts (package-manager choice, Homebrew "Press RETURN", etc.).
+        export DOTFILES_NON_INTERACTIVE=true
         local mode="${1:---help}"
 
         case "$mode" in
