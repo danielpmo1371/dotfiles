@@ -44,7 +44,7 @@ install_tools() {
     # Modern CLI replacements
     log_info "Installing modern CLI tools..."
     install_package "rg" "ripgrep" "ripgrep" "" "ripgrep" || log_warn "Failed to install ripgrep, continuing..."
-    install_package "fd" "fd" "fd-find" "" "fd-find" || log_warn "Failed to install fd, continuing..."
+    install_package "fd" "fd" "fd-find" "fd" "fd-find" || log_warn "Failed to install fd, continuing..."
     install_package "bat" "bat" "bat" "" "bat" || log_warn "Failed to install bat, continuing..."
     install_package "delta" "git-delta" "git-delta" "" "git-delta" || log_warn "Failed to install git-delta, continuing..."
     install_package "lsd" "lsd" "lsd" "" "lsd" || log_warn "Failed to install lsd, continuing..."
@@ -65,7 +65,9 @@ install_tools() {
         install_package "notify-send" "libnotify" "libnotify-bin" "libnotify" || log_warn "Failed to install libnotify, continuing..."
     fi
     install_package "fastfetch" "fastfetch" "fastfetch" || log_warn "Failed to install fastfetch, continuing..."
-    install_package "toilet" "toilet" "toilet" || log_warn "Failed to install toilet, continuing..."
+    # toilet removed: the Arch package drags in libcaca -> mesa -> llvm-libs
+    # (~300 MB) for a cosmetic ASCII-art banner. Not worth it.
+    # install_package "toilet" "toilet" "toilet" || log_warn "Failed to install toilet, continuing..."
     # install calcure with pipx install calcure # calendar
 
     echo ""
