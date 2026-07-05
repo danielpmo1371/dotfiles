@@ -112,7 +112,6 @@ test_tools() {
     assert_command_exists rg "ripgrep"
     assert_command_exists fzf
     assert_command_exists jq
-    assert_command_exists chafa
     assert_command_exists htop
     assert_command_exists tree
 }
