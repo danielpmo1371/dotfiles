@@ -43,6 +43,26 @@ log_header() {
     echo ""
 }
 
+# Prominent phase banner (used to separate the dotfiles core from the
+# Claude Code handover in the top-level install flow).
+log_phase() {
+    echo ""
+    echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
+    echo -e "${BLUE}  $1${NC}"
+    echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
+    echo ""
+}
+
+# Format a duration in seconds as a compact human string (e.g. "1m 05s").
+format_duration() {
+    local secs="$1"
+    if (( secs >= 60 )); then
+        printf '%dm %02ds' "$((secs / 60))" "$((secs % 60))"
+    else
+        printf '%ds' "$secs"
+    fi
+}
+
 # Get the dotfiles root directory (parent of lib/)
 get_dotfiles_root() {
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

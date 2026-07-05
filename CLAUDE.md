@@ -9,7 +9,13 @@ Personal dotfiles repository with modular installation system. Supports macOS an
 ## Installation Commands
 
 ```bash
-# Full installation
+# Full installation (Phase 1: dotfiles core, then handover to Phase 2: Claude Code)
+./install.sh --all
+
+# Just the dotfiles core — terminal & tmux workflow, stops before Claude Code
+./install.sh --dotfiles
+
+# Interactive dialog installer
 ./install.sh
 
 # Individual components

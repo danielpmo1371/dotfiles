@@ -582,7 +582,8 @@ show_help() {
     echo "  ./install.sh --dialog     Force dialog mode"
     echo ""
     echo "CLI mode:"
-    echo "  --all          Install everything"
+    echo "  --all          Install everything (dotfiles core, then Claude Code)"
+    echo "  --dotfiles     Install only the dotfiles core (terminal & tmux workflow)"
     echo "  --brew         Install Homebrew"
     echo "  --tools        Install common dev tools"
     echo "  --casks        Install macOS GUI apps from Brewfile (macOS only)"
@@ -622,135 +623,108 @@ run_installer() {
 
     if [ -f "$install_root/installers/$installer" ]; then
         source "$install_root/installers/$installer"
+        local _start _end
+        _start=$(date +%s)
         $func
+        _end=$(date +%s)
         SCRIPT_DIR="$install_root"
+        # Per-step timing, shown by default so slow steps are always visible.
+        # Label by installer name (funcs are often generically named "main").
+        log_info "⏱  ${installer%.sh} took $(format_duration $((_end - _start)))"
     else
         log_error "Installer not found: $installer"
         return 1
     fi
 }
 
-install_all() {
-  log_header "Full Dotfiles Installation"
-  local failures=0
-  local failed_components=""
+# =============================================================================
+# Top-level install phases
+# =============================================================================
+# The install is two phases: Phase 1 is the dotfiles proper (an amazing terminal
+# experience built around a tmux workflow) — the dotfiles begin and end here.
+# Phase 2 is a handover to set up Claude Code, a separate fundamental tool.
 
-    # Install brew
-    run_installer "brew.sh" "install_brew" || {
-        log_warn "Brew installation had failures, continuing..."
-        ((failures++))
-        failed_components+="  - tools\n"
+# Failure accounting shared by the phase functions.
+_INSTALL_FAILURES=0
+_INSTALL_FAILED=""
+
+# Run one installer step, recording (but never aborting on) failures.
+# Usage: _run_step <label> <installer.sh> <func>
+_run_step() {
+    local label="$1" installer="$2" func="$3"
+    run_installer "$installer" "$func" || {
+        log_warn "$label installation had issues, continuing..."
+        _INSTALL_FAILURES=$((_INSTALL_FAILURES + 1))
+        _INSTALL_FAILED+="  - $label\n"
     }
-    # Install tools first
-    run_installer "tools.sh" "install_tools" || {
-        log_warn "Tools installation had failures, continuing..."
-        ((failures++))
-        failed_components+="  - tools\n"
-    }
-    # Install macOS GUI apps from Brewfile (no-op on Linux)
-    run_installer "casks.sh" "install_casks" || {
-        log_warn "Casks installation had failures, continuing..."
-        ((failures++))
-        failed_components+="  - casks\n"
-    }
-    # Create secrets template
-    run_installer "secrets.sh" "install_secrets" || {
-        log_warn "Secrets installation failed, continuing..."
-        ((failures++))
-        failed_components+="  - secrets\n"
-    }
-    # Install Nerd Fonts (before shells - p10k needs them for glyphs)
-    run_installer "fonts.sh" "install_fonts" || {
-        log_warn "Fonts installation failed, continuing..."
-        ((failures++))
-        failed_components+="  - fonts\n"
-    }
-    # Install TMUX
-    run_installer "tmux.sh" "install_tmux" || {
-        log_warn "Tmux installation failed, continuing..."
-        ((failures++))
-        failed_components+="  - tmux\n"
-    }
-    # Install shell-specific configs
-    run_installer "bash.sh" "install_bash_config" || {
-        log_warn "Bash config installation failed, continuing..."
-        ((failures++))
-        failed_components+="  - bash\n"
-    }
-    # Install shell-specific configs
-    run_installer "zsh.sh" "install_zsh_config" || {
-        log_warn "Zsh config installation failed, continuing..."
-        ((failures++))
-        failed_components+="  - zsh\n"
-    }
+}
+
+# Phase 1 — the dotfiles: tools, shell, tmux, terminals, fonts, editor, plus the
+# Claude config scaffolding that lives in this repo (MCP servers + hooks). The
+# Claude Code program itself is the Phase 2 handover.
+install_dotfiles_core() {
+    local standalone="${1:-}"
+    log_phase "Phase 1 · Dotfiles — your terminal & tmux workflow"
+    local start; start=$(date +%s)
+
+    # Homebrew up front only on macOS (its primary package manager). On Linux
+    # it's a fallback bootstrapped on demand by install_package, so distros like
+    # Arch never pay for it.
+    [[ "$OSTYPE" == darwin* ]] && _run_step "brew" "brew.sh" "install_brew"
+
+    _run_step "tools"         "tools.sh"        "install_tools"
+    # macOS GUI apps from the Brewfile (no-op on Linux)
+    _run_step "casks"         "casks.sh"        "install_casks"
+    _run_step "secrets"       "secrets.sh"      "install_secrets"
+    # Nerd Fonts before shells - p10k needs them for glyphs
+    _run_step "fonts"         "fonts.sh"        "install_fonts"
+    _run_step "tmux"          "tmux.sh"         "install_tmux"
+    _run_step "bash"          "bash.sh"         "install_bash_config"
+    _run_step "zsh"           "zsh.sh"          "install_zsh_config"
     # Nushell removed from the default install (heavy: nu is ~246 MB via brew,
-    # and starship duplicates the Powerlevel10k prompt). Left commented on purpose.
-    # run_installer "nushell.sh" "install_nushell_config" || {
-    #     log_warn "Nushell config installation failed, continuing..."
-    #     ((failures++))
-    #     failed_components+="  - nushell\n"
-    # }
-    # Install terminal emulators config (before tmux - tmux needs terminal keybindings)
-    run_installer "terminals.sh" "install_terminals" || {
-        log_warn "Terminals installation failed, continuing..."
-        ((failures++))
-        failed_components+="  - terminals\n"
-    }
-    # Symlink config directories
-    run_installer "config-dirs.sh" "install_config_dirs" || {
-        log_warn "Config dirs installation failed, continuing..."
-        ((failures++))
-        failed_components+="  - config-dirs\n"
-    }
-  (run_installer "claude.sh" "install_claude_code" && run_installer "claude.sh" "install_claude_config") || {
-        log_warn "Claude config installation failed, continuing..."
-        ((failures++))
-        failed_components+="  - claude (config)\n"
-    }
-    # Install MCP configuration
-    run_installer "mcp.sh" "main" || {
-        log_warn "MCP installation failed, continuing..."
-        ((failures++))
-        failed_components+="  - mcp\n"
-    }
-    # Install memory hooks for MCP memory service
-    run_installer "memory-hooks.sh" "main" || {
-        log_warn "Memory hooks installation failed, continuing..."
-        ((failures++))
-        failed_components+="  - memory-hooks\n"
-    }
-    # Install logging hooks
-    run_installer "logging-hooks.sh" "main" || {
-        log_warn "Logging hooks installation failed, continuing..."
-        ((failures++))
-        failed_components+="  - logging-hooks\n"
-    }
-    # Install Claude AZDO pipeline guard hooks
-    run_installer "claude-azdo-pipeline-hooks.sh" "main" || {
-        log_warn "Claude AZDO pipeline hooks installation failed, continuing..."
-        ((failures++))
-        failed_components+="  - claude-azdo-pipeline-hooks\n"
-    }
+    # and starship duplicates Powerlevel10k). Left commented on purpose.
+    # _run_step "nushell"     "nushell.sh"      "install_nushell_config"
+    _run_step "terminals"     "terminals.sh"    "install_terminals"
+    _run_step "config-dirs"   "config-dirs.sh"  "install_config_dirs"
+    # Claude config scaffolding that ships with these dotfiles (the Claude Code
+    # program itself is installed in the Phase 2 handover).
+    _run_step "mcp"            "mcp.sh"                        "main"
+    _run_step "memory-hooks"   "memory-hooks.sh"              "main"
+    _run_step "logging-hooks"  "logging-hooks.sh"            "main"
+    _run_step "pipeline-hooks" "claude-azdo-pipeline-hooks.sh" "main"
 
-    log_header "Installation Complete"
+    local end; end=$(date +%s)
+    echo ""
+    log_success "✔ Your dotfiles are ready — an amazing terminal & tmux workflow."
+    log_info "⏱  Phase 1 total: $(format_duration $((end - start)))"
 
-    if [[ $failures -gt 0 ]]; then
-        log_warn "$failures component(s) had failures:"
-        echo -e "$failed_components"
-        echo "You can re-run individual installers to retry failed components."
-    else
-        echo "All dotfiles have been installed successfully."
+    if [[ "$standalone" == "standalone" ]]; then
+        echo ""
+        echo "The dotfiles end here. To add Claude Code — a fundamental tool for"
+        echo "any modern workflow — continue with:"
+        echo "  ./install.sh --claude"
     fi
-    echo ""
-    echo "Next steps:"
-    echo "  1. Restart your shell or run: source ~/.zshrc (or ~/.bashrc)"
-    echo "  2. Run 'p10k configure' to setup powerlevel10k prompt"
-    echo "  3. Restart Claude Code to pick up new settings"
-    echo ""
+}
 
-    return $failures
+# Phase 2 (handover) — Claude Code. The dotfiles are done; we hand the install
+# over to a different fundamental tool: the Claude Code CLI + its settings.
+install_claude_handover() {
+    log_phase "Handover → Claude Code — a fundamental modern-workflow tool"
+    log_info "Dotfiles complete. Continuing to set up Claude Code..."
+    local start; start=$(date +%s)
 
-  }
+    _run_step "claude (cli)"    "claude.sh" "install_claude_code"
+    _run_step "claude (config)" "claude.sh" "install_claude_config"
+
+    local end; end=$(date +%s)
+    log_info "⏱  Phase 2 total: $(format_duration $((end - start)))"
+}
+
+# Full install = dotfiles core, then hand over to Claude Code.
+install_all() {
+    install_dotfiles_core
+    install_claude_handover
+}
 
 # =============================================================================
 # Main Entry Point
@@ -759,6 +733,9 @@ install_all() {
 main() {
     local failures=0
     local failed_components=""
+    local _main_start; _main_start=$(date +%s)
+    _INSTALL_FAILURES=0
+    _INSTALL_FAILED=""
 
     if should_use_dialog "$@"; then
         run_dialog_mode
@@ -907,6 +884,11 @@ main() {
             --all)
                 install_all
                 ;;
+            --dotfiles)
+                # The dotfiles core only (terminal & tmux workflow) — stops
+                # before the Claude Code handover.
+                install_dotfiles_core "standalone"
+                ;;
             --dialog)
                 run_dialog_mode
                 ;;
@@ -930,13 +912,17 @@ main() {
 
     log_header "Installation Complete"
 
-    if [[ $failures -gt 0 ]]; then
-        log_warn "$failures component(s) had failures:"
-        echo -e "$failed_components"
-        echo "You can re-run individual installers to retry failed components."
+    local total_failures=$((failures + _INSTALL_FAILURES))
+    if [[ $total_failures -gt 0 ]]; then
+        log_warn "$total_failures component(s) had issues:"
+        [[ -n "$failed_components" ]] && echo -e "$failed_components"
+        [[ -n "$_INSTALL_FAILED" ]] && echo -e "$_INSTALL_FAILED"
+        echo "You can re-run individual installers to retry them."
     else
-        echo "All dotfiles have been installed successfully."
+        echo "All requested components installed."
     fi
+    echo ""
+    log_info "⏱  Total time: $(format_duration $(( $(date +%s) - _main_start )))"
     echo ""
     echo "Next steps:"
     echo "  1. Restart your shell or run: source ~/.zshrc (or ~/.bashrc)"
@@ -944,6 +930,6 @@ main() {
     echo "  3. Restart Claude Code to pick up new settings"
     echo ""
 
-    return $failures
+    return $total_failures
   }
 main "$@"
