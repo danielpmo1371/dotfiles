@@ -1,0 +1,46 @@
+# Arch Linux test environment for dotfiles e2e testing
+# Arch is the preferred candidate: pacman ships current package versions, so the
+# native package manager provides the modern CLI tools without Homebrew fallback.
+#
+# NOTE: the official `archlinux` image is x86_64-only. We use the multi-arch
+# community image `lopsided/archlinux` so this builds natively on both Apple
+# Silicon (arm64) and x86_64 hosts (accurate benchmarks, no QEMU emulation).
+FROM lopsided/archlinux:latest
+
+# pacman 7.0's download sandbox (DownloadUser=alpm + landlock) fails inside
+# emulated/containerised environments ("switching to sandbox user 'alpm' failed").
+# Disable it so pacman works both at build time and at runtime in this test image.
+RUN sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf
+
+# Refresh the package database and install essential build/test prerequisites.
+# base-devel is required for Homebrew and AUR builds; git/curl/wget for installers.
+RUN pacman -Syu --noconfirm \
+    base-devel \
+    git \
+    curl \
+    wget \
+    sudo \
+    which \
+    && pacman -Scc --noconfirm
+
+# Generate locale (Arch ships no locale by default)
+RUN echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen && locale-gen
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+# Create a test user with passwordless sudo (Homebrew refuses to run as root)
+RUN useradd -m -s /bin/bash testuser && \
+    echo "testuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Switch to test user
+USER testuser
+WORKDIR /home/testuser
+
+# Copy dotfiles repository
+COPY --chown=testuser:testuser . /home/testuser/dotfiles/
+
+# Set working directory
+WORKDIR /home/testuser/dotfiles
+
+# Default command
+CMD ["/bin/bash"]
