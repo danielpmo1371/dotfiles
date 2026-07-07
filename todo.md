@@ -1,3 +1,4 @@
+- fix the way the terminal looks and works in terminals that are not running in ghostty
 - remove non-public data from repo
 - fix ttalk
 - document features in readme
