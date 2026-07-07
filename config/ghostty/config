@@ -47,7 +47,11 @@
 # custom-shader = ~/.config/ghostty/shaders/inside-the-matrix.glsl
 custom-shader-animation = always
 
+# SF Mono is Apple-only; MesloLGS NF (installed by installers/fonts.sh) is the
+# fallback so Nerd Font glyphs render on Linux, where SF Mono is skipped and
+# MesloLGS NF becomes primary. font-family is a priority list, not a single value.
 font-family = "SF Mono"
+font-family = "MesloLGS NF"
 font-size = 19
 font-thicken = true
 # theme = light:Xcode Light hc,dark:Xcode Dark hc
