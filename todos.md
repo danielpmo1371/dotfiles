@@ -1,3 +1,0 @@
- - refactor install script to take the path of the repo or use current dir.
- - install script to include install of dependencies
- - install script to add dotfiles scripts folders to PATH 
