@@ -97,12 +97,15 @@ Checks run in this order — earlier rules cannot be overridden by later ones:
 
 ## Caveats
 
-- **Fallback is silent.** A missing, malformed, or unparseable registry drops the
-  validator to the prefix fallback with only a line in
+- **A missing registry falls back silently.** No registry in any parent directory
+  drops the validator to the prefix fallback with only a line in
   `~/.claude/logs/pipeline-validator.log`. Fallback still fails closed, but
-  service-specific stage names (like `INZ_PaaS_SHARED_SIT`) will be wrongly blocked —
-  if an allowed stage is unexpectedly rejected, validate the registry JSON first:
-  `jq . .claude/pipeline-registry.json`.
+  service-specific stage names (like `INZ_PaaS_SHARED_SIT`) will be wrongly blocked.
+- **An unparseable registry aborts hard.** Invalid JSON makes the validator exit
+  non-zero with no decision output at all (jq parse failure under `set -e`) — also
+  fail-closed, but the symptom is an opaque error rather than a BLOCKED reason. In
+  either case, if a stage you expect to be allowed is rejected, validate the registry
+  first: `jq . .claude/pipeline-registry.json`.
 - **Empty `allowed` disables the registry path entirely** for that service, including
   its `blocked` list. Never author an entry with `blocked` populated but `allowed`
   empty; list every triggerable stage explicitly.

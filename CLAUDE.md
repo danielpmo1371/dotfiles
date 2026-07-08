@@ -137,6 +137,7 @@ Test scripts in `tests/` that teammates (or manual runs) can use:
 - `tests/test-installer.sh <component|all>` - Validates a single installer's results
 - `tests/test-docker.sh <distro|all>` - Builds Docker image and runs full e2e test
 - `tests/validate-symlinks.sh` - Checks all expected symlinks exist and point correctly
+- `tests/test-pipeline-validator.sh` - Hermetic safety tests for the pipeline validator (blocklist layering, registry stage lists, terraform plan-only)
 
 ## Learning from Mistakes
 
