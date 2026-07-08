@@ -57,6 +57,17 @@ elif [[ -d "/home/linuxbrew/.linuxbrew/bin" ]]; then
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
+#   .NET official install (must come AFTER Homebrew to win precedence)
+# ─────────────────────────────────────────────────────────────────────────────
+# The official installer at /usr/local/share/dotnet pools all runtimes (SDKs 6-10),
+# so net8 targets run without DOTNET_ROLL_FORWARD. Homebrew's dotnet formula is
+# self-isolated (only its own Cellar runtime), so it must not shadow this on PATH.
+if [[ -d "/usr/local/share/dotnet" ]]; then
+    export DOTNET_ROOT="/usr/local/share/dotnet"
+    export PATH="/usr/local/share/dotnet:$PATH"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
 #   Claude code native installation
 # ─────────────────────────────────────────────────────────────────────────────
 export PATH="$HOME/.local/bin:$PATH"
