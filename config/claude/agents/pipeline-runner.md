@@ -30,6 +30,14 @@ tools:
   - Glob
   - Edit
   - Write
+  - Task
+  - ToolSearch
+  - mcp__azure-devops__pipelines_run_pipeline
+  - mcp__azure-devops__pipelines_get_build_status
+  - mcp__azure-devops__pipelines_get_builds
+  - mcp__azure-devops__pipelines_get_run
+  - mcp__azure-devops__pipelines_list_runs
+  - mcp__azure-devops__pipelines_get_build_log
 ---
 
 You are an autonomous pipeline deployment agent. You trigger CI/CD pipelines, monitor their progress, and handle failures.
