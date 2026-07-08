@@ -84,6 +84,29 @@ alias g='gemini --model gemini-2.5-flash --prompt'
 alias update-claude='sudo npm i -g @anthropic-ai/claude-code'
 alias cdang='claude --dangerously-skip-permissions'
 
+# Fast one-shot query via `llm`. Provider chosen by $AI_PROVIDER (see env.sh);
+# defaults to Groq for the lowest time-to-first-token. Streams to stdout.
+#   q "explain this regex"            # uses $AI_PROVIDER
+#   AI_PROVIDER=gemini q "..."        # switch provider for one call
+#   AI_MODEL=groq/llama-3.3-70b-versatile q "..."   # pin a specific model
+q() {
+    local model="$AI_MODEL"
+    if [ -z "$model" ]; then
+        case "${AI_PROVIDER:-groq}" in
+            groq)   model="groq/llama-3.1-8b-instant" ;;
+            gemini) model="gemini-2.5-flash" ;;
+            openai) model="gpt-4o-mini" ;;
+            claude) model="claude-haiku-4-5-20251001" ;;
+            *)      echo "q: unknown AI_PROVIDER '$AI_PROVIDER' (groq|gemini|openai|claude)" >&2; return 2 ;;
+        esac
+    fi
+    if ! command -v llm >/dev/null 2>&1; then
+        echo "q: 'llm' not installed -> run: ./install.sh --llm" >&2
+        return 127
+    fi
+    llm -m "$model" "$@"
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 #   Terraform / DevOps
 # ─────────────────────────────────────────────────────────────────────────────
@@ -172,3 +195,12 @@ alias fetch='fastfetch'
 #         fi
 #     }
 # fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+#   Shell functions
+# ─────────────────────────────────────────────────────────────────────────────
+# Load the add-shortcut function form so `add-shortcut <name>` can capture the
+# last command. A function takes precedence over the PATH executable in
+# util-scripts/, which runs in a child process and cannot read shell history.
+[[ -f "$DOTFILES_DIR/util-scripts/add-shortcut.function.sh" ]] && \
+    source "$DOTFILES_DIR/util-scripts/add-shortcut.function.sh"

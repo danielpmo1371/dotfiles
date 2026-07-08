@@ -25,11 +25,10 @@ export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border'
 #   AI Tools (non-secret settings)
 # ─────────────────────────────────────────────────────────────────────────────
 export GEMINI_MODEL="gemini-2.5-flash"
-export AI_PROVIDER="openai"
-export AI_ENDPOINT="https://api.openai.com/v1"
-export AI_MODEL="o4-mini"
-export AI_TEMPERATURE="0.7"
-export AI_MAX_TOKENS="2000"
+# Quick-query (`q` function in aliases.sh) provider switch. Default Groq = lowest
+# time-to-first-token (LPU inference). Provider -> model map lives in aliases.sh.
+export AI_PROVIDER="groq"   # groq | gemini | openai | claude
+# export AI_MODEL=...        # optional: pin a specific `llm` model id, overrides the provider default
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Azure DevOps
