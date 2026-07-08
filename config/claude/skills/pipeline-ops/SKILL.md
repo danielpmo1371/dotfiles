@@ -25,7 +25,7 @@ Trigger a deployment for the current service and branch:
 ## Prerequisites
 
 - `AZDO_PAT` environment variable set
-- Project-level `.claude/pipeline-registry.json` in a parent directory
+- Project-level `.claude/pipeline-registry.json` in a parent directory — hand-authored and committed to the workspace repo; schema and authoring guide in [REGISTRY.md](REGISTRY.md)
 - Azure DevOps MCP server configured
 - AZDO pipeline guard hooks installed: `~/.claude/hooks/pipeline-guard.sh` and `~/.claude/hooks/pipeline-trigger-guard.sh` — installed by `installers/claude-azdo-pipeline-hooks.sh` (auto-invoked by `./install.sh --claude`) or directly via `./install.sh --claude-azdo-pipeline-hooks`
 - Validator/registry scripts in `~/.claude/scripts/` — delivered by the whole-dir `scripts` symlink from `claude.sh`
@@ -81,12 +81,14 @@ When a pipeline fails:
 
 ## Service Registry
 
-The project-level `.claude/pipeline-registry.json` contains the mapping:
+The workspace-level `.claude/pipeline-registry.json` is the source of truth for pipeline
+IDs and stage safety lists — never hardcode or duplicate its values in docs. To list
+what's available, query the registry itself (found by walking up from CWD):
 
-| Service | CI | CD | Project |
-|---|---|---|---|
-| td-api | 380 | 768 | Travel Declaration |
-| fch-api | 326 | — | Flight Checker Service |
-| avscanner-api | 332 | 333 | Travel Declaration |
-| app-app | 450 | — | Travel Declaration |
-| bre-bdf-app | 494 | 493 | BRE-CMMI |
+```bash
+jq -r '.services | to_entries[] | "\(.key)  ci:\(.value.ci.id // "-")  cd:\(.value.cd.id // "-")  \(.value.project)"' \
+  <workspace-root>/.claude/pipeline-registry.json
+```
+
+Schema, validation semantics, and the authoring guide for new workspaces:
+[REGISTRY.md](REGISTRY.md) (installed at `~/.claude/skills/pipeline-ops/REGISTRY.md`).

@@ -39,6 +39,8 @@ From the service info JSON, extract:
 - `project` — AzDO project name
 - `stages.allowed` — allowed deployment stages
 
+Full registry schema and authoring guide: `~/.claude/skills/pipeline-ops/REGISTRY.md`.
+
 If the service has a `terraform` key, this is a **Terraform pipeline** — skip to **Step 2b**.
 If no CI or CD pipeline exists for the service, inform the user.
 
