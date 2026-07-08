@@ -27,6 +27,23 @@ log_validator() {
   echo "[$VALIDATOR_TIMESTAMP] $1" >> "$VALIDATOR_LOG"
 }
 
+# Locate the project pipeline-registry.json by walking up from CWD.
+# The registry is the source of truth for service-specific stage names
+# (e.g. td-apim's INZ_PaaS_SHARED_* stages) that the generic prefix
+# lists above cannot express.
+find_registry_from_cwd() {
+  local dir
+  dir="${PWD}"
+  while [[ "$dir" != "/" ]]; do
+    if [[ -f "$dir/.claude/pipeline-registry.json" ]]; then
+      echo "$dir/.claude/pipeline-registry.json"
+      return 0
+    fi
+    dir=$(dirname "$dir")
+  done
+  return 1
+}
+
 INPUT=$(cat)
 
 # Log the incoming request
@@ -124,26 +141,63 @@ if [[ "$TYPE" == "cd" ]]; then
     done
   done
 
-  # Check each requested stage is in allowed list
-  # Uses prefix matching: "sitae" matches allowed prefix "sit", "dryae" matches "dry", etc.
-  # This supports composite stage names like {env}{region} (e.g., sitae, uatase)
-  for stage in "${STAGES_ARRAY[@]}"; do
-    stage_lower=$(echo "$stage" | tr '[:upper:]' '[:lower:]')
-    found=false
-    for allowed in "${ALLOWED_CD_STAGES[@]}"; do
-      if [[ "$stage_lower" == "$allowed" || "$stage_lower" == "${allowed}"* ]]; then
-        found=true
-        break
+  # Registry lookup: service-specific stage lists take precedence over the
+  # generic prefix lists, because stage names like INZ_PaaS_SHARED_SIT
+  # (td-apim) are invisible to prefix matching — including its PROD stage
+  # INZ_PaaS_SHARED, which the substring blocklist above does NOT catch.
+  # Match the registry entry by service name, falling back to cd.id.
+  CD_REG_ENTRY="null"
+  if REGISTRY_FILE=$(find_registry_from_cwd); then
+    CD_REG_ENTRY=$(jq --arg svc "$SERVICE" --arg pid "${PIPELINE_ID:-0}" '
+      (.services[$svc] // null) as $byName
+      | if $byName != null then $byName
+        else ([.services | to_entries[] | select(.value.cd.id? == ($pid | tonumber))] | .[0].value // null)
+        end' "$REGISTRY_FILE")
+  fi
+
+  if [[ "$CD_REG_ENTRY" != "null" && -n "$CD_REG_ENTRY" ]] && [[ $(echo "$CD_REG_ENTRY" | jq -r '.stages.allowed // [] | length') -gt 0 ]]; then
+    # Registry-driven validation: exact case-insensitive match.
+    # Blocked list wins over allowed; anything not explicitly allowed is blocked.
+    for stage in "${STAGES_ARRAY[@]}"; do
+      stage_lower=$(echo "$stage" | tr '[:upper:]' '[:lower:]')
+      if [[ $(echo "$CD_REG_ENTRY" | jq -r --arg s "$stage_lower" '[.stages.blocked // [] | .[] | ascii_downcase] | index($s) != null') == "true" ]]; then
+        jq -n \
+          --arg reason "BLOCKED: Stage '$stage' is in the registry blocked list for service '$SERVICE'. PRE/PRD are NEVER allowed." \
+          --arg rule "ENVIRONMENT_BLOCKLIST" \
+          '{"approved": false, "reason": $reason, "rule": $rule}'
+        exit 1
+      fi
+      if [[ $(echo "$CD_REG_ENTRY" | jq -r --arg s "$stage_lower" '[.stages.allowed // [] | .[] | ascii_downcase] | index($s) != null') != "true" ]]; then
+        REG_ALLOWED=$(echo "$CD_REG_ENTRY" | jq -r '.stages.allowed | join(" ")')
+        jq -n \
+          --arg reason "BLOCKED: Stage '$stage' is not in the registry allowed list for service '$SERVICE'. Allowed: $REG_ALLOWED" \
+          --arg rule "STAGE_NOT_ALLOWED" \
+          '{"approved": false, "reason": $reason, "rule": $rule}'
+        exit 1
       fi
     done
-    if [[ "$found" == "false" ]]; then
-      jq -n \
-        --arg reason "BLOCKED: Stage '$stage' is not in the allowed list. Allowed: ${ALLOWED_CD_STAGES[*]}" \
-        --arg rule "STAGE_NOT_ALLOWED" \
-        '{"approved": false, "reason": $reason, "rule": $rule}'
-      exit 1
-    fi
-  done
+    log_validator "CD stages validated against registry entry for service '$SERVICE'"
+  else
+    # Fallback: generic prefix matching — "sitae" matches allowed prefix "sit",
+    # "dryae" matches "dry", etc. Supports composite {env}{region} stage names.
+    for stage in "${STAGES_ARRAY[@]}"; do
+      stage_lower=$(echo "$stage" | tr '[:upper:]' '[:lower:]')
+      found=false
+      for allowed in "${ALLOWED_CD_STAGES[@]}"; do
+        if [[ "$stage_lower" == "$allowed" || "$stage_lower" == "${allowed}"* ]]; then
+          found=true
+          break
+        fi
+      done
+      if [[ "$found" == "false" ]]; then
+        jq -n \
+          --arg reason "BLOCKED: Stage '$stage' is not in the allowed list. Allowed: ${ALLOWED_CD_STAGES[*]}" \
+          --arg rule "STAGE_NOT_ALLOWED" \
+          '{"approved": false, "reason": $reason, "rule": $rule}'
+        exit 1
+      fi
+    done
+  fi
 
   # Normalize branch
   REF_BRANCH="$BRANCH"
@@ -261,19 +315,7 @@ if [[ "$TYPE" == "terraform" ]]; then
   # CLOSED: emit a conservative plan-only default that still skips any stage
   # whose name contains "apply" — but we warn loudly in the reason.
   # ==========================================================================
-  find_registry_from_cwd() {
-    local dir
-    dir="${PWD}"
-    while [[ "$dir" != "/" ]]; do
-      if [[ -f "$dir/.claude/pipeline-registry.json" ]]; then
-        echo "$dir/.claude/pipeline-registry.json"
-        return 0
-      fi
-      dir=$(dirname "$dir")
-    done
-    return 1
-  }
-
+  # (find_registry_from_cwd is defined at the top of this script)
   REGISTRY_FILE=""
   if REGISTRY_FILE=$(find_registry_from_cwd); then
     log_validator "Using registry: $REGISTRY_FILE"
