@@ -145,13 +145,16 @@ if [[ "$TYPE" == "cd" ]]; then
   # generic prefix lists, because stage names like INZ_PaaS_SHARED_SIT
   # (td-apim) are invisible to prefix matching — including its PROD stage
   # INZ_PaaS_SHARED, which the substring blocklist above does NOT catch.
-  # Match the registry entry by service name, falling back to cd.id.
+  # Match by cd.id FIRST — the pipeline ID is what actually gets triggered,
+  # and pipeline-guard.sh matches by ID only, so a name/ID mismatch must
+  # validate against the ID's entry. Service name is the fallback for
+  # requests that carry no pipelineId.
   CD_REG_ENTRY="null"
   if REGISTRY_FILE=$(find_registry_from_cwd); then
     CD_REG_ENTRY=$(jq --arg svc "$SERVICE" --arg pid "${PIPELINE_ID:-0}" '
-      (.services[$svc] // null) as $byName
-      | if $byName != null then $byName
-        else ([.services | to_entries[] | select(.value.cd.id? == ($pid | tonumber))] | .[0].value // null)
+      ([.services | to_entries[] | select(.value.cd.id? == ($pid | tonumber))] | .[0].value // null) as $byId
+      | if $byId != null then $byId
+        else (.services[$svc] // null)
         end' "$REGISTRY_FILE")
   fi
 

@@ -23,7 +23,7 @@ every service repo checked out under the workspace root.
 | Consumer | What it reads |
 |---|---|
 | `~/.claude/scripts/pipeline-registry.sh` | `.organization`, `.services` keys (CWD-based service detection, ID resolution) |
-| `~/.claude/scripts/pipeline-validator.sh` | `.services.<name>.stages.allowed/blocked` (CD), `.terraform.*` (terraform), `.cd.id` (service fallback match) |
+| `~/.claude/scripts/pipeline-validator.sh` | `.services.<name>.stages.allowed/blocked` (CD), `.terraform.*` (terraform); entry matched by `.cd.id` first, service name as fallback |
 | `~/.claude/hooks/pipeline-guard.sh` | `.services.<name>.{ci,cd,test,terraform}.id`, `.stages.blocked` |
 
 ## Schema

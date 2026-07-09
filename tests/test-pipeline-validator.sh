@@ -183,8 +183,14 @@ assert_blocked "stage absent from registry lists -> default-deny" "STAGE_NOT_ALL
     '{"service":"svc-registry","type":"cd","branch":"develop","pipelineId":"900","stages":["Shared_Other"]}'
 assert_blocked "one bad stage among good ones blocks the whole request" "ENVIRONMENT_BLOCKLIST" 1 "$WS" \
     '{"service":"svc-registry","type":"cd","branch":"develop","pipelineId":"900","stages":["Shared_SIT","Shared_Zone"]}'
-assert_approved "unknown service name matched via cd.id fallback" "$WS" \
+assert_approved "unknown service name matched via cd.id" "$WS" \
     '{"service":"not-in-registry","type":"cd","branch":"develop","pipelineId":"900","project":"P","stages":["Shared_SIT"]}'
+# The pipeline ID is what actually runs — on a name/ID mismatch the ID's
+# entry must win (pipeline-guard.sh matches by ID only). pipelineId 901 is
+# svc-empty-allowed's CD, whose blocked list contains 'sitae'; under
+# svc-registry (the claimed name) 'sitae' would merely be STAGE_NOT_ALLOWED.
+assert_blocked "name/ID mismatch validates against the ID's entry" "ENVIRONMENT_BLOCKLIST" 1 "$WS" \
+    '{"service":"svc-registry","type":"cd","branch":"develop","pipelineId":"901","stages":["sitae"]}'
 run "$WS" '{"service":"svc-registry","type":"cd","branch":"develop","pipelineId":"900","project":"P","stages":["Shared_SIT"],"allStages":["Shared_SIT","Shared_UAT","Shared_Zone"]}'
 if [[ $(jq -c '.stagesToSkip | sort' <<< "$OUT") == '["Shared_UAT","Shared_Zone"]' ]]; then
     echo -e "  ${GREEN}PASS${NC} stagesToSkip = allStages minus requested"
