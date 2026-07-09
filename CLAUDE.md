@@ -89,11 +89,12 @@ Settings symlinked from `config/claude/` to `~/.claude/`:
 - `scripts/pipeline-registry.sh` - CWD-based service detection and pipeline ID resolution
 - `hooks/pipeline-guard.sh` - PreToolUse hook intercepting direct MCP pipeline calls
 - `hooks/pipeline-trigger-guard.sh` - PreToolUse Bash hook blocking direct curl/az/gh trigger attempts
+- `hooks/pipeline-registry-write-guard.sh` - PreToolUse hook blocking AI mutations of pipeline-registry.json (the stage allow/block authority; humans edit + commit it)
 - `commands/pipe-deploy.md` - `/pipe-deploy` command for CI/CD orchestration
 - `agents/pipeline-runner.md` - Autonomous pipeline trigger/monitor/recovery agent
 - `skills/pipeline-ops/` - Auto-discoverable skill matching "deploy", "run pipeline" etc.
 
-The two `pipeline-*-guard.sh` files are not delivered by the whole-dir symlinks (because `~/.claude/hooks/` is shared with `memory-hooks` and `logging-hooks`). They are installed by `installers/claude-azdo-pipeline-hooks.sh`, which is auto-invoked by `installers/claude.sh` (i.e. by `./install.sh --claude`) and can also be run standalone via `./install.sh --claude-azdo-pipeline-hooks`. Their `PreToolUse` registration in `settings.json` is delivered through the existing `settings.json` whole-file symlink.
+The three `pipeline-*-guard.sh` files are not delivered by the whole-dir symlinks (because `~/.claude/hooks/` is shared with `memory-hooks` and `logging-hooks`). They are installed by `installers/claude-azdo-pipeline-hooks.sh`, which is auto-invoked by `installers/claude.sh` (i.e. by `./install.sh --claude`) and can also be run standalone via `./install.sh --claude-azdo-pipeline-hooks`. Their `PreToolUse` registration in `settings.json` is delivered through the existing `settings.json` whole-file symlink.
 
 Local files (not synced): `settings.local.json`, `.credentials.json`
 
@@ -137,7 +138,8 @@ Test scripts in `tests/` that teammates (or manual runs) can use:
 - `tests/test-installer.sh <component|all>` - Validates a single installer's results
 - `tests/test-docker.sh <distro|all>` - Builds Docker image and runs full e2e test
 - `tests/validate-symlinks.sh` - Checks all expected symlinks exist and point correctly
-- `tests/test-pipeline-validator.sh` - Hermetic safety tests for the pipeline validator (blocklist layering, registry stage lists, terraform plan-only)
+- `tests/test-pipeline-validator.sh` - Hermetic safety tests for the pipeline validator (blocklist layering, registry stage lists, registry integrity fail-closed, terraform plan-only)
+- `tests/test-pipeline-hooks.sh` - Hermetic safety tests for the three PreToolUse guard hooks (MCP trigger, Bash trigger, registry write protection)
 
 ## Learning from Mistakes
 
