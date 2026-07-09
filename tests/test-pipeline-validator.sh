@@ -7,6 +7,10 @@
 # registry discovered by walking up from CWD, logs under $HOME. Each case
 # runs in a throwaway workspace with a fixture registry (or none) and an
 # overridden HOME, so no real state is read or written.
+#
+# Registry fixtures are committed into throwaway git repos because the
+# validator only trusts a registry at its committed state (fails closed
+# on untracked/modified/non-repo — pinned below).
 
 set -euo pipefail
 
@@ -27,16 +31,26 @@ trap 'rm -rf "$TMP"' EXIT
 FAKE_HOME="$TMP/home"
 mkdir -p "$FAKE_HOME"
 
+# Commit a workspace's registry so the validator's integrity check trusts it.
+commit_registry() {
+    local ws="$1"
+    git -C "$ws" init -q
+    git -C "$ws" add .claude/pipeline-registry.json
+    git -C "$ws" -c user.email=test@test -c user.name=test commit -qm "registry" >/dev/null
+}
+
 # Workspace WITH a fixture registry
 WS="$TMP/ws"
 mkdir -p "$WS/.claude"
 # Workspace WITHOUT any registry in its ancestry (mktemp dirs have none)
 WS_BARE="$TMP/bare"
 mkdir -p "$WS_BARE"
-# Workspace with a malformed (unparseable) registry
+# Workspace with a malformed (unparseable) registry — committed, so it gets
+# past the integrity check and exercises the jq parse failure
 WS_BAD="$TMP/bad"
 mkdir -p "$WS_BAD/.claude"
 echo '{ this is not json' > "$WS_BAD/.claude/pipeline-registry.json"
+commit_registry "$WS_BAD"
 
 cat > "$WS/.claude/pipeline-registry.json" << 'EOF'
 {
@@ -88,6 +102,24 @@ cat > "$WS/.claude/pipeline-registry.json" << 'EOF'
   }
 }
 EOF
+commit_registry "$WS"
+
+# Integrity fixtures: same registry content, different git states.
+# Committed then locally modified:
+WS_DIRTY="$TMP/dirty"
+mkdir -p "$WS_DIRTY/.claude"
+cp "$WS/.claude/pipeline-registry.json" "$WS_DIRTY/.claude/"
+commit_registry "$WS_DIRTY"
+printf '\n' >> "$WS_DIRTY/.claude/pipeline-registry.json"
+# In a git repo but never committed:
+WS_UNTRACKED="$TMP/untracked"
+mkdir -p "$WS_UNTRACKED/.claude"
+cp "$WS/.claude/pipeline-registry.json" "$WS_UNTRACKED/.claude/"
+git -C "$WS_UNTRACKED" init -q
+# Outside any git work tree:
+WS_NOREPO="$TMP/norepo"
+mkdir -p "$WS_NOREPO/.claude"
+cp "$WS/.claude/pipeline-registry.json" "$WS_NOREPO/.claude/"
 
 # run <workspace-dir> <input-json>
 # Sets OUT and RC. Never trips set -e.
@@ -217,6 +249,14 @@ assert_approved "empty allowed-list: allow decision falls back (dryae approved b
 echo -e "${BLUE}=== CD: malformed registry fails closed ===${NC}"
 assert_fail_closed "unparseable registry never approves" "$WS_BAD" \
     '{"service":"svc-registry","type":"cd","branch":"develop","pipelineId":"900","project":"P","stages":["Shared_SIT"]}'
+
+echo -e "${BLUE}=== Registry integrity: only the committed state is trusted ===${NC}"
+CD_OK_REQUEST='{"service":"svc-registry","type":"cd","branch":"develop","pipelineId":"900","project":"P","stages":["Shared_SIT"]}'
+assert_blocked "registry with uncommitted changes -> fail closed" "REGISTRY_NOT_COMMITTED" 1 "$WS_DIRTY" "$CD_OK_REQUEST"
+assert_blocked "untracked registry -> fail closed" "REGISTRY_NOT_COMMITTED" 1 "$WS_UNTRACKED" "$CD_OK_REQUEST"
+assert_blocked "registry outside a git work tree -> fail closed" "REGISTRY_NOT_COMMITTED" 1 "$WS_NOREPO" "$CD_OK_REQUEST"
+assert_blocked "terraform also refuses an unverifiable registry" "REGISTRY_NOT_COMMITTED" 1 "$WS_DIRTY" \
+    '{"service":"svc-terraform","type":"terraform","branch":"develop","pipelineId":"950","project":"P","environment":"sit"}'
 
 echo -e "${BLUE}=== Terraform ===${NC}"
 run "$WS" '{"service":"svc-terraform","type":"terraform","branch":"develop","pipelineId":"950","project":"P","environment":"sit","location":"ae"}'

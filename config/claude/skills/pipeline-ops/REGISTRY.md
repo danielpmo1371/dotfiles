@@ -12,6 +12,19 @@ pipeline IDs and stage safety lists. It is **hand-authored** (nothing generates 
 **must be committed** to the workspace repo — it is safety-load-bearing: the validator's
 CD stage decisions are driven by its `stages` lists.
 
+Both requirements are **enforced**, not advisory:
+
+- **Only a human may modify it.** A PreToolUse hook
+  (`~/.claude/hooks/pipeline-registry-write-guard.sh`) blocks Edit/Write/NotebookEdit
+  targeting the file and Bash commands that mention it alongside write indicators
+  (redirects, `tee`, `sed -i`, `mv`, ...). Read it without redirects
+  (`jq '.' .claude/pipeline-registry.json`).
+- **Only the committed state is trusted.** Both `pipeline-validator.sh` and
+  `pipeline-guard.sh` fail CLOSED (`REGISTRY_NOT_COMMITTED`) when a discovered registry
+  is untracked, has uncommitted changes, or sits outside a git work tree. A tampered or
+  half-authored registry stops pipeline triggering entirely rather than degrading to
+  heuristics.
+
 ## Location and discovery
 
 Place the file at `<workspace-root>/.claude/pipeline-registry.json`. All consumers find

@@ -44,6 +44,33 @@ find_registry_from_cwd() {
   return 1
 }
 
+# The registry is safety-load-bearing: its stage lists decide what the AI
+# may trigger. Refuse to trust a copy git cannot vouch for — untracked,
+# locally modified, or outside a git work tree all fail CLOSED. Tampering
+# must be a hard stop, NOT a fallback to prefix matching (which could
+# approve a stage the committed registry blocks). Mirrored in
+# pipeline-guard.sh; AI writes to the file are blocked separately by
+# pipeline-registry-write-guard.sh.
+registry_committed_or_die() {
+  local reg="$1" root reason=""
+  root=$(dirname "$(dirname "$reg")")
+  if ! command -v git >/dev/null 2>&1; then
+    reason="git not on PATH — cannot verify registry integrity"
+  elif ! git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    reason="registry is not inside a git work tree"
+  elif ! git -C "$root" ls-files --error-unmatch -- .claude/pipeline-registry.json >/dev/null 2>&1; then
+    reason="registry is not tracked by git"
+  elif [[ -n "$(git -C "$root" status --porcelain -- .claude/pipeline-registry.json 2>/dev/null)" ]]; then
+    reason="registry has uncommitted changes"
+  fi
+  if [[ -n "$reason" ]]; then
+    log_validator "BLOCKED: $reason ($reg)"
+    jq -n --arg reason "BLOCKED: $reason ($reg). The registry drives stage safety decisions and is only trusted at its committed, human-reviewed state." \
+      '{"approved": false, "reason": $reason, "rule": "REGISTRY_NOT_COMMITTED"}'
+    exit 1
+  fi
+}
+
 INPUT=$(cat)
 
 # Log the incoming request
@@ -151,6 +178,7 @@ if [[ "$TYPE" == "cd" ]]; then
   # requests that carry no pipelineId.
   CD_REG_ENTRY="null"
   if REGISTRY_FILE=$(find_registry_from_cwd); then
+    registry_committed_or_die "$REGISTRY_FILE"
     CD_REG_ENTRY=$(jq --arg svc "$SERVICE" --arg pid "${PIPELINE_ID:-0}" '
       ([.services | to_entries[] | select(.value.cd.id? == ($pid | tonumber))] | .[0].value // null) as $byId
       | if $byId != null then $byId
@@ -331,6 +359,7 @@ if [[ "$TYPE" == "terraform" ]]; then
   # (find_registry_from_cwd is defined at the top of this script)
   REGISTRY_FILE=""
   if REGISTRY_FILE=$(find_registry_from_cwd); then
+    registry_committed_or_die "$REGISTRY_FILE"
     log_validator "Using registry: $REGISTRY_FILE"
   else
     log_validator "WARNING: No pipeline-registry.json found from CWD — falling back to hardcoded defaults"

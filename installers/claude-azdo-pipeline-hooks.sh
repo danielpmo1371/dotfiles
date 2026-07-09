@@ -2,8 +2,10 @@
 #
 # Claude AZDO Pipeline Hooks Installer
 # Installs the PreToolUse guard hooks that gate Azure DevOps pipeline runs:
-#   - pipeline-guard.sh         (matches mcp__azure-devops__pipelines_run_pipeline)
-#   - pipeline-trigger-guard.sh (matches Bash; blocks direct curl/az/gh triggers)
+#   - pipeline-guard.sh               (matches mcp__azure-devops__pipelines_run_pipeline)
+#   - pipeline-trigger-guard.sh       (matches Bash; blocks direct curl/az/gh triggers)
+#   - pipeline-registry-write-guard.sh (matches Edit|Write|NotebookEdit|Bash;
+#                                       blocks AI mutations of pipeline-registry.json)
 #
 # Both hooks are referenced by:
 #   - agents/pipeline-runner.md
@@ -39,6 +41,7 @@ SCRIPTS_TARGET_DIR="$HOME/.claude/scripts"
 PIPELINE_HOOK_FILES=(
     "pipeline-guard.sh"
     "pipeline-trigger-guard.sh"
+    "pipeline-registry-write-guard.sh"
 )
 
 PIPELINE_HOOK_PREREQS=(

@@ -107,6 +107,32 @@ REGISTRY_FILE=""
 REGISTRY_FILE=$(find_registry) || true
 
 # ============================================================================
+# Registry integrity — MIRRORS registry_committed_or_die in
+# pipeline-validator.sh (deliberately duplicated: each defense layer must
+# stand alone). The registry is only trusted at its committed state;
+# untracked, locally modified, or outside a git work tree fails CLOSED.
+# ============================================================================
+if [[ -n "$REGISTRY_FILE" ]]; then
+  REG_ROOT=$(dirname "$(dirname "$REGISTRY_FILE")")
+  REG_INTEGRITY_REASON=""
+  if ! command -v git >/dev/null 2>&1; then
+    REG_INTEGRITY_REASON="git not on PATH — cannot verify registry integrity"
+  elif ! git -C "$REG_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    REG_INTEGRITY_REASON="registry is not inside a git work tree"
+  elif ! git -C "$REG_ROOT" ls-files --error-unmatch -- .claude/pipeline-registry.json >/dev/null 2>&1; then
+    REG_INTEGRITY_REASON="registry is not tracked by git"
+  elif [[ -n "$(git -C "$REG_ROOT" status --porcelain -- .claude/pipeline-registry.json 2>/dev/null)" ]]; then
+    REG_INTEGRITY_REASON="registry has uncommitted changes"
+  fi
+  if [[ -n "$REG_INTEGRITY_REASON" ]]; then
+    log_detail "BLOCKED: $REG_INTEGRITY_REASON ($REGISTRY_FILE)"
+    log_audit "blocked" "$REG_INTEGRITY_REASON ($REGISTRY_FILE)"
+    echo "BLOCKED by pipeline-guard hook: $REG_INTEGRITY_REASON ($REGISTRY_FILE). The registry is only trusted at its committed, human-reviewed state — a HUMAN must review and commit it before pipelines can be triggered." >&2
+    exit 2
+  fi
+fi
+
+# ============================================================================
 # Check 0: Block unregistered pipelines
 # ============================================================================
 if [[ -n "$REGISTRY_FILE" && -n "$PIPELINE_ID" ]]; then
