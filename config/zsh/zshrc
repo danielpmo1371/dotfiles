@@ -62,22 +62,23 @@ bindkey '^x^x' edit-command-line   # Ctrl-X Ctrl-X (avoids tmux prefix C-e)
 bindkey -M vicmd 'v' edit-command-line  # also: `v` in vi normal mode
 
 # ─────────────────────────────────────────────────────────────────────────────
-#   Command routing: * prefix routes to cc alias
+#   Command routing: * prefix routes to q (llm + groq)
 # ─────────────────────────────────────────────────────────────────────────────
-preexec() {
-    # If command starts with *, route to cc (claude -p)
-    if [[ "$1" =~ '^\*(.*)' ]]; then
-        # Extract the text after *
-        local prompt="${match[1]}"
-        # Strip leading whitespace
-        prompt="${prompt##[[:space:]]}"
-        # Execute cc with the prompt
-        # eval "cc \"$prompt\""
-        eval "g \"$prompt\""
-        # Return to prevent original command execution
-        return 1
+# Rewrites the buffer BEFORE zsh parses it (a preexec hook cannot cancel the
+# original command, which would still glob-expand the leading * and execute
+# whatever file matched first). ${(q)prompt} quotes the text so nothing in
+# the question is ever evaluated as shell code.
+_star_to_q_accept() {
+    if [[ $BUFFER == \** ]]; then
+        local prompt=${BUFFER#\*}
+        prompt="${prompt#"${prompt%%[![:space:]]*}"}"
+        if [[ -n $prompt ]]; then
+            BUFFER="q ${(q)prompt}"
+        fi
     fi
+    zle .accept-line
 }
+zle -N accept-line _star_to_q_accept
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Completion

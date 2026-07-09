@@ -86,6 +86,8 @@ alias cdang='claude --dangerously-skip-permissions'
 
 # Fast one-shot query via `llm`. Provider chosen by $AI_PROVIDER (see env.sh);
 # defaults to Groq for the lowest time-to-first-token. Streams to stdout.
+# Rendered as markdown through bat when on a tty (line-buffered, so output
+# appears per-line instead of per-token); raw when piped or bat is missing.
 #   q "explain this regex"            # uses $AI_PROVIDER
 #   AI_PROVIDER=gemini q "..."        # switch provider for one call
 #   AI_MODEL=groq/llama-3.3-70b-versatile q "..."   # pin a specific model
@@ -104,7 +106,11 @@ q() {
         echo "q: 'llm' not installed -> run: ./install.sh --llm" >&2
         return 127
     fi
-    llm -m "$model" "$@"
+    if [ -t 1 ] && command -v bat >/dev/null 2>&1; then
+        llm -m "$model" "$@" | bat --style=plain --paging=never --language=md
+    else
+        llm -m "$model" "$@"
+    fi
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
