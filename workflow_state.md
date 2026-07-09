@@ -1,4 +1,124 @@
-# Workflow State: Open-Source Dotfiles Public Repo Build
+# Workflow State
+
+## Active: Claude Session Summary Viewer (TUI) + Summarizer Improvements (2026-06-29)
+
+### State
+- **Status**: NEEDS_PLAN_APPROVAL
+- **Phase**: Blueprint
+- **Branch**: main (will branch before construct)
+
+### Problem
+The `response-summarizer.sh` Stop hook writes per-session `summaries.log`
+(1552 sessions to date) into `~/repos/dotfiles/tmp/claude/sessions/`, but
+**nothing reads them**. The `conversation-history` skill is an empty stub.
+Goal: a TUI viewer launched via tmux popup so the user can quickly recall the
+last context of any past session; then improve what the summarizer captures.
+
+### Plan
+**Part A — TUI viewer (build first)**
+1. NEW `config/claude/scripts/claude-sessions.sh`:
+   - List source = parse session **folder names** (`{project}_{date}_{time}_{id}`)
+     → instant, no per-file reads. Sort newest-first.
+   - `fzf` picker: fuzzy search over `date │ project │ id` lines.
+   - Preview pane = lazily read that session's `summaries.log` (jq → AI summary,
+     tools, files), `goals.log`, `requests.log`; render via `bat` (markdown).
+   - Keys: Enter = exit (read-only), Ctrl-Y = copy latest AI summary (pbcopy),
+     Ctrl-O = open session folder, Ctrl-E = open native transcript.
+   - Path via `${CLAUDE_SESSIONS_DIR:-$HOME/repos/dotfiles/tmp/claude/sessions}`
+     (no magic value; mirrors `lib-session-dir.sh`). `bat`/`batcat` fallback.
+2. EDIT `config/shell/aliases.sh`: add `csessions` → `~/.claude/scripts/claude-sessions.sh`.
+3. EDIT `config/tmux/tmux.conf`: `bind-key S display-popup -E -w 90% -h 85% '<script>'`.
+4. Deps: add `brew "fzf"`, `brew "bat"` to `config/brew/Brewfile`; ensure
+   fzf/bat in Linux tools install path. (jq/tmux already present.)
+5. Verify scripts symlink path for `config/claude/scripts/` in `installers/claude.sh`.
+
+**Part B — Summarizer content improvements (after A)**
+6. EDIT `config/claude/hooks/logging/response-summarizer.sh`:
+   - Widen window: last 20→~50 msgs; raise 500-char + 4000-char caps.
+   - Sharper prompt: "goal, key decisions, current state, next step" (not generic recap).
+   - Save raw last-N messages verbatim (so preview shows the real exchange, not just paraphrase).
+
+### Decisions (defaults chosen, override on request)
+- TUI engine: `fzf` + `bat` preview (zero new heavy deps; all installed).
+- Launch: tmux `prefix + S` popup, plus `csessions` shell alias.
+- List built from folder names for instant load across 1552 sessions.
+- Viewer is **read-only** (No-Delete rule); no session mutation.
+
+### Out of scope
+- Wiring the `conversation-history` skill (separate follow-up if wanted).
+- Rich HTML dashboard; native transcript indexing/search.
+- Changing the sessions storage path or folder-naming scheme.
+
+### Log
+- 2026-06-29 — Blueprint drafted. Awaiting plan approval.
+
+---
+
+## Active: Claude AZDO Pipeline Hooks Installer (2026-04-30)
+
+### State
+- **Status**: CONSTRUCT
+- **Phase**: Implementation
+- **Branch**: main
+
+### Goal
+Add proper installation for the Claude Code Azure DevOps pipeline guard hooks
+(`pipeline-guard.sh`, `pipeline-trigger-guard.sh`) so they are symlinked into
+`~/.claude/hooks/` automatically, and so any component that depends on them
+(agent, command, skill) declares and triggers that dependency.
+
+### Background
+- `~/.claude/hooks/` is a real directory (not a symlink) because three different
+  installers populate it: `claude.sh`, `memory-hooks.sh`, `logging-hooks.sh`.
+  The first two cohabit subdirs (`memory/`, `utilities/`, `logging/`).
+- `pipeline-guard.sh` and `pipeline-trigger-guard.sh` were committed to
+  `config/claude/hooks/` but never had an installer step — they exist as
+  manual symlinks on this machine only.
+- `config/claude/settings.json` already registers both hooks under
+  `PreToolUse`, and that file is whole-symlinked by `claude.sh`. So no jq
+  merge is needed — registration travels with the symlink.
+
+### Plan
+1. Create `installers/claude-azdo-pipeline-hooks.sh` (modelled on
+   `logging-hooks.sh`; symlinks the two hook files; warns on missing prereqs).
+2. Wire `--claude-azdo-pipeline-hooks` flag into `install.sh` (help text,
+   dispatch, picker, `--all`).
+3. Auto-trigger from `install_claude_config()` in `installers/claude.sh`
+   so the agent/command/skill always have their hook dependency.
+4. Document the hook dependency in:
+   - `config/claude/agents/pipeline-runner.md`
+   - `config/claude/commands/pipe-deploy.md`
+   - `config/claude/skills/pipeline-ops/SKILL.md`
+5. Update project `CLAUDE.md` with the new flag and a one-liner under the
+   Claude Code Setup section.
+
+### Decisions
+- **Naming**: `claude-azdo-pipeline-hooks` (per user direction).
+- **Auto-run from `--claude`**: yes.
+- **Settings.json**: not modified at install time.
+- **Prereq check**: warn (not fail) if `pipeline-validator.sh` /
+  `pipeline-registry.sh` are missing.
+- **No formal dependency-resolution framework** — direct invocation +
+  human-readable doc strings.
+
+### Out of scope
+- New dependency-graph system.
+- Changes to `memory-hooks.sh` / `logging-hooks.sh`.
+- Reorganisation of `~/.claude/hooks/`.
+
+### Log
+- 2026-04-30 — Plan approved by user. Entering CONSTRUCT.
+- 2026-04-30 — Created `installers/claude-azdo-pipeline-hooks.sh` (idempotent, --dry-run, warn-on-missing-prereq).
+- 2026-04-30 — Wired `--claude-azdo-pipeline-hooks` into `install.sh` (help, dispatch, picker, --all, --flag).
+- 2026-04-30 — Added auto-trigger from `install_claude_config()` in `installers/claude.sh`.
+- 2026-04-30 — Added Dependencies sections to pipeline-runner.md, pipe-deploy.md, pipeline-ops/SKILL.md.
+- 2026-04-30 — Updated project CLAUDE.md.
+- 2026-04-30 — Verified: dry-run OK, live run OK, idempotent re-run OK, `--claude-azdo-pipeline-hooks` flag end-to-end OK, syntax check across all touched scripts OK.
+- State.Status = CONSTRUCT_COMPLETE — ready for review/commit.
+
+---
+
+## Archived: Open-Source Dotfiles Public Repo Build
 
 ## State
 - **Status**: CONSTRUCT
@@ -219,3 +339,61 @@ After reviewing the previous agent's work, I recommend **OPTION 5: Combination S
 - Documentation: docs/learning/README.md updated with new incident
 - MCP memory: Stored with tags (lesson-learned, skill-creation, expertise-bias, etc.)
 - Files ready to commit
+
+## SESSION: Homebrew Casks Installer (2026-06-05)
+- Goal: Add macOS cask management to dotfiles (gap found after manual `brew install --cask little-snitch`)
+- Plan (approved by user): Option 1 - Brewfile + brew bundle
+- Actions:
+  - Created config/brew/Brewfile seeded from `brew bundle dump --casks` (24 casks + nikitabobko/tap, deduped docker/zulu aliases)
+  - Created installers/casks.sh (install_casks: macOS guard, ensure_brew_in_path, brew bundle)
+  - Wired install.sh: --casks CLI flag, install_all (after tools), dialog checklist + dispatch + change report, help texts
+  - Updated CLAUDE.md: install command, directory structure, casks pattern doc
+- Verification:
+  - bash -n syntax OK on install.sh and casks.sh
+  - `brew bundle check` parses Brewfile; only unmet item = aerospace pending upgrade (genuine drift, expected)
+  - --help shows --casks
+- Not run: full `./install.sh --casks` (would live-upgrade aerospace window manager mid-session; left to user)
+
+## SESSION: Pipeline commits review + registry doc (2026-07-08)
+- Goal: Review today's pipeline-ops harness commits (bd2dac7 validator registry-aware CD validation, 1fff831 pipeline-runner tools) for design soundness; close identified gaps
+- Review verdict: both sound — validator consumes pre-existing registry schema (stages.allowed/blocked, cd.id) already used by pipeline-guard.sh and present in ~/repos/td registry; hardcoded PRE/PRD blocklist still runs first; fallback preserves old behavior; agent frontmatter now matches tools its body already required
+- Gaps found: (1) td registry untracked [user committed it], (2) no validator tests [design proposed, pending user approval], (3) no registry authoring doc [fixed]
+- Actions:
+  - Created config/claude/skills/pipeline-ops/REGISTRY.md: schema, consumers, validator check order, silent-fallback + empty-allowed caveats, authoring checklist
+  - SKILL.md: replaced drifted hardcoded service-ID table (app-app CI 450 = 2022-inactive) with registry jq query + REGISTRY.md pointer
+  - pipe-deploy.md: schema doc pointer in Step 2
+  - skill-forge validation: 0 errors; 2 warnings false-positive (multiline YAML description, jq backslashes); added TOC to REGISTRY.md (>100 lines checklist item)
+  - Committed f6f7bf0 (docs only; first attempt swept user-staged shell files — reset --soft, split, re-staged them)
+- Verification: validate-skill.sh passes; ~/.claude/skills/pipeline-ops/REGISTRY.md live via whole-dir symlink
+
+## SESSION UPDATE: Pipeline validator test suite (2026-07-08)
+- Created tests/test-pipeline-validator.sh: 27 hermetic black-box cases (temp workspaces, fixture registries, HOME override); all green
+- Coverage: input validation (exit 2 rules), CI approval + branch normalization, hardcoded blocklist supremacy (preae blocked even when registry allows it), registry exact-match (default-deny, case-insensitive, blocked-wins, cd.id fallback, stagesToSkip), prefix fallback, empty-allowed caveat, malformed-registry fail-closed, terraform plan-only (registry-driven + no-registry fallback)
+- Empirical finding: unparseable registry aborts hard (exit 5, no decision JSON) instead of falling back — REGISTRY.md caveat corrected
+- Committed 439804b (tests + REGISTRY.md fix + CLAUDE.md test-harness entry) via pathspec to avoid sweeping unrelated staged files
+
+## SESSION: Independent re-review of 2026-07-08 pipeline-ops commits (2026-07-09)
+- Goal: Verify the registry-aware validation commit set (bd2dac7, 1fff831, f6f7bf0, 439804b) was aligned with harness purpose, not a shortcut/anti-pattern, no cross-repo breakage
+- Method: dispatched read-only review agent; empirically probed validator with adversarial registries; ran hermetic test suite
+- Verdict: directionally aligned (hardcoded PRE/PRD blocklist still supreme, registry default-deny, docs match code, tests real) BUT 4 confirmed issues:
+  1. HIGH: CD allow-authority now lives solely in workspace-writable .claude/pipeline-registry.json — agent (Edit/Write/Bash) can modify it, takes effect uncommitted, no independent code layer for non-pre/prd-substring prod stages (verified: INZ_PaaS_SHARED approved when listed)
+  2. MED fail-open: stages.blocked ignored when allowed empty (validator :158 gate skips whole registry branch); papered over in REGISTRY.md prose instead of code fix (verified: blocked sitae approved via prefix fallback)
+  3. MED: test suite HOME misbinding (run() :99 — HOME= binds to printf, not validator across pipe) pollutes real ~/.claude/logs/pipeline-validator.log with fake "approved" fixture entries
+  4. LOW: validator matches registry by name-first, guard hook by ID-only — name/ID mismatch validates against wrong service
+- Status: findings reported to user; fixes NOT applied (awaiting direction)
+
+## Plan (approved by user 2026-07-09): fix the 4 review findings
+1. tests: fix HOME misbinding in run() so validator (not printf) gets FAKE_HOME — stops audit-log pollution
+2. validator: honor registry stages.blocked unconditionally (before the empty-allowed gate); pin with tests (sitae-in-blocked-with-empty-allowed = BLOCKED)
+3. validator: match registry entry by cd.id FIRST (aligns with pipeline-guard ID-only), service name as fallback for ID-less calls; pin with mismatch test
+4. structural registry protection: (a) new PreToolUse hook pipeline-registry-write-guard.sh blocking Edit/Write/NotebookEdit/Bash mutations of pipeline-registry.json; (b) validator + pipeline-guard fail CLOSED when a found registry is untracked/modified/outside a git work tree (verified: real td registry is tracked+clean, so no breakage); register hook in settings.json + installer
+5. tests: new tests/test-pipeline-hooks.sh covering pipeline-guard.sh, pipeline-trigger-guard.sh, and the new write-guard
+Commits: atomic per item, suite green before each; pathspec staging (zshrc is user-dirty)
+- Actions (all committed, suites green after each):
+  - 9028215 tests: HOME herestring binding — validator suite no longer pollutes real audit log (verified via mtime/line-count)
+  - a14bb7f validator: stages.blocked honored unconditionally; REGISTRY.md caveat rewritten; sitae-in-blocked pinned BLOCKED
+  - 8e83d05 validator: registry entry matched by cd.id first (guard-aligned); mismatch test pinned
+  - ebc15fc structural protection: registry_committed_or_die in validator (CD+terraform) + mirrored check in pipeline-guard; new pipeline-registry-write-guard.sh hook (Edit/Write/NotebookEdit/Bash) registered in settings.json + installer; REGISTRY.md documents enforcement
+  - 1e79b86 tests/test-pipeline-hooks.sh: 32 cases across all three hooks incl. dirty-registry fail-closed and no-registry permissive fallback (pinned as known weakness); CLAUDE.md updated
+- Verification: 33+32 tests green; live td workspace re-validated (sitae approved, INZ_PaaS_SHARED blocked); installer delivered write-guard symlink; only user-dirty zshrc + this file remain uncommitted
+- Remaining known gaps (not in approved scope, surfaced to user): guard skips checks 0-2 with no registry; guard terraform constants (802) still hardcoded; agent-doc diagram claims guard invokes validator; stagesToSkip derived from caller allStages not registry stages.all
