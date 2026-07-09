@@ -94,7 +94,7 @@ EOF
 run() {
     local ws="$1" json="$2"
     set +e
-    OUT=$(cd "$ws" && HOME="$FAKE_HOME" printf '%s' "$json" | "$VALIDATOR" 2>/dev/null)
+    OUT=$(cd "$ws" && HOME="$FAKE_HOME" "$VALIDATOR" <<< "$json" 2>/dev/null)
     RC=$?
     set -e
 }
