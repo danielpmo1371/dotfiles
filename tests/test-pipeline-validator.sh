@@ -59,9 +59,9 @@ cat > "$WS/.claude/pipeline-registry.json" << 'EOF'
       "cd": { "id": 901, "name": "svc2-cd" },
       "folder": "svc-empty-allowed",
       "stages": {
-        "all": ["apply_foo", "sitae"],
+        "all": ["apply_foo", "sitae", "dryae"],
         "allowed": [],
-        "blocked": ["apply_foo"]
+        "blocked": ["apply_foo", "sitae"]
       }
     },
     "svc-terraform": {
@@ -199,12 +199,14 @@ assert_approved "no registry: composite stage 'sitae' matches 'sit' prefix" "$WS
     '{"service":"x","type":"cd","branch":"develop","pipelineId":"1","project":"P","stages":["sitae"]}'
 assert_blocked "no registry: unknown stage blocked" "STAGE_NOT_ALLOWED" 1 "$WS_BARE" \
     '{"service":"x","type":"cd","branch":"develop","pipelineId":"1","stages":["randomstage"]}'
-# Documented caveat: empty stages.allowed disables the registry path for the
-# service, INCLUDING its blocked list — the generic fallback takes over.
-assert_blocked "empty allowed-list entry falls back (apply_foo still blocked)" "STAGE_NOT_ALLOWED" 1 "$WS" \
+# The registry blocked list is honored even when stages.allowed is empty —
+# only the ALLOW decision falls back to prefix matching, never the block.
+assert_blocked "empty allowed-list: registry-blocked apply_foo still blocked" "ENVIRONMENT_BLOCKLIST" 1 "$WS" \
     '{"service":"svc-empty-allowed","type":"cd","branch":"develop","pipelineId":"901","stages":["apply_foo"]}'
-assert_approved "empty allowed-list entry falls back (sitae approved by prefix)" "$WS" \
-    '{"service":"svc-empty-allowed","type":"cd","branch":"develop","pipelineId":"901","project":"P","stages":["sitae"]}'
+assert_blocked "empty allowed-list: registry-blocked sitae blocked despite matching 'sit' prefix" "ENVIRONMENT_BLOCKLIST" 1 "$WS" \
+    '{"service":"svc-empty-allowed","type":"cd","branch":"develop","pipelineId":"901","stages":["sitae"]}'
+assert_approved "empty allowed-list: allow decision falls back (dryae approved by prefix)" "$WS" \
+    '{"service":"svc-empty-allowed","type":"cd","branch":"develop","pipelineId":"901","project":"P","stages":["dryae"]}'
 
 echo -e "${BLUE}=== CD: malformed registry fails closed ===${NC}"
 assert_fail_closed "unparseable registry never approves" "$WS_BAD" \

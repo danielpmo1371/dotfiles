@@ -155,9 +155,11 @@ if [[ "$TYPE" == "cd" ]]; then
         end' "$REGISTRY_FILE")
   fi
 
-  if [[ "$CD_REG_ENTRY" != "null" && -n "$CD_REG_ENTRY" ]] && [[ $(echo "$CD_REG_ENTRY" | jq -r '.stages.allowed // [] | length') -gt 0 ]]; then
-    # Registry-driven validation: exact case-insensitive match.
-    # Blocked list wins over allowed; anything not explicitly allowed is blocked.
+  # The registry blocked list is honored UNCONDITIONALLY whenever an entry
+  # matches — even when 'allowed' is empty and the allow decision falls
+  # through to the generic prefix fallback below. This is the only layer
+  # that can block prod stages whose names carry no pre/prd/prod substring.
+  if [[ "$CD_REG_ENTRY" != "null" && -n "$CD_REG_ENTRY" ]]; then
     for stage in "${STAGES_ARRAY[@]}"; do
       stage_lower=$(echo "$stage" | tr '[:upper:]' '[:lower:]')
       if [[ $(echo "$CD_REG_ENTRY" | jq -r --arg s "$stage_lower" '[.stages.blocked // [] | .[] | ascii_downcase] | index($s) != null') == "true" ]]; then
@@ -167,6 +169,14 @@ if [[ "$TYPE" == "cd" ]]; then
           '{"approved": false, "reason": $reason, "rule": $rule}'
         exit 1
       fi
+    done
+  fi
+
+  if [[ "$CD_REG_ENTRY" != "null" && -n "$CD_REG_ENTRY" ]] && [[ $(echo "$CD_REG_ENTRY" | jq -r '.stages.allowed // [] | length') -gt 0 ]]; then
+    # Registry-driven allow decision: exact case-insensitive match;
+    # anything not explicitly allowed is blocked (default-deny).
+    for stage in "${STAGES_ARRAY[@]}"; do
+      stage_lower=$(echo "$stage" | tr '[:upper:]' '[:lower:]')
       if [[ $(echo "$CD_REG_ENTRY" | jq -r --arg s "$stage_lower" '[.stages.allowed // [] | .[] | ascii_downcase] | index($s) != null') != "true" ]]; then
         REG_ALLOWED=$(echo "$CD_REG_ENTRY" | jq -r '.stages.allowed | join(" ")')
         jq -n \

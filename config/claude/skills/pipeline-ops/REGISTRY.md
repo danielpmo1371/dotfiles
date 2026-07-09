@@ -85,13 +85,14 @@ Checks run in this order — earlier rules cannot be overridden by later ones:
 1. **Hardcoded blocklist first.** Any requested stage containing `pre`, `prd`, `prod`,
    `pre-prod`, or `production` (case-insensitive substring) is blocked. This list lives
    in `pipeline-validator.sh` itself and is never consulted from the registry.
-2. **Registry exact match** (when the service has a registry entry with a non-empty
-   `stages.allowed`): a stage in `stages.blocked` is blocked; a stage not in
-   `stages.allowed` is blocked (default-deny). This is the only layer that can block
-   prod stages whose names carry no pre/prd/prod substring (e.g. td-apim's
+2. **Registry `blocked` list** (whenever a service entry matches, regardless of
+   `allowed`): a stage in `stages.blocked` is blocked. This is the only layer that can
+   block prod stages whose names carry no pre/prd/prod substring (e.g. td-apim's
    `INZ_PaaS_SHARED`) — which is why `blocked` must list them explicitly, and why
    the registry must be authored carefully and kept in version control.
-3. **Generic prefix fallback** (no registry, no service entry, or empty
+3. **Registry `allowed` list** (when the entry's `stages.allowed` is non-empty): a
+   stage not in `stages.allowed` is blocked (default-deny).
+4. **Generic prefix fallback** (no registry, no service entry, or empty
    `stages.allowed`): the stage must start with one of the validator's generic allowed
    prefixes (`dry`, `sit`, `uat`, `npe`, ...). Everything else is blocked.
 
@@ -106,9 +107,11 @@ Checks run in this order — earlier rules cannot be overridden by later ones:
   fail-closed, but the symptom is an opaque error rather than a BLOCKED reason. In
   either case, if a stage you expect to be allowed is rejected, validate the registry
   first: `jq . .claude/pipeline-registry.json`.
-- **Empty `allowed` disables the registry path entirely** for that service, including
-  its `blocked` list. Never author an entry with `blocked` populated but `allowed`
-  empty; list every triggerable stage explicitly.
+- **`blocked` is honored unconditionally** whenever a service entry matches, even when
+  `allowed` is empty. An empty `allowed` only drops the *allow* decision to the generic
+  prefix fallback — a stage in `blocked` can never be approved that way. Still prefer
+  listing every triggerable stage in `allowed` explicitly: default-deny beats prefix
+  heuristics.
 - **`stages.all` is documentation** for humans and agents selecting stages; the
   validator decides only from `allowed`/`blocked`.
 
