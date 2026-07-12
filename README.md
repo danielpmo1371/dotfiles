@@ -23,6 +23,7 @@ cd ~/repos/dotfiles
 - **Shell**: Zsh (with Zap plugin manager) and Bash configurations
 - **Terminal**: Ghostty configuration
 - **Tmux**: Config with TPM and plugins (gruvbox, resurrect, continuum, floax)
+  - Claude pane picker (`prefix i`): fzf list of every pane running Claude Code with live preview — vi keys (j/k move, `i` to filter), Enter jumps to it
 - **Neovim**: LazyVim-based configuration
 - **CLI Tools**: ripgrep, fd, bat, fzf, zoxide, lsd, jq, htop
 - **Claude Code**: CLI settings, custom commands, and skills

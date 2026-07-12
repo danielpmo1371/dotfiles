@@ -100,6 +100,8 @@ HELP_TEXT="
   Cmd+e Cmd+n     Toggle Claude Code popup
   Cmd+e  q        Close Claude popup
   Esc             Close popup (session persists)
+  Cmd+e  i        Claude pane picker: list running Claudes w/ live
+                  preview; vi keys (j/k move, i filter), Enter jumps
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   HELP & ASK CLAUDE

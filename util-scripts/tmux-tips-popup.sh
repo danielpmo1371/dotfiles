@@ -28,7 +28,7 @@ TIPS=(
   "Ctrl+w opens a floating Lazygit window (80% size) in current directory."
   "Prefix + ? shows the full keybindings cheat sheet popup."
   "Prefix + S opens the Ghostty shader picker — try different visual effects!"
-  "Prefix + Ctrl+i toggles the Claude corner pane for background AI tasks."
+  "Prefix + i opens the Claude pane picker — j/k to move, Enter jumps to that session."
 
   # ── Tmux Modes ──
   "Prefix + Z enters Zen mode — distraction-free, no status bar, pure focus."
