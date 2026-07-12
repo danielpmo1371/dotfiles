@@ -34,6 +34,10 @@ interactive picker: select a running Claude and jump to its session/window/pane.
 - 2026-07-12 (fix 2): slow open (~1.2s) — old detection spawned
   pgrep+xargs+ps per pane. Replaced with one `ps -axo ppid=,comm=` pass
   joined against pane pids: 0.18s (6.5x). No spinner needed.
+- 2026-07-12 (vi mode): picker now opens in vi normal mode — prompt is the
+  mode state ([N]/[I]); transform bindings on j/k/i/esc consult $FZF_PROMPT.
+  Esc from insert keeps the filter; esc from normal closes. All 8 key/mode
+  transform outputs verified.
 
 ---
 
