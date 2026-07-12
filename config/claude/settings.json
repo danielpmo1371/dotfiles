@@ -186,7 +186,7 @@
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/logging/response-summarizer.sh",
-            "timeout": 10
+            "timeout": 30
           }
         ]
       }
