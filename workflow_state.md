@@ -26,6 +26,14 @@ interactive picker: select a running Claude and jump to its session/window/pane.
   capture-pane preview verified (ANSI ok); config reloaded; both bindings
   confirmed via `tmux list-keys`. Interactive Enter-jump path needs a manual
   user test (can't drive fzf/switch-client without hijacking the live client).
+- 2026-07-12 (fix 1): user got a persistent blank popup. Root cause: tmux
+  global env carries `FZF_DEFAULT_OPTS=... --tmux center,75% ...`, so fzf
+  tried to open a *nested* tmux popup inside display-popup and wedged.
+  Fix: unset FZF_DEFAULT_OPTS/FZF_DEFAULT_OPTS_FILE/FZF_DEFAULT_COMMAND in
+  the picker — it owns all its flags. Verified fzf renders in popup.
+- 2026-07-12 (fix 2): slow open (~1.2s) — old detection spawned
+  pgrep+xargs+ps per pane. Replaced with one `ps -axo ppid=,comm=` pass
+  joined against pane pids: 0.18s (6.5x). No spinner needed.
 
 ---
 

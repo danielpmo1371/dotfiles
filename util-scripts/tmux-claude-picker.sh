@@ -10,17 +10,18 @@
 
 set -euo pipefail
 
-# TEMP DEBUG
-exec 9>>/tmp/claude-picker-debug.log
-echo "START $(date '+%T') args=${1:-none} TERM=${TERM:-unset} tty=$(tty 2>&1) fzf=$(command -v fzf 2>&1)" >&9
-
 SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 TAB=$'\t'
 
 # Print one line per pane with a claude child process: "session:window.pane<TAB>label"
 list_claude_panes() {
+    # Single ps pass: parent pids that have a claude-ish child (vs pgrep/ps per pane)
+    local claude_ppids
+    claude_ppids="$(ps -axo ppid=,comm= | awk '/claude|node.*claude/ {print $1}' | sort -u)"
+    [ -z "$claude_ppids" ] && return 0
+
     while IFS="$TAB" read -r session window pane pid pane_title window_name; do
-        if pgrep -P "$pid" 2>/dev/null | xargs -I {} ps -p {} -o comm= 2>/dev/null | grep -q "claude\|node.*claude"; then
+        if grep -qxF "$pid" <<<"$claude_ppids"; then
             local target="$session:$window.$pane"
             local label="$window_name"
             if [ -n "$pane_title" ] && [ "$pane_title" != "$target" ]; then
@@ -67,8 +68,7 @@ selection="$(printf '%s\n' "$panes" | fzf \
     --header='enter: jump · ctrl-r: refresh · esc: close' \
     --preview='tmux capture-pane -ep -t {1}' \
     --preview-window='down,65%,border-top' \
-    --bind="ctrl-r:reload($SCRIPT_PATH --list)")" || { echo "FZF exited rc=$? (cancel or error)" >&9; exit 0; }
-echo "FZF selected: $selection" >&9
+    --bind="ctrl-r:reload($SCRIPT_PATH --list)")" || exit 0
 
 target="$(printf '%s' "$selection" | cut -f1)"
 [ -z "$target" ] && exit 0
