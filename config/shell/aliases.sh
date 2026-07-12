@@ -88,6 +88,8 @@ alias cdang='claude --dangerously-skip-permissions'
 # defaults to Groq for the lowest time-to-first-token. Streams to stdout.
 # Rendered as markdown through bat when on a tty (line-buffered, so output
 # appears per-line instead of per-token); raw when piped or bat is missing.
+# The raw answer is copied to the clipboard (pbcopy, when available) and the
+# Q&A appended to $Q_LOG_FILE (default ~/.q_history.md).
 #   q "explain this regex"            # uses $AI_PROVIDER
 #   AI_PROVIDER=gemini q "..."        # switch provider for one call
 #   AI_MODEL=groq/llama-3.3-70b-versatile q "..."   # pin a specific model
@@ -106,11 +108,25 @@ q() {
         echo "q: 'llm' not installed -> run: ./install.sh --llm" >&2
         return 127
     fi
+    local tmp
+    tmp="$(mktemp)" || return 1
     if [ -t 1 ] && command -v bat >/dev/null 2>&1; then
-        llm -m "$model" "$@" | bat --style=plain --paging=never --language=md
+        llm -m "$model" "$@" | tee "$tmp" | bat --style=plain --paging=never --language=md
     else
-        llm -m "$model" "$@"
+        llm -m "$model" "$@" | tee "$tmp"
     fi
+    if [ -s "$tmp" ]; then
+        if command -v pbcopy >/dev/null 2>&1; then
+            pbcopy < "$tmp"
+        fi
+        {
+            printf '\n---\n### %s | %s\n\n**Q:** %s\n\n' \
+                "$(date '+%Y-%m-%d %H:%M:%S')" "$model" "$*"
+            cat "$tmp"
+            printf '\n'
+        } >> "${Q_LOG_FILE:-$HOME/.q_history.md}"
+    fi
+    rm -f "$tmp"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
