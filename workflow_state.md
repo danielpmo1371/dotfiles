@@ -1,6 +1,35 @@
 # Workflow State
 
-## Active: Claude Session Summary Viewer (TUI) + Summarizer Improvements (2026-06-29)
+## Completed: Interactive Claude pane picker (2026-07-12)
+
+### State
+- **Status**: COMPLETED
+- **Branch**: main
+
+### Goal
+Replace the passive Claude-processes corner monitor (Cmd+e i) with an
+interactive picker: select a running Claude and jump to its session/window/pane.
+
+### Plan (approved)
+1. NEW `util-scripts/tmux-claude-picker.sh` — fzf over panes with a claude
+   child process (detection logic carried over from show-claude-processes.sh);
+   preview = live `tmux capture-pane` of the highlighted pane; Enter =
+   select-window/select-pane/switch-client; ctrl-r = reload list; `--list`
+   mode feeds the reload binding. fzf PATH guard for popup shells.
+2. EDIT `config/tmux/tmux.conf` — `prefix C-i` / `prefix i` now
+   `display-popup -E` (top-right, 80%x70%) running the picker.
+3. DELETE `util-scripts/tmux-claude-corner.sh`, `util-scripts/show-claude-processes.sh`
+   (dead after replacement). `tmux-corner-pane.sh` kept as generic utility.
+
+### Log
+- 2026-07-12: Script created; `--list` verified against 12 live Claude panes;
+  capture-pane preview verified (ANSI ok); config reloaded; both bindings
+  confirmed via `tmux list-keys`. Interactive Enter-jump path needs a manual
+  user test (can't drive fzf/switch-client without hijacking the live client).
+
+---
+
+## Paused: Claude Session Summary Viewer (TUI) + Summarizer Improvements (2026-06-29)
 
 ### State
 - **Status**: NEEDS_PLAN_APPROVAL
