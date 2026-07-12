@@ -3,15 +3,21 @@
 # tmux-claude-picker.sh - fzf picker over panes running Claude Code; Enter jumps to the pane
 #
 # Usage:
-#   tmux-claude-picker.sh          # run the picker (needs a tty; tmux.conf wraps it in display-popup)
-#   tmux-claude-picker.sh --list   # print detected Claude panes (used by fzf ctrl-r reload)
+#   tmux-claude-picker.sh            # run the picker (needs a tty; tmux.conf wraps it in display-popup)
+#   tmux-claude-picker.sh --list     # print detected Claude panes (used by fzf ctrl-r reload)
+#   tmux-claude-picker.sh --vi <key> # fzf transform helper: vi-modal action for <key> (reads $FZF_PROMPT)
 #
 # Keybinding: Cmd+e Cmd+i / Cmd+e i (see config/tmux/tmux.conf)
+#
+# Starts in NORMAL mode (j/k move, i enters filter mode, esc closes).
+# In INSERT mode typing filters; esc returns to NORMAL keeping the filter.
 
 set -euo pipefail
 
 SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 TAB=$'\t'
+NORMAL_PROMPT='[N] '
+INSERT_PROMPT='[I] '
 
 # Print one line per pane with a claude child process: "session:window.pane<TAB>label"
 list_claude_panes() {
@@ -34,6 +40,26 @@ list_claude_panes() {
 
 if [ "${1:-}" = "--list" ]; then
     list_claude_panes
+    exit 0
+fi
+
+# fzf `transform` helper: prints the action for a key based on the current
+# mode, which is tracked in the prompt ($FZF_PROMPT is exported by fzf).
+if [ "${1:-}" = "--vi" ]; then
+    key="${2:-}"
+    if [ "${FZF_PROMPT:-}" = "$NORMAL_PROMPT" ]; then
+        case "$key" in
+            j)   echo "down" ;;
+            k)   echo "up" ;;
+            i)   echo "change-prompt($INSERT_PROMPT)" ;;
+            esc) echo "abort" ;;
+        esac
+    else
+        case "$key" in
+            esc) echo "change-prompt($NORMAL_PROMPT)" ;;
+            *)   echo "put($key)" ;;
+        esac
+    fi
     exit 0
 fi
 
@@ -64,10 +90,14 @@ unset FZF_DEFAULT_OPTS FZF_DEFAULT_OPTS_FILE FZF_DEFAULT_COMMAND
 selection="$(printf '%s\n' "$panes" | fzf \
     --delimiter="$TAB" \
     --with-nth=1,2 \
-    --prompt='claude> ' \
-    --header='enter: jump · ctrl-r: refresh · esc: close' \
+    --prompt="$NORMAL_PROMPT" \
+    --header='j/k: move · i: filter · esc: normal/close · enter: jump · ctrl-r: refresh' \
     --preview='tmux capture-pane -ep -t {1}' \
     --preview-window='down,65%,border-top' \
+    --bind="j:transform:$SCRIPT_PATH --vi j" \
+    --bind="k:transform:$SCRIPT_PATH --vi k" \
+    --bind="i:transform:$SCRIPT_PATH --vi i" \
+    --bind="esc:transform:$SCRIPT_PATH --vi esc" \
     --bind="ctrl-r:reload($SCRIPT_PATH --list)")" || exit 0
 
 target="$(printf '%s' "$selection" | cut -f1)"
