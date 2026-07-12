@@ -10,6 +10,10 @@
 
 set -euo pipefail
 
+# TEMP DEBUG
+exec 9>>/tmp/claude-picker-debug.log
+echo "START $(date '+%T') args=${1:-none} TERM=${TERM:-unset} tty=$(tty 2>&1) fzf=$(command -v fzf 2>&1)" >&9
+
 SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 TAB=$'\t'
 
@@ -51,6 +55,11 @@ if [ -z "$panes" ]; then
     exit 0
 fi
 
+# The shell env (tmux global env / zshrc) may carry FZF_DEFAULT_OPTS like
+# "--tmux center,75%" which makes fzf try to open a nested tmux popup — that
+# deadlocks inside display-popup. This picker fully controls its own flags.
+unset FZF_DEFAULT_OPTS FZF_DEFAULT_OPTS_FILE FZF_DEFAULT_COMMAND
+
 selection="$(printf '%s\n' "$panes" | fzf \
     --delimiter="$TAB" \
     --with-nth=1,2 \
@@ -58,7 +67,8 @@ selection="$(printf '%s\n' "$panes" | fzf \
     --header='enter: jump · ctrl-r: refresh · esc: close' \
     --preview='tmux capture-pane -ep -t {1}' \
     --preview-window='down,65%,border-top' \
-    --bind="ctrl-r:reload($SCRIPT_PATH --list)")" || exit 0
+    --bind="ctrl-r:reload($SCRIPT_PATH --list)")" || { echo "FZF exited rc=$? (cancel or error)" >&9; exit 0; }
+echo "FZF selected: $selection" >&9
 
 target="$(printf '%s' "$selection" | cut -f1)"
 [ -z "$target" ] && exit 0
