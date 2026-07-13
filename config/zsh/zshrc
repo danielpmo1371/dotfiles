@@ -62,6 +62,32 @@ bindkey '^x^x' edit-command-line   # Ctrl-X Ctrl-X (avoids tmux prefix C-e)
 bindkey -M vicmd 'v' edit-command-line  # also: `v` in vi normal mode
 
 # ─────────────────────────────────────────────────────────────────────────────
+#   Meta (Alt/Option/Cmd-via-Ghostty) bindings — portable keybinding layer
+# ─────────────────────────────────────────────────────────────────────────────
+# Inside tmux, M-e/a/q/w/u/h/j/k/l are consumed by tmux (prefix2, popups,
+# pane nav, scrollback) and never reach the shell. These bindings serve the
+# outside-tmux case AND act as a safety net: in vi mode an UNBOUND meta key
+# (ESC+char) would drop to vi normal mode and run the char as a vi command
+# (e.g. stray text deletion). Every meta key the terminal can emit for our
+# keybinding layer must therefore be bound in BOTH viins and vicmd.
+# Mirror of this block for bash: config/bash/bashrc.
+for m in viins vicmd; do
+  bindkey -M $m '\ea' beginning-of-line                     # home (tmux: nvim popup)
+  bindkey -M $m '\ee' end-of-line                           # end  (tmux: prefix)
+  bindkey -M $m '\er' history-incremental-search-backward   # history search
+  bindkey -M $m '\eh' backward-char                         # tmux: pane nav
+  bindkey -M $m '\el' forward-char                          # tmux: pane nav
+  bindkey -M $m '\ej' down-line-or-history                  # tmux: pane nav
+  bindkey -M $m '\ek' up-line-or-history                    # tmux: pane nav
+  bindkey -M $m '\ei' redisplay                             # inert (tmux: prefix chord → picker)
+  bindkey -M $m '\en' redisplay                             # inert (tmux: prefix chord → popup)
+  bindkey -M $m '\eq' redisplay                             # inert (tmux: Claude popup)
+  bindkey -M $m '\ew' redisplay                             # inert (tmux: lazygit popup)
+  bindkey -M $m '\eu' redisplay                             # inert (tmux: scrollback)
+  bindkey -M $m '\ed' redisplay                             # inert (tmux: scrollback)
+done
+
+# ─────────────────────────────────────────────────────────────────────────────
 #   Command routing: * prefix routes to q (llm + groq)
 # ─────────────────────────────────────────────────────────────────────────────
 # Rewrites the buffer BEFORE zsh parses it (a preexec hook cannot cancel the

@@ -32,6 +32,34 @@ echo "DEBUG: DOTFILES_DIR set to: $DOTFILES_DIR"
 #   Bash options
 # ─────────────────────────────────────────────────────────────────────────────
 set -o vi             # Vi mode
+
+# ─────────────────────────────────────────────────────────────────────────────
+#   Meta (Alt/Option/Cmd-via-Ghostty) bindings — portable keybinding layer
+# ─────────────────────────────────────────────────────────────────────────────
+# Mirror of the zsh block in config/zsh/zshrc — keep the two in sync.
+# Inside tmux these keys are consumed by tmux (prefix2, popups, pane nav,
+# scrollback). Outside tmux they must be bound in BOTH vi keymaps: an unbound
+# ESC+char in readline vi mode drops to command mode and runs the char as a
+# vi command (accidental text mangling).
+if [[ $- == *i* ]]; then
+    for _m in vi-insert vi-command; do
+        bind -m "$_m" '"\ea": beginning-of-line'        # home (tmux: nvim popup)
+        bind -m "$_m" '"\ee": end-of-line'              # end  (tmux: prefix)
+        bind -m "$_m" '"\er": reverse-search-history'   # history search
+        bind -m "$_m" '"\eh": backward-char'            # tmux: pane nav
+        bind -m "$_m" '"\el": forward-char'             # tmux: pane nav
+        bind -m "$_m" '"\ej": next-history'             # tmux: pane nav
+        bind -m "$_m" '"\ek": previous-history'         # tmux: pane nav
+        bind -m "$_m" '"\ei": redraw-current-line'      # inert (tmux: prefix chord → picker)
+        bind -m "$_m" '"\en": redraw-current-line'      # inert (tmux: prefix chord → popup)
+        bind -m "$_m" '"\eq": redraw-current-line'      # inert (tmux: Claude popup)
+        bind -m "$_m" '"\ew": redraw-current-line'      # inert (tmux: lazygit popup)
+        bind -m "$_m" '"\eu": redraw-current-line'      # inert (tmux: scrollback)
+        bind -m "$_m" '"\ed": redraw-current-line'      # inert (tmux: scrollback)
+    done
+    unset _m
+fi
+
 shopt -s histappend   # Append to history file
 shopt -s checkwinsize # Update LINES and COLUMNS after each command
 shopt -s cdspell      # Correct minor cd spelling errors
