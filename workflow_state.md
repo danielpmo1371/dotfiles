@@ -1,5 +1,148 @@
 # Workflow State
 
+## Active: Portable Cmd/Alt meta-layer keybindings (2026-07-13)
+
+### State
+- **Status**: CONSTRUCT_COMPLETE — awaiting user smoke test + merge
+- **Phase**: Verification (user-assisted)
+- **Branch**: worktree-alt-meta-keybindings (worktree at .claude/worktrees/alt-meta-keybindings)
+- **Baseline**: 65/65 hermetic tests green (validator 33, hooks 32)
+
+### Goal
+Make the Cmd-key conveniences portable to Linux (Alt) by moving keybinding
+*semantics* out of Ghostty into zsh/tmux, leaving Ghostty as a thin adapter:
+Cmd+X → the same ESC-prefix bytes Alt+X produces natively on Linux (and
+Option+X already produces on macOS via `macos-option-as-alt`).
+Result: Cmd (Mac) ≡ Option (Mac) ≡ Alt (Linux), one binding vocabulary,
+defined once in repo-tracked shell/tmux config, portable to any emulator.
+
+### Key design constraints
+1. **vi-mode ESC hazard**: zshrc uses `bindkey -v`. An *unbound* meta sequence
+   (ESC+x) in vi insert mode = exit to normal mode + run `x` as a vi command
+   (destructive). Therefore: NO blanket a–z transliteration. Ghostty emits
+   meta ONLY for keys with an explicit zsh/tmux consumer; unused Cmd combos
+   are dropped from the config entirely.
+2. **tty line-discipline keys can't move to shell**: SIGINT/SIGTSTP/EOF are
+   kernel reactions to literal bytes \x03/\x1A/\x04. Cmd+C/Z/D stay as
+   control-byte mappings in Ghostty.
+3. **Shift-arrow alias group stays**: super+[/]/shift+hjkl send Shift/
+   Ctrl-Shift-arrow escape sequences whose semantics ALREADY live in tmux
+   (S-Left/S-Right window nav etc., tmux.conf:114-123). On Linux, real
+   Shift+arrows produce the same sequences natively — nothing to migrate.
+   (Deliberately NOT binding tmux `M-[` — ESC-[ is the CSI introducer and
+   collides with arrow-key parsing.)
+
+### Inventory: what each Cmd combo actually drives (verified against tmux.conf)
+| Cmd combo | bytes | Real consumer today |
+|---|---|---|
+| Cmd+E | C-e | tmux prefix (tmux.conf:10) |
+| Cmd+A | C-a | tmux root: nvim scratch popup (:148) |
+| Cmd+Q | C-q | tmux root: Claude popup (:133) |
+| Cmd+W | C-w | tmux root: lazygit popup (:151) |
+| Cmd+H/J/K/L | C-h/j/k/l | tmux root: pane nav (:89-92) |
+| Cmd+E Cmd+I / i | prefix C-i / i | Claude picker popup (:138-139) |
+| Cmd+E Cmd+N / q | prefix C-n / q | Claude popup (:134-135) |
+| Cmd+E Cmd+E | prefix C-e | copy-mode (:61 overrides :12 send-prefix) |
+| Cmd+E Cmd+S / Cmd+R | prefix C-s / C-r | tmux-resurrect save / restore (plugin) |
+| Cmd+R | C-r | shell history search (zshrc:53; bash vi-mode) |
+| Cmd+U | C-u | shell kill-line-back (vi-insert ^u) — likely unintended |
+| Cmd+C / Z / D | \x03/\x1A/\x04 | kernel tty: SIGINT / SIGTSTP / EOF (C-d explicitly unbound in tmux root :35) |
+| Cmd+[ ] / Cmd+Shift+hjkl,[ ] | Shift(/C-S)-arrow seqs | tmux window/client nav (:114-123) |
+| Cmd+V | (commented) | native macOS paste |
+| Cmd+B F G I M N O P Q(std) S T X Y, Cmd+1–0, Cmd+`, Cmd+- | assorted | no consumer / nonsensical — DROP (approved) |
+
+### Revised design (user feedback 2026-07-13 incorporated)
+- **Bash included**: identical meta bindings in `config/bash/bashrc`
+  (readline `bind` in vi-insert + vi-command keymaps) mirroring zsh bindkeys.
+  Both shells are vi-mode → same unbound-ESC hazard, same fix.
+- **Every current tmux shortcut keeps working** — guaranteed by phasing:
+  Phase 1 is purely ADDITIVE (M- mirrors alongside existing C- bindings);
+  nothing existing is removed until the M- layer is proven.
+- **Scrolling (priority)**: NEW tmux root `M-u` = `copy-mode -u` (enter
+  scrolled up one page), `M-d` = page down in copy-mode context; mouse wheel
+  stays (mouse on). Works identically on Mac (Cmd/Option+U) and Linux (Alt+U),
+  incl. bare TTY. Ghostty ctrl+u/d native-scrollback bindings KEPT for the
+  outside-tmux case (shadowing shell C-u kill-line accepted by user).
+- **vim-tmux-navigator (christoomey) adopted** for tmux + nvim (LazyVim spec):
+  vim-aware C-hjkl pane/split nav. Manual root C-hjkl binds (:89-92) removed
+  in favor of the plugin's; M-hjkl binds (:241-244) rewrapped with the same
+  is_vim check; nvim gets <C-h/j/k/l> + <A-h/j/k/l> → TmuxNavigate* maps.
+  Ctrl family already portable (exists on both OSes); meta family added for
+  Cmd/Alt symmetry.
+- **tmux-sensible**: ALREADY INSTALLED (tmux.conf:184). Its options defer to
+  explicitly-set user values (escape-time, history-limit, display-time etc.
+  all set in this conf) and it skips already-bound keys (prefix C-n popup is
+  safe). Verdict: keep, no action; it neither helps nor hinders migration.
+
+### Plan — Phase 1 (additive M- layer; zero behavior removed)
+1. tmux.conf:
+   a. `set -g prefix2 M-e`; prefix-table mirrors: `bind M-e copy-mode`,
+      `bind M-i` → picker, `bind M-n` → Claude popup.
+   b. Root mirrors: `M-a` scratch nvim, `M-q` Claude popup, `M-w` lazygit.
+   c. Scroll: root `M-u` `copy-mode -u`; `M-d` page-down (copy-mode table).
+   d. resurrect: prefix `M-s`/`M-r` mirrors → ASK (Q2) or defer.
+2. vim-tmux-navigator: tmux @plugin + replace :89-92 and rewrap :241-244
+   with is_vim-aware binds; NEW `config/nvim/lua/plugins/tmux-navigator.lua`.
+3. zshrc meta block: `\ea`…`\el`, `\eq`, `\ew`, `\er` (history search),
+   `\eu`, `\ed`, `\ee` — bound in viins+vicmd. Outside tmux these are the
+   only consumers; each gets a sensible/harmless action (documented inline)
+   so no meta key ever falls through to raw vi-command execution.
+4. bashrc meta block: same keys via readline `bind`, vi-insert + vi-command.
+5. Verify Phase 1 (isolated tmux server `-L kbtest`, list-keys diff before/
+   after; zsh/bash binding listings; 65-test baseline; manual smoke on Mac).
+   Commit atomically per file-group: tmux → navigator(nvim+tmux) → zsh → bash.
+
+### Plan — Phase 2 (flip Ghostty to meta adapter; separate commits, revertable)
+6. Ghostty keep-set → meta: super+e/a/q/w/r/u/d/i/n/s → `text:\x1b<key>`;
+   hjkl → meta; c/z stay control bytes (tty semantics); v stays commented;
+   shift-arrow alias group unchanged; DROP super+b f g m o p t x y,
+   super+1–0, super+`, super+- and redundant ctrl+z (approved).
+   NOTE Cmd+D: becomes M-d (scroll down); EOF remains on physical Ctrl+D.
+7. Update comments: adapter contract ("Cmd→meta; semantics live in tmux/shell").
+8. Docs: CLAUDE.md Key Patterns paragraph (adapter-vs-semantics layering;
+   Linux/TTY needs zero emulator config; Option+X = test harness on Mac).
+9. Full verification: ghostty +validate-config (if available), re-run
+   baseline, manual smoke of every inventory row on Mac (user-assisted).
+
+### Open questions
+- Q1: "Cmd+E U" — prefix+u is NOT currently bound (no plugin provides it).
+  What do you use it for / what should it do?
+- Q2: Mirror resurrect save/restore on prefix M-s/M-r (reaches into plugin
+  binding conventions), or leave resurrect on prefix C-s/C-r only?
+- Q3: Cmd+S standalone — no tmux root binding; C-s is XOFF terminal-freeze
+  risk in bash outside tmux. Assumed you meant prefix C-s (resurrect save).
+  Confirm?
+
+### Log
+- 2026-07-13 — Worktree created, baseline green, blueprint drafted.
+- 2026-07-13 — User feedback: include bash; preserve ALL tmux shortcuts;
+  scrolling priority; oddballs approved for drop; evaluate vim-tmux-navigator
+  (wants tmux+nvim) and tmux-sensible. Plan revised to phased additive
+  design; tmux-sensible found already installed. Awaiting approval.
+- 2026-07-13 — Plan approved (both shells confirmed in scope; skip prefix+u
+  [it's TPM clean_plugins, verified]; no resurrect M-s/M-r mirrors).
+- 2026-07-13 — CONSTRUCT complete, commits (all gitleaks-clean):
+  - 7f39d68 tmux meta layer (prefix2 M-e, popup mirrors, vim-aware C-/M-hjkl
+    with is_vim, M-u scrollback via copy-mode, copy-mode-vi M-u/M-d paging)
+  - 3d89848 nvim vim-tmux-navigator spec (C-hjkl + A-hjkl)
+  - 27051da zsh+bash meta blocks, viins+vicmd / vi-insert+vi-command,
+    13 keys each (a e r h j k l i n q w u d), mirrored files
+  - f7edf49 ghostty flip: Cmd→meta adapter (13 keys), C/Z stay control
+    bytes, all dead mappings dropped
+- 2026-07-13 — Verified: isolated tmux server (-L kbtest) shows prefix2 +
+  all M- binds in root/prefix/copy-mode-vi tables; zsh/bash binding
+  listings green in both keymaps; ghostty +validate-config exit 0;
+  65/65 suite re-run green.
+- BEHAVIOR CHANGES to smoke-test after merge: Cmd+D no longer sends EOF
+  (physical Ctrl+D unchanged); Cmd+M / Cmd+- no longer send Enter;
+  resurrect save = Cmd+E Ctrl+S (Cmd+E Cmd+S dropped per user);
+  Cmd+B/F/G/O/P/S/T/X/Y and Cmd+digits do nothing now.
+- NOTE: nothing is live yet — installed configs symlink to the MAIN
+  checkout, not this worktree. After merge: tmux source-file, fresh
+  shells, Ghostty reload config, nvim :Lazy sync (installs navigator).
+
+---
+
 ## Completed: Interactive Claude pane picker (2026-07-12)
 
 ### State

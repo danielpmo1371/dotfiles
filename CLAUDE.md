@@ -74,6 +74,8 @@ config/              # Configuration files organized by tool
 
 **Package Manager**: Auto-detects available managers, prompts user on first run, caches choice in `~/.dotfiles_pkg_manager`.
 
+**Keybinding architecture (meta layer)**: Keyboard shortcut *semantics* live in repo-tracked config — `config/tmux/tmux.conf` (prefix2 `M-e`, popup/pane-nav/scrollback bindings, both `C-` and `M-` families), `config/nvim/lua/plugins/tmux-navigator.lua` (vim-aware pane nav), and mirrored meta blocks in `config/zsh/zshrc` + `config/bash/bashrc` (keep in sync; both shells are vi-mode, so every meta key the terminal can emit must be bound in insert AND command keymaps — unbound ESC+char executes as a vi command). The terminal emulator is a thin adapter only: `config/ghostty/config` maps Cmd+key to the same ESC-prefix bytes Alt produces natively on Linux and Option produces on macOS (`macos-option-as-alt`). On Linux (any emulator, SSH, bare TTY) no emulator config is needed — Alt works out of the box. Exceptions that must stay emulator-level control bytes: Cmd+C/Z (SIGINT/SIGTSTP are kernel tty semantics). Caveat: tmux `escape-time 0` can split ESC+key on slow SSH links.
+
 ### Neovim Setup
 
 LazyVim-based configuration. Plugin definitions in `config/nvim/lua/plugins/`. Custom keymaps in `config/nvim/lua/config/keymaps.lua`.
