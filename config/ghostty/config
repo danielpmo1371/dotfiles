@@ -102,62 +102,34 @@ keybind = super+\=decrease_font_size:1
 term = xterm-256color
 
 # ─────────────────────────────────────────────────────────────────────────────
-#   Map Command+⟨key⟩ → Ctrl+⟨key⟩ for letters, digits, punctuation
+#   Cmd → Meta adapter
 # ─────────────────────────────────────────────────────────────────────────────
-keybind = super+a=text:\x01
-keybind = super+b=text:\x02
+# Ghostty is a thin adapter only: Cmd+<key> emits the same ESC-prefix (meta)
+# bytes that Alt+<key> produces natively on Linux and Option+<key> already
+# produces here (macos-option-as-alt). All SEMANTICS live in repo-tracked
+# config — tmux.conf (prefix2 M-e, popups, vim-aware pane nav, M-u scrollback)
+# and the meta blocks in zshrc/bashrc. Cmd ≡ Option ≡ Alt everywhere.
+# Only keys with a bound consumer are mapped: an unbound meta key in a
+# vi-mode shell falls through to vi-command execution (destructive).
+keybind = super+e=text:\x1be
+keybind = super+a=text:\x1ba
+keybind = super+q=text:\x1bq
+keybind = super+w=text:\x1bw
+keybind = super+r=text:\x1br
+keybind = super+u=text:\x1bu
+keybind = super+d=text:\x1bd
+keybind = super+i=text:\x1bi
+keybind = super+n=text:\x1bn
+keybind = super+h=text:\x1bh
+keybind = super+j=text:\x1bj
+keybind = super+k=text:\x1bk
+keybind = super+l=text:\x1bl
+
+# Kernel tty semantics — these MUST stay literal control bytes; no shell or
+# tmux binding can raise SIGINT/SIGTSTP. EOF stays on physical Ctrl+D.
 keybind = super+c=text:\x03
-keybind = super+d=text:\x04
-keybind = super+e=text:\x05
-keybind = super+f=text:\x06
-keybind = super+g=text:\x07
-keybind = super+h=text:\x08
-keybind = super+i=text:\x09
-keybind = super+j=text:\x0A
-keybind = super+k=text:\x0B
-keybind = super+l=text:\x0C
-keybind = super+m=text:\x0D
-keybind = super+n=text:\x0E
-keybind = super+o=text:\x0F
-keybind = super+p=text:\x10
-keybind = super+q=text:\x11
-keybind = super+r=text:\x12
-keybind = super+s=text:\x13
-keybind = super+t=text:\x14
-keybind = super+u=text:\x15
-#keybind = super+v=text:\x16
-keybind = super+w=text:\x17
-keybind = super+x=text:\x18
-keybind = super+y=text:\x19
 keybind = super+z=text:\x1A
-keybind = super+1=text:\x11
-keybind = super+2=text:\x12
-keybind = super+3=text:\x13
-keybind = super+4=text:\x14
-keybind = super+5=text:\x15
-keybind = super+6=text:\x16
-keybind = super+7=text:\x17
-keybind = super+8=text:\x18
-keybind = super+9=text:\x19
-keybind = super+0=text:\x10
-keybind = super+`=text:\x00
-keybind = super+-=text:\x0D
-#keybind = super+==text:\x1D
-#keybind = super+.=text:\x0E
-#keybind = super+/=text:\x0F
-#keybind = super+'=text:\x07
-#keybind = super+;=text:\x1B
-#keybind = super+,=text:\x0C
-
-# Note: Command+E sends Ctrl+E (\x05) for tmux prefix (defined above in super+e)
-
-
-# Backslash - for nvim Claude Code toggle
-# keybind = super+backslash=text:\x1c
-
-# Suspend process (SIGTSTP)
-keybind = ctrl+z=text:\x1A
-keybind = super+z=text:\x1A
+# Cmd+V deliberately unmapped: native macOS paste.
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Tmux Window/Session Navigation with Cmd+Shift+h/j/k/l
