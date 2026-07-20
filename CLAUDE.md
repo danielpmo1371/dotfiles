@@ -74,6 +74,18 @@ config/              # Configuration files organized by tool
 
 **Package Manager**: Auto-detects available managers, prompts user on first run, caches choice in `~/.dotfiles_pkg_manager`.
 
+### Terminal-Agnostic Configuration (binding decisions)
+
+**Never reach for `config/ghostty/config` first.** Implement behaviour in the most
+portable layer that can do it: tmux → shell → app config → emulator. Emulator
+config is limited to rendering, OS/window integration, and forwarding keys the OS
+swallows (the `super+<key>` → control-code table) — it must never *implement* a
+behaviour tmux or the shell could own.
+
+Rationale and the decision test: [docs/terminal-agnostic-config.md](docs/terminal-agnostic-config.md).
+Adding a Ghostty setting that fails that test means the workflow breaks under
+every other terminal and the config has to be rewritten per emulator.
+
 ### Neovim Setup
 
 LazyVim-based configuration. Plugin definitions in `config/nvim/lua/plugins/`. Custom keymaps in `config/nvim/lua/config/keymaps.lua`.

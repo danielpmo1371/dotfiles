@@ -21,7 +21,9 @@ cd ~/repos/dotfiles
 ## What's Included
 
 - **Shell**: Zsh (with Zap plugin manager) and Bash configurations
-- **Terminal**: Ghostty configuration
+- **Terminal**: Ghostty configuration — deliberately thin. Behaviour lives in tmux
+  and the shell so it survives switching emulators; see
+  [docs/terminal-agnostic-config.md](docs/terminal-agnostic-config.md)
 - **Tmux**: Config with TPM and plugins (gruvbox, resurrect, continuum, floax)
   - Claude pane picker (`prefix i`): fzf list of every pane running Claude Code with live preview — vi keys (j/k move, `i` to filter), Enter jumps to it
 - **Neovim**: LazyVim-based configuration
