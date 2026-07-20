@@ -24,8 +24,14 @@ CLAUDE_DESKTOP_CONFIG="$HOME/Library/Application Support/Claude/claude_desktop_c
 # Flags
 SYNC_DESKTOP=false
 
-# Resolve secret:KEY_NAME references in env blocks
-# Replaces values like "secret:AZDO_PAT" with the actual secret from keychain
+# Rewrite secret:KEY_NAME references in env blocks to ${KEY_NAME}
+# Claude Code expands ${VAR} from its environment when it spawns the server, so the
+# credential never lands on disk. The shell exports these from the OS keychain
+# (config/shell/secrets.sh), which stays the single source of truth.
+#
+# Caveat: this relies on the consuming app inheriting the shell environment. True for
+# the Claude Code CLI; NOT true for GUI-launched Claude Desktop (--desktop), which
+# would see an empty value. Desktop sync is opt-in and off by default for that reason.
 resolve_secrets() {
     local config_file="$1"
     local has_secrets
@@ -38,13 +44,12 @@ resolve_secrets() {
         return 0
     fi
 
-    log_info "Resolving $has_secrets secret reference(s) from keychain..."
+    log_info "Rewriting $has_secrets secret reference(s) to \${VAR} expansion..."
 
-    local resolved="$config_file"
     local tmpfile
     tmpfile=$(mktemp)
 
-    # Extract secret references and resolve them
+    # Extract secret references and point them at the environment
     jq -r '
         .mcpServers // {} | to_entries[] |
         .key as $server |
@@ -52,16 +57,16 @@ resolve_secrets() {
         select(.value | startswith("secret:")) |
         "\($server)\t\(.key)\t\(.value | ltrimstr("secret:"))"
     ' "$config_file" | while IFS=$'\t' read -r server env_key secret_key; do
-        local secret_value
-        secret_value=$(secret "$secret_key" 2>/dev/null)
+        jq --arg server "$server" --arg key "$env_key" --arg val "\${${secret_key}}" '
+            .mcpServers[$server].env[$key] = $val
+        ' "$config_file" > "$tmpfile" && mv "$tmpfile" "$config_file"
 
-        if [[ -n "$secret_value" ]]; then
-            jq --arg server "$server" --arg key "$env_key" --arg val "$secret_value" '
-                .mcpServers[$server].env[$key] = $val
-            ' "$config_file" > "$tmpfile" && mv "$tmpfile" "$config_file"
-            log_success "Resolved secret for $server.$env_key"
+        # The value arrives at runtime from the environment, so check the keychain can
+        # supply it now - otherwise the server fails later with an opaque auth error.
+        if [[ -n "$(secret "$secret_key" 2>/dev/null)" ]]; then
+            log_success "Linked $server.$env_key -> \${$secret_key}"
         else
-            log_warn "Secret '$secret_key' not found for $server.$env_key"
+            log_warn "Secret '$secret_key' not in keychain; $server.$env_key will be empty at runtime"
         fi
     done
 }
