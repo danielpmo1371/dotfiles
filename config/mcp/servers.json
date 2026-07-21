@@ -12,6 +12,10 @@
     "command": "npx",
     "args": ["-y", "@azure-devops/mcp", "mbie-immigrationnz-prod", "--authentication", "envvar"],
     "env": {
+      "AZURE_DEVOPS_ORG_URL": "https://dev.azure.com/mbie-immigrationnz-prod",
+      "AZURE_DEVOPS_AUTH_METHOD": "pat",
+      "AZURE_DEVOPS_PAT": "secret:AZDO_PAT",
+      "AZURE_DEVOPS_DEFAULT_PROJECT": "Travel Declaration",
       "ADO_MCP_AUTH_TOKEN": "secret:AZDO_PAT"
     }
   },
