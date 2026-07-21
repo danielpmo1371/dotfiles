@@ -38,6 +38,7 @@ setopt inc_append_history  # Add commands to history file immediately (don't wai
 setopt no_share_history    # Don't pull other sessions' commands into this one's in-memory history
 setopt hist_ignore_dups    # Don't store duplicates
 setopt hist_ignore_space   # Don't store commands starting with space
+setopt ignore_eof          # ^D at the prompt won't close the shell (it's forwarded for scrolling; see config/ghostty/config)
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   History

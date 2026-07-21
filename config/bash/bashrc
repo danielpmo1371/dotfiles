@@ -32,6 +32,7 @@ echo "DEBUG: DOTFILES_DIR set to: $DOTFILES_DIR"
 #   Bash options
 # ─────────────────────────────────────────────────────────────────────────────
 set -o vi             # Vi mode
+IGNOREEOF=10          # ^D at the prompt won't close the shell (it's forwarded for scrolling; see config/ghostty/config)
 shopt -s histappend   # Append to history file
 shopt -s checkwinsize # Update LINES and COLUMNS after each command
 shopt -s cdspell      # Correct minor cd spelling errors

@@ -1,4 +1,16 @@
 # Ghostty Configuration
+#
+# KEEP THIS FILE SMALL — see docs/terminal-agnostic-config.md
+#
+# Everything configured here stops existing the moment another terminal is used
+# (Kitty, WezTerm, iTerm2, VS Code's terminal, an SSH session from a borrowed
+# machine). Behaviour belongs in tmux or the shell, which are portable; this file
+# is for rendering, OS/window integration, and forwarding keys macOS swallows.
+#
+# The super+<key> block below is exactly that forwarding: it only turns cmd into a
+# control code so tmux/the shell can act on it. Do NOT add bindings that implement
+# behaviour here (splits, tab switching, resizing) — that behaviour then has to be
+# rewritten for every other terminal, forever.
 
 # Window transparency - 0.95 means 95% opaque (5% transparent)
 # background-opacity = 0.85
@@ -107,6 +119,9 @@ term = xterm-256color
 keybind = super+a=text:\x01
 keybind = super+b=text:\x02
 keybind = super+c=text:\x03
+# super+d forwards ^D so it scrolls in nvim and tmux copy-mode (their native
+# half-page-down). The old EOF-closes-the-shell side effect is handled in the
+# shell layer (zsh ignore_eof / bash IGNOREEOF), not by neutering the key here.
 keybind = super+d=text:\x04
 keybind = super+e=text:\x05
 keybind = super+f=text:\x06
