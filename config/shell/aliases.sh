@@ -82,7 +82,7 @@ alias cc='claude -p --model haiku'
 alias gg='gemini -p'
 alias g='gemini --model gemini-2.5-flash --prompt'
 alias update-claude='sudo npm i -g @anthropic-ai/claude-code'
-alias cdang='claude --dangerously-skip-permissions --remote-control'
+alias cdang='claude --dangerously-skip-permissions --rc'
 
 # Fast one-shot query via `llm`. Provider chosen by $AI_PROVIDER (see env.sh);
 # defaults to Groq for the lowest time-to-first-token. Streams to stdout.
