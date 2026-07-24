@@ -209,5 +209,6 @@
   "alwaysThinkingEnabled": true,
   "skipDangerousModePermissionPrompt": true,
   "agentPushNotifEnabled": true,
+  "remoteControlAtStartup": true,
   "model": "claude-fable-5[1m]"
 }
