@@ -37,6 +37,42 @@ history since it was first added, so removal needs a history rewrite
      `config/claude/agents/fetch-azdo-logs.md` — check for client specifics
      inline, not just in the name.
 
+## Progress
+
+Tree-level org/project cleanup done in two follow-up PRs (#4, and the one
+that removed `azsetmbdev`/`azsetmbsit`, ado-task's `NZTD BAU` default,
+`config/mcp/servers.json`'s org URL + default project). Three keychain
+values now required for previous functionality to keep working:
+`secret_set AZDO_ORG "<org-slug>"`, `secret_set AZDO_ORG_URL
+"https://dev.azure.com/<org>"`, `secret_set AZDO_PROJECT "<project>"`
+(`AZDO_PAT` already existed).
+
+**Deliberately not touched, needs a decision:**
+- `config/mcp/servers.json`'s `azure-devops` server still has the org name
+  as a positional CLI arg (`args: [..., "mbie-immigrationnz-prod", ...]`).
+  `installers/mcp.sh`'s `resolve_secrets()` only rewrites `env` block
+  values, not `args` — genericizing this safely needs either extending
+  that function or the templating layer already scoped in
+  `docs/plans/open-source-architecture-plan.md` (Phase 2). Untested
+  guesses here risk silently breaking the live MCP connection.
+- The AZDO pipeline safety system (`config/claude/hooks/pipeline-guard.sh`,
+  `scripts/pipeline-{registry,validator}.sh`, `skills/pipeline-ops/`,
+  `agents/pipeline-runner.md`, `commands/pipe-deploy.md`,
+  `tests/test-pipeline-hooks.sh`, plus the `sdlc-framework` plugin) still
+  hardcodes pipeline id `802`, project `Travel Declaration`, stage name
+  `apply_travellerdirectives`, and service `td-iac`/`td-api` across ~10
+  files. This is the same blocker issue 14 Tier 1 item 3 already
+  identifies ("must become registry-driven config") — it's not cosmetic,
+  `802`/`apply_travellerdirectives` are the literal match conditions the
+  guard uses to block an unreviewed terraform destroy/apply. A careless
+  parameterization (e.g. a constant going unset) risks the guard failing
+  open instead of closed. Needs the registry-driven refactor as a
+  deliberate piece of work, not a find-replace pass.
+- `docs/plans/*.md`, `docs/learning/*.md`, `workflow_state.md` still
+  narrate the org/project by name, including a document that describes a
+  real PAT-in-public-repo incident. Redacting historical incident write-ups
+  is an editorial call, not addressed here.
+
 ## Plan
 
 1. Full-history secret/PII sweep (gitleaks with a wider ruleset than the

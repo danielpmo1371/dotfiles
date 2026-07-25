@@ -145,8 +145,6 @@ alias tf='terraform'
 alias az-show='az account show'
 alias azl='az account list | grep name'
 alias az-list='az account list | grep name'
-alias azsetmbdev='az account set --name "INZ_TDS_DEV"'
-alias azsetmbsit='az account set --name "INZ_TDS_SIT"'
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   File listing (uses lsd if available, falls back to ls)

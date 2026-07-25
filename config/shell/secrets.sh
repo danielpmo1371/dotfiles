@@ -29,6 +29,11 @@ if [[ -f "$SECRETS_LIB" ]]; then
     export AZURE_DEVOPS_EXT_PAT="$AZDO_PAT"
     export ADO_MCP_AUTH_TOKEN="$AZDO_PAT"
     export AZDO_ORG="$(secret AZDO_ORG 2>/dev/null)"
+    # AZDO_ORG_URL/AZDO_PROJECT back the "secret:..." refs in config/mcp/servers.json
+    # (installers/mcp.sh rewrites those to ${VAR}; Claude Code expands them from this
+    # shell's environment when it spawns the azure-devops MCP server).
+    export AZDO_ORG_URL="$(secret AZDO_ORG_URL 2>/dev/null)"
+    export AZDO_PROJECT="$(secret AZDO_PROJECT 2>/dev/null)"
     # export CLAUDE_CODE_OAUTH_TOKEN="$(secret CLAUDE_CODE_OAUTH_TOKEN 2>/dev/null)"
 
     # Groq key for the `llm` quick-query (q function). The llm-groq model classes

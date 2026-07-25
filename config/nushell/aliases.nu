@@ -66,8 +66,6 @@ alias tf = terraform
 #   Azure CLI
 # ─────────────────────────────────────────────────────────────────────────────
 alias az-show = az account show
-alias azsetmbdev = az account set --name "INZ_TDS_DEV"
-alias azsetmbsit = az account set --name "INZ_TDS_SIT"
 
 # Better az list with nushell's structured output
 def azl [] { az account list | from json | select name isDefault | sort-by isDefault -r }
