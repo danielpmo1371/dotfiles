@@ -288,8 +288,8 @@ After reviewing the previous agent's work, I recommend **OPTION 5: Combination S
 - docs/customization.md — how to personalize
 
 ## Private Data Patterns (for agents to scan/avoid)
-- `mbie-immigrationnz-prod` or `mbie` (employer)
-- `INZ_TDS_DEV`, `INZ_TDS_SIT` (Azure subscriptions)
+- `<azdo-org-slug>` (employer)
+- `<subscription-a>`, `<subscription-b>` (Azure subscriptions)
 - `10.0.0.102` (private IP)
 - `192.168.1.107` (private IP)
 - `memory-mcp:8000` (private hostname)
@@ -361,11 +361,11 @@ After reviewing the previous agent's work, I recommend **OPTION 5: Combination S
   - Identified critical verification error: 39 destroys in build 270486 (SIT/AE) marked as PASS
   - Created analysis: docs/learning/incident-2026-03-11-terraform-destroys-missed.md
   - Created summary: docs/learning/SUMMARY-2026-03-11-terraform-destroys.md
-  - Enhanced td-iac MEMORY.md with "Terraform Plan Verification Protocol -- HARD GATE" section
+  - Enhanced iac MEMORY.md with "Terraform Plan Verification Protocol -- HARD GATE" section
   - Updated docs/learning/README.md with incident entry
   - New protocol: Destroy count is FIRST check, >0 = automatic FAIL, no exceptions
   - MCP memory not available for storage (tools not loaded)
-  - Project: td-iac, Story 193236, Branch: feature/193236-Refactor-ServiceBus
+  - Project: iac, Story 193236, Branch: feature/193236-Refactor-ServiceBus
 
 ## LEARN-FROM-MISTAKE SESSION: Skill-Forge Not Used
 - [2026-03-11] Starting systematic learning analysis
@@ -417,7 +417,7 @@ After reviewing the previous agent's work, I recommend **OPTION 5: Combination S
 - Goal: Verify the registry-aware validation commit set (bd2dac7, 1fff831, f6f7bf0, 439804b) was aligned with harness purpose, not a shortcut/anti-pattern, no cross-repo breakage
 - Method: dispatched read-only review agent; empirically probed validator with adversarial registries; ran hermetic test suite
 - Verdict: directionally aligned (hardcoded PRE/PRD blocklist still supreme, registry default-deny, docs match code, tests real) BUT 4 confirmed issues:
-  1. HIGH: CD allow-authority now lives solely in workspace-writable .claude/pipeline-registry.json — agent (Edit/Write/Bash) can modify it, takes effect uncommitted, no independent code layer for non-pre/prd-substring prod stages (verified: INZ_PaaS_SHARED approved when listed)
+  1. HIGH: CD allow-authority now lives solely in workspace-writable .claude/pipeline-registry.json — agent (Edit/Write/Bash) can modify it, takes effect uncommitted, no independent code layer for non-pre/prd-substring prod stages (verified: PROD_SHARED_STAGE approved when listed)
   2. MED fail-open: stages.blocked ignored when allowed empty (validator :158 gate skips whole registry branch); papered over in REGISTRY.md prose instead of code fix (verified: blocked sitae approved via prefix fallback)
   3. MED: test suite HOME misbinding (run() :99 — HOME= binds to printf, not validator across pipe) pollutes real ~/.claude/logs/pipeline-validator.log with fake "approved" fixture entries
   4. LOW: validator matches registry by name-first, guard hook by ID-only — name/ID mismatch validates against wrong service
@@ -436,5 +436,5 @@ Commits: atomic per item, suite green before each; pathspec staging (zshrc is us
   - 8e83d05 validator: registry entry matched by cd.id first (guard-aligned); mismatch test pinned
   - ebc15fc structural protection: registry_committed_or_die in validator (CD+terraform) + mirrored check in pipeline-guard; new pipeline-registry-write-guard.sh hook (Edit/Write/NotebookEdit/Bash) registered in settings.json + installer; REGISTRY.md documents enforcement
   - 1e79b86 tests/test-pipeline-hooks.sh: 32 cases across all three hooks incl. dirty-registry fail-closed and no-registry permissive fallback (pinned as known weakness); CLAUDE.md updated
-- Verification: 33+32 tests green; live td workspace re-validated (sitae approved, INZ_PaaS_SHARED blocked); installer delivered write-guard symlink; only user-dirty zshrc + this file remain uncommitted
+- Verification: 33+32 tests green; live example workspace re-validated (sitae approved, PROD_SHARED_STAGE blocked); installer delivered write-guard symlink; only user-dirty zshrc + this file remain uncommitted
 - Remaining known gaps (not in approved scope, surfaced to user): guard skips checks 0-2 with no registry; guard terraform constants (802) still hardcoded; agent-doc diagram claims guard invokes validator; stagesToSkip derived from caller allStages not registry stages.all

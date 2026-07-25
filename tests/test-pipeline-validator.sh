@@ -279,15 +279,11 @@ assert_blocked "terraform missing environment" "MISSING_ENVIRONMENT" 1 "$WS" \
     '{"service":"svc-terraform","type":"terraform","branch":"develop","pipelineId":"950"}'
 assert_blocked "terraform invalid location" "LOCATION_NOT_ALLOWED" 1 "$WS" \
     '{"service":"svc-terraform","type":"terraform","branch":"develop","pipelineId":"950","environment":"sit","location":"eu"}'
-run "$WS_BARE" '{"service":"x","type":"terraform","branch":"develop","pipelineId":"999","project":"P","environment":"sit"}'
-if [[ $RC -eq 0 && $(jq -r '.templateParameters.deployToggle' <<< "$OUT") == "plan" ]] \
-   && jq -e '.stagesToSkip | length > 0' <<< "$OUT" > /dev/null; then
-    echo -e "  ${GREEN}PASS${NC} terraform without registry: conservative plan-only defaults"
-    PASS=$((PASS + 1))
-else
-    echo -e "  ${RED}FAIL${NC} terraform no-registry fallback — got rc=$RC out=$OUT"
-    FAIL=$((FAIL + 1))
-fi
+# No registry (or a registry with no matching terraform.id) means no
+# verified stage list to derive stagesToSkip from — refuse to guess rather
+# than approve with a stage-name guess-list. See pipeline-validator.sh Rule 4.
+assert_blocked "terraform without a registry match: fails closed, does not guess stagesToSkip" "TERRAFORM_NOT_REGISTERED" 1 "$WS_BARE" \
+    '{"service":"x","type":"terraform","branch":"develop","pipelineId":"999","project":"P","environment":"sit"}'
 
 echo ""
 echo -e "${BLUE}=== Summary ===${NC}"

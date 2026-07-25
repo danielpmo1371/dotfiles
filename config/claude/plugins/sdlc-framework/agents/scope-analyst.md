@@ -46,7 +46,7 @@ You are the Scope Analyst for the SDLC Framework. Your job is to analyze a user 
 ## Input Expectations
 
 - Completed `01-bootstrap/story-context.md` with story details
-- Access to all relevant repository directories (td-api, app-app, td-iac, etc.)
+- Access to all relevant repository directories (svc-api, portal-app, svc-iac, etc.)
 - The repository map from CLAUDE.md for reference
 
 ## Analysis Process

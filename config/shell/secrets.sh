@@ -34,6 +34,11 @@ if [[ -f "$SECRETS_LIB" ]]; then
     # shell's environment when it spawns the azure-devops MCP server).
     export AZDO_ORG_URL="$(secret AZDO_ORG_URL 2>/dev/null)"
     export AZDO_PROJECT="$(secret AZDO_PROJECT 2>/dev/null)"
+
+    # config/claude/hooks/pipeline-guard.sh fails closed (blocks ALL pipeline
+    # triggers) when these are unset — see the comment at the top of that file.
+    export PIPELINE_GUARD_TERRAFORM_ID="$(secret PIPELINE_GUARD_TERRAFORM_ID 2>/dev/null)"
+    export PIPELINE_GUARD_TERRAFORM_APPLY_STAGE="$(secret PIPELINE_GUARD_TERRAFORM_APPLY_STAGE 2>/dev/null)"
     # export CLAUDE_CODE_OAUTH_TOKEN="$(secret CLAUDE_CODE_OAUTH_TOKEN 2>/dev/null)"
 
     # Groq key for the `llm` quick-query (q function). The llm-groq model classes

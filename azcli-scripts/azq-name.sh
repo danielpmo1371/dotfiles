@@ -5,7 +5,7 @@
 if [ -z "$1" ]; then
   echo "Error: Resource name filter is required"
   echo "Usage: $0 <resource_name_filter>"
-  echo "Example: $0 inztdsaes"
+  echo "Example: $0 myresource"
   exit 1
 fi
 

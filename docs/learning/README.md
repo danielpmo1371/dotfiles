@@ -58,7 +58,7 @@ When things go wrong, we don't just fix them—we **learn from them** and **prev
 
 ---
 
-### 2026-03-11: Terraform Plan Destroys Missed (td-iac)
+### 2026-03-11: Terraform Plan Destroys Missed (iac)
 
 **What Happened**: Agent reviewed terraform plan output for build 270486 (SIT/AE) and marked it as PASS despite 39 destroy actions in the plan. The destroys were Service Bus application-level resources (subscriptions, rules, SAS policies) that would have been deleted from Azure on apply.
 

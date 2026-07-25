@@ -120,7 +120,7 @@ You are the Retrospective Analyst for the SDLC Framework. Your job is to analyze
 
 ## Analysis Guidelines
 
-- Be specific — "scope analysis was incomplete" is less useful than "scope analysis missed the APIM policy changes because it didn't check the td-apim repo"
+- Be specific — "scope analysis was incomplete" is less useful than "scope analysis missed the APIM policy changes because it didn't check the svc-apim repo"
 - Focus on systemic improvements, not one-off fixes
 - Prioritize action items by impact and effort
 - Distinguish between framework issues and story-specific issues

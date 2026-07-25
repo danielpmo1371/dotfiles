@@ -10,7 +10,7 @@
   "azure-devops": {
     "type": "stdio",
     "command": "npx",
-    "args": ["-y", "@azure-devops/mcp", "mbie-immigrationnz-prod", "--authentication", "envvar"],
+    "args": ["-y", "@azure-devops/mcp", "secret:AZDO_ORG", "--authentication", "envvar"],
     "env": {
       "AZURE_DEVOPS_ORG_URL": "secret:AZDO_ORG_URL",
       "AZURE_DEVOPS_AUTH_METHOD": "pat",

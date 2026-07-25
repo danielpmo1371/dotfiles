@@ -5,8 +5,8 @@ description: |
 
   <example>
   Context: User wants to deploy their current branch.
-  user: "Deploy td-api to sit"
-  assistant: "I'll use the pipeline-runner agent to trigger the CI/CD pipeline for td-api."
+  user: "Deploy svc-api to sit"
+  assistant: "I'll use the pipeline-runner agent to trigger the CI/CD pipeline for svc-api."
   <commentary>
   User wants pipeline deployment. Agent handles the full trigger-monitor-diagnose loop.
   </commentary>
@@ -118,9 +118,9 @@ After triggering, poll status:
 ### Terraform Pipelines
 Terraform builds have a ManualValidation gate that keeps the build "inProgress" forever. Do NOT wait for overall build completion:
 1. Wait 15 seconds for the build to queue
-2. Call `get_builds` with pipeline definition ID 802, top 1, to find the buildId
+2. Call `get_builds` with pipeline definition ID <TERRAFORM_PIPELINE_ID>, top 1, to find the buildId
 3. Call `get_build_status` with the buildId — check the timeline/stages
-4. Look for the **plan job** (`plan infra travellerdirectives`). Poll every 30s until this specific job completes.
+4. Look for the **plan job** (`plan infra`). Poll every 30s until this specific job completes.
 5. Once the plan job is `completed`: if result is `succeeded` → done, report success. If `failed` → trigger failure recovery.
 6. **Stop monitoring immediately** — do not wait for the review gate or apply stage.
 
@@ -137,26 +137,26 @@ When a pipeline fails:
 
 When the detected service has a `terraform` key in the registry (instead of ci/cd), follow this flow:
 
-1. **Detect**: Service registry entry has `"terraform": { "id": 802, ... }` — this is a terraform pipeline
+1. **Detect**: Service registry entry has `"terraform": { "id": <TERRAFORM_PIPELINE_ID>, ... }` — this is a terraform pipeline
 2. **Parameters**: The user must specify `environment` (dev/sit/uat) and optionally `location` (ae/ase, default: ae)
 3. **Validate**: Send type `"terraform"` to pipeline-validator.sh with environment and location:
    ```bash
-   echo '{"service":"td-iac","type":"terraform","branch":"BRANCH","pipelineId":"802","project":"Travel Declaration","environment":"sit","location":"ae"}' | ~/.claude/scripts/pipeline-validator.sh
+   echo '{"service":"iac","type":"terraform","branch":"BRANCH","pipelineId":"<TERRAFORM_PIPELINE_ID>","project":"Example Project","environment":"sit","location":"ae"}' | ~/.claude/scripts/pipeline-validator.sh
    ```
 4. **Trigger**: The validator returns `templateParameters` and `stagesToSkip`. Pass BOTH to the MCP call:
    - `templateParameters`: `{"environment":"sit","location":"ae","deployToggle":"deploy","requireManualApproval":"True","TF_LOG":"NONE"}`
-   - `stagesToSkip`: `["apply_travellerdirectives"]` (ALWAYS — apply is never run)
+   - `stagesToSkip`: `["apply_infra"]` (ALWAYS — apply is never run)
    - `resources.repositories.self.refName`: branch ref
 5. **Monitor**: Use `get_build_status` to poll, but with **terraform-specific completion logic**:
-   - The build will have a `plan_travellerdirectives` stage followed by a ManualValidation gate (review job) and an `apply_travellerdirectives` stage.
+   - The build will have a `plan_infra` stage followed by a ManualValidation gate (review job) and an `apply_infra` stage.
    - The plan job completing is what matters. The ManualValidation gate will keep the build status as "inProgress" indefinitely — **do NOT wait for it**.
-   - **Completion check**: Use `mcp__azure-devops__pipelines_get_build_status` to get the timeline. Look for the plan job (`plan infra travellerdirectives`). Once that job's status is `completed`:
+   - **Completion check**: Use `mcp__azure-devops__pipelines_get_build_status` to get the timeline. Look for the plan job (`plan infra`). Once that job's status is `completed`:
      - If its result is `succeeded` → the plan is done, report success immediately
      - If its result is `failed` → the plan failed, trigger failure recovery
    - **Do NOT poll until the overall build status is "completed"** — it won't complete until the manual gate times out (5 hours) or is rejected.
 6. **Report**: Report plan results. The build logs contain the terraform plan output. Include a note that the ManualValidation gate is intentionally left unapproved.
 
-**CRITICAL**: Terraform pipelines are PLAN ONLY. The `apply_travellerdirectives` stage is ALWAYS skipped. This is enforced by the validator and the registry's `alwaysSkipStages` field. Never override this. The ManualValidation gate should be left to time out or manually rejected — never approved.
+**CRITICAL**: Terraform pipelines are PLAN ONLY. The `apply_infra` stage is ALWAYS skipped. This is enforced by the validator and the registry's `alwaysSkipStages` field. Never override this. The ManualValidation gate should be left to time out or manually rejected — never approved.
 
 ## Files & Logs
 
@@ -228,7 +228,7 @@ If the guard hook blocks a call, it appears in the detail log with the reason �
 ```
 ## Terraform Plan Summary
 
-**Service:** td-iac
+**Service:** iac
 **Branch:** {branch}
 **Environment:** {environment}
 **Location:** {location}
