@@ -4,9 +4,12 @@ Some things in here stopped being config and became products. They should live
 in their own repos: own tests, own versioning, installable without cloning all
 of dotfiles.
 
-**Blocked on:** `todo.md` "remove non-public data from repo". Candidates 3 and 4
+**Blocked on:** issue 16 (non-public-data-audit). Candidates 3 and 4
 carry employer identifiers (`mbie-immigrationnz-prod`, `travellerdirectives`,
 `INZ_*`, pipeline id `802`) that leak on publish. Tier 1 does not and can go first.
+
+**Hosting:** issue 17 decides every extracted repo goes under the personal
+account (`danielpmo1371`), not `nuvemlabs`.
 
 ## Tier 1 — low coupling, generally useful
 
@@ -49,6 +52,18 @@ carry employer identifiers (`mbie-immigrationnz-prod`, `travellerdirectives`,
    `transform` bindings. The other tmux-*.sh stay — help/tips popups are pure
    content about this config's own keybinds.
 
+6. **Claude session journal** (~250 LOC)
+   `config/claude/hooks/logging/{lib-session-dir,response-summarizer,
+   session-goal-tracker,user-request-logger}.sh` +
+   `util-scripts/tmux-claude-summaries.sh`
+   Missed in the original pass of this issue. Stop-hook writes a fast
+   metadata entry per session then a best-effort Groq-generated ~100-word
+   summary; the tmux popup renders it project-scoped. No employer coupling,
+   genuinely differentiated (session history + AI summary, browsable without
+   leaving tmux). Blocked on the same fix already noted below (`~/repos/
+   dotfiles/tmp` path) before it can leave this repo — extracting it and
+   fixing the path are the same change.
+
 ## Checked and explicitly NOT candidates
 
 - `config/claude/hooks/{memory,utilities}/` (~10500 LOC JS) — **vendored, not ours**.
@@ -73,7 +88,8 @@ Fix: one `CLAUDE_SESSIONS_DIR` defaulting to
 
 ## Order
 
-1. remove non-public data (todo.md) — unblocks everything, and is a live exposure
-2. Tier 1 items 1 and 2 — no dependency on step 1
-3. parameterise employer constants, then item 3
-4. item 4, item 5
+1. issue 16 (non-public data) — unblocks everything, and is a live exposure
+2. issue 17 (hosting decision) — needed before the first repo is created
+3. Tier 1 items 1, 2, and 6 — no dependency on step 1
+4. parameterise employer constants, then item 3
+5. item 4, item 5
