@@ -96,6 +96,47 @@ genericized. Historical filename citations of the now-deleted
 `util-scripts/copy-mbie-pat.sh` were left as literal text (documenting what
 a past commit deleted, not a live identifier).
 
+**Second pass — a different category than org/project (private-network
+infra + personal PII), found on re-review after PR #4 merged:**
+- **Private LAN IPs**: `10.0.0.102` (`config/mcp/servers.json`'s
+  `browser-network.url`, `config/mcp/README.md`) and `192.168.1.107`
+  (`config/mcp/mcp-env.template`) were real internal IPs for the home
+  server. `README.md`/`mcp-env.template` were plain placeholder swaps.
+  `servers.json`'s `url` was a live functional value with no existing
+  indirection mechanism to reuse — `env` and `args` secrets already had
+  one (`resolve_secrets`/`resolve_arg_secrets` in `installers/mcp.sh`), but
+  nothing handled a server's top-level `url` field. Added
+  `resolve_url_secrets()` (same `secret:KEY` → `${KEY}` whole-value
+  rewrite, same untested-for-non-`env`-fields caveat as `args`).
+  **While adding it, found and fixed a real bug**: the early `return 0` in
+  `resolve_secrets()` when a config has no `env`-based secrets would have
+  skipped `resolve_arg_secrets`/`resolve_url_secrets` entirely — didn't
+  bite here only because `azure-devops` always has an `env` secret too, so
+  it always happened to fall through. Restructured so the arg/url
+  resolvers always run regardless of whether `env` has any.
+  **Action needed**: `secret_set MCP_BROWSER_URL "http://<host>:3002/sse"`
+  (the actual browser-network host) before `./install.sh --mcp`.
+- **Real personal email** `danielpmo@gmail.com`, tracked in
+  `docs/plans/open-source-vision-analysis.md` and `workflow_state.md`
+  (both were citing what used to be in the untracked `claude.json`) —
+  redacted to `<user-email>`.
+- **Full name leak**: `config/bash/bash_aliases:6` had
+  `/mnt/c/Users/daniel.paiva/...` — real first+last name via a Windows
+  path. Genericized to `$USER`.
+- **First-name-only path mentions** (`/Users/daniel/...`) across
+  `config/claude/skills/archer-verification/SKILL.md` and six
+  `docs/learning/`/`docs/plans/` files — genericized to `/Users/you/`.
+- **Correction**: `archer-verification` was mischaracterized above as
+  "named after a specific client project." It isn't — it's the user's own
+  personal side project (a Telegram bot + persistent Claude container
+  called archer-pro-active), not a client's. No employer info in it, only
+  the path/name exposure just fixed.
+- `workflow_state.md`'s own "Private Data Patterns" scan-list ironically
+  contained the literal sensitive values it was cataloguing (the email,
+  both IPs, the WSL path) — genericized the list itself, and dropped a
+  stale note suggesting `danielpmo1371` → `nuvemlabs`, superseded by
+  issue 17's decision to host under the personal account.
+
 ## Still open
 
 - **The git-history rewrite itself** (see Plan below) — nothing in this

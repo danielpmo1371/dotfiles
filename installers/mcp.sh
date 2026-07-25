@@ -40,37 +40,39 @@ resolve_secrets() {
          select(.value | startswith("secret:"))] | length
     ' "$config_file")
 
-    if [[ "$has_secrets" -eq 0 ]]; then
-        return 0
+    if [[ "$has_secrets" -gt 0 ]]; then
+        log_info "Rewriting $has_secrets secret reference(s) to \${VAR} expansion..."
+
+        local tmpfile
+        tmpfile=$(mktemp)
+
+        # Extract secret references and point them at the environment
+        jq -r '
+            .mcpServers // {} | to_entries[] |
+            .key as $server |
+            .value.env // {} | to_entries[] |
+            select(.value | startswith("secret:")) |
+            "\($server)\t\(.key)\t\(.value | ltrimstr("secret:"))"
+        ' "$config_file" | while IFS=$'\t' read -r server env_key secret_key; do
+            jq --arg server "$server" --arg key "$env_key" --arg val "\${${secret_key}}" '
+                .mcpServers[$server].env[$key] = $val
+            ' "$config_file" > "$tmpfile" && mv "$tmpfile" "$config_file"
+
+            # The value arrives at runtime from the environment, so check the keychain can
+            # supply it now - otherwise the server fails later with an opaque auth error.
+            if [[ -n "$(secret "$secret_key" 2>/dev/null)" ]]; then
+                log_success "Linked $server.$env_key -> \${$secret_key}"
+            else
+                log_warn "Secret '$secret_key' not in keychain; $server.$env_key will be empty at runtime"
+            fi
+        done
     fi
 
-    log_info "Rewriting $has_secrets secret reference(s) to \${VAR} expansion..."
-
-    local tmpfile
-    tmpfile=$(mktemp)
-
-    # Extract secret references and point them at the environment
-    jq -r '
-        .mcpServers // {} | to_entries[] |
-        .key as $server |
-        .value.env // {} | to_entries[] |
-        select(.value | startswith("secret:")) |
-        "\($server)\t\(.key)\t\(.value | ltrimstr("secret:"))"
-    ' "$config_file" | while IFS=$'\t' read -r server env_key secret_key; do
-        jq --arg server "$server" --arg key "$env_key" --arg val "\${${secret_key}}" '
-            .mcpServers[$server].env[$key] = $val
-        ' "$config_file" > "$tmpfile" && mv "$tmpfile" "$config_file"
-
-        # The value arrives at runtime from the environment, so check the keychain can
-        # supply it now - otherwise the server fails later with an opaque auth error.
-        if [[ -n "$(secret "$secret_key" 2>/dev/null)" ]]; then
-            log_success "Linked $server.$env_key -> \${$secret_key}"
-        else
-            log_warn "Secret '$secret_key' not in keychain; $server.$env_key will be empty at runtime"
-        fi
-    done
-
+    # NOT gated on has_secrets above — a server can have an args/url secret
+    # with no env secret at all (browser-network is exactly that case), and
+    # an early return here would silently skip resolving those.
     resolve_arg_secrets "$config_file"
+    resolve_url_secrets "$config_file"
 }
 
 # Same rewrite as resolve_secrets, but for positional args (e.g. the
@@ -117,6 +119,46 @@ resolve_arg_secrets() {
             log_success "Linked $server.args[$arg_index] -> \${$secret_key}"
         else
             log_warn "Secret '$secret_key' not in keychain; $server.args[$arg_index] will be literal \${$secret_key} at runtime"
+        fi
+    done
+}
+
+# Same rewrite as resolve_secrets, but for a top-level "url" field (e.g. an
+# SSE/HTTP server whose endpoint embeds a private-network host, like
+# browser-network). The whole url is stored as one secret — this does
+# whole-value substitution only, not partial ${VAR}-in-a-string templating
+# (that's the templating layer docs/plans/open-source-architecture-plan.md
+# Phase 2 already scopes; this is the minimal fix that doesn't require it).
+resolve_url_secrets() {
+    local config_file="$1"
+    local has_url_secrets
+    has_url_secrets=$(jq -r '
+        [.mcpServers // {} | to_entries[] | .value.url // empty |
+         select(type == "string" and startswith("secret:"))] | length
+    ' "$config_file")
+
+    if [[ "$has_url_secrets" -eq 0 ]]; then
+        return 0
+    fi
+
+    log_info "Rewriting $has_url_secrets secret reference(s) in url to \${VAR} expansion..."
+
+    local tmpfile
+    tmpfile=$(mktemp)
+
+    jq -r '
+        .mcpServers // {} | to_entries[] |
+        select(.value.url? | type == "string" and startswith("secret:")) |
+        "\(.key)\t\(.value.url | ltrimstr("secret:"))"
+    ' "$config_file" | while IFS=$'\t' read -r server secret_key; do
+        jq --arg server "$server" --arg val "\${${secret_key}}" '
+            .mcpServers[$server].url = $val
+        ' "$config_file" > "$tmpfile" && mv "$tmpfile" "$config_file"
+
+        if [[ -n "$(secret "$secret_key" 2>/dev/null)" ]]; then
+            log_success "Linked $server.url -> \${$secret_key}"
+        else
+            log_warn "Secret '$secret_key' not in keychain; $server.url will be literal \${$secret_key} at runtime"
         fi
     done
 }

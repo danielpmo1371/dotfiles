@@ -290,13 +290,15 @@ After reviewing the previous agent's work, I recommend **OPTION 5: Combination S
 ## Private Data Patterns (for agents to scan/avoid)
 - `<azdo-org-slug>` (employer)
 - `<subscription-a>`, `<subscription-b>` (Azure subscriptions)
-- `10.0.0.102` (private IP)
-- `192.168.1.107` (private IP)
-- `memory-mcp:8000` (private hostname)
-- `danielpmo1371` (private GitHub username) — replace with `nuvemlabs`
-- `danielpmo@gmail.com` (email)
+- `<private-ip>` patterns (e.g. 10.x.x.x, 192.168.x.x)
+- `<private-hostname>:<port>` (internal service hostnames)
+- `<personal-email>`
 - Any PAT/token values
-- `/c/repos/`, `/mnt/c/Users/daniel.paiva/` (WSL paths)
+- `/c/repos/`, `/mnt/c/Users/<username>/` (WSL paths)
+
+Note: `danielpmo1371` (the GitHub account this repo is hosted under) is not
+on this list — see issues/17-repo-hosting-decision.md, it's the intended
+public identity, not something to scrub.
 
 ## Log
 - [2026-03-04] Audit complete: identified all private data across 215 tracked files
@@ -352,7 +354,7 @@ After reviewing the previous agent's work, I recommend **OPTION 5: Combination S
     - Updated Step 5 with explicit path examples ($DOTFILES_REPO anchor)
     - Updated Step 6 to distinguish project vs global CLAUDE.md
     - Updated Integration Points with full paths
-    - Fixed EXAMPLES.md: removed hardcoded /Users/daniel paths
+    - Fixed EXAMPLES.md: removed hardcoded /Users/you paths
     - Fixed REFERENCE.md: updated cross-referencing diagram with $DOTFILES_REPO
   - Re-validated: 21 pass, 1 warning (512 lines, acceptable for critical fix)
   - Skill now provides clear context for forked agents

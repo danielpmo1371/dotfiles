@@ -138,7 +138,7 @@ Reference Layer (Knowledge base):
 **Error Message Format**:
 ```
 BLOCKED by file-ownership-guard hook:
-  File: /Users/daniel/.local/lib/secrets/secrets.sh
+  File: /Users/you/.local/lib/secrets/secrets.sh
   Reason: Not tracked in current git repo
   Location: Appears to be installed dependency
 
@@ -150,7 +150,7 @@ Next steps:
   3. Re-run installer to apply changes
 
 If this IS correct (e.g., symlink), verify with:
-  readlink -f /Users/daniel/.local/lib/secrets/secrets.sh
+  readlink -f /Users/you/.local/lib/secrets/secrets.sh
 ```
 
 **Features**:
@@ -519,22 +519,22 @@ Use the `/learn-from-mistake` skill for guided post-mortem analysis:
 ### Hook Testing
 ```bash
 # Test 1: Block edit to installed file
-echo '{"tool_name":"Edit","tool_input":{"file_path":"/Users/daniel/.local/lib/secrets/secrets.sh"}}' | \
+echo '{"tool_name":"Edit","tool_input":{"file_path":"/Users/you/.local/lib/secrets/secrets.sh"}}' | \
   config/claude/hooks/file-ownership-guard.sh
 # Expected: exit 2, helpful error message
 
 # Test 2: Allow edit to tracked file
-echo '{"tool_name":"Edit","tool_input":{"file_path":"/Users/daniel/repos/dotfiles/README.md"}}' | \
+echo '{"tool_name":"Edit","tool_input":{"file_path":"/Users/you/repos/dotfiles/README.md"}}' | \
   config/claude/hooks/file-ownership-guard.sh
 # Expected: exit 0
 
 # Test 3: Allow edit to symlinked file
-echo '{"tool_name":"Edit","tool_input":{"file_path":"/Users/daniel/.config/nvim/init.lua"}}' | \
+echo '{"tool_name":"Edit","tool_input":{"file_path":"/Users/you/.config/nvim/init.lua"}}' | \
   config/claude/hooks/file-ownership-guard.sh
 # Expected: exit 0 (if symlinked to repo)
 
 # Test 4: Warn about ~/.config/ non-symlink
-echo '{"tool_name":"Edit","tool_input":{"file_path":"/Users/daniel/.config/unknown/file.txt"}}' | \
+echo '{"tool_name":"Edit","tool_input":{"file_path":"/Users/you/.config/unknown/file.txt"}}' | \
   config/claude/hooks/file-ownership-guard.sh
 # Expected: exit 2 with verification message
 ```

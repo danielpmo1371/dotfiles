@@ -39,6 +39,11 @@ if [[ -f "$SECRETS_LIB" ]]; then
     # triggers) when these are unset — see the comment at the top of that file.
     export PIPELINE_GUARD_TERRAFORM_ID="$(secret PIPELINE_GUARD_TERRAFORM_ID 2>/dev/null)"
     export PIPELINE_GUARD_TERRAFORM_APPLY_STAGE="$(secret PIPELINE_GUARD_TERRAFORM_APPLY_STAGE 2>/dev/null)"
+
+    # Backs config/mcp/servers.json's browser-network "secret:MCP_BROWSER_URL"
+    # (installers/mcp.sh resolve_url_secrets). Full URL incl. scheme/port/path,
+    # e.g. "http://<host>:3002/sse" — whichever private-network host runs BrowserMCP.
+    export MCP_BROWSER_URL="$(secret MCP_BROWSER_URL 2>/dev/null)"
     # export CLAUDE_CODE_OAUTH_TOKEN="$(secret CLAUDE_CODE_OAUTH_TOKEN 2>/dev/null)"
 
     # Groq key for the `llm` quick-query (q function). The llm-groq model classes
