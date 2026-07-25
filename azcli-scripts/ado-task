@@ -4,7 +4,8 @@
 
 set -euo pipefail
 
-readonly DEFAULT_ORG="https://dev.azure.com/mbie-immigrationnz-prod"
+readonly DEFAULT_ORG="https://dev.azure.com/${AZDO_ORG:-}"
+readonly DEFAULT_PROJECT="${ADO_PROJECT:-}"
 readonly PAT_FILE="${HOME}/.ado-pat"
 readonly DEFAULT_OUTPUT_DIR="${ADO_OUTPUT_DIR:-/repos/user_stories}"
 
@@ -40,6 +41,7 @@ Examples:
 Environment:
     AZURE_DEVOPS_EXT_PAT    Personal Access Token (can also use 'login' command)
     ADO_ORG                 Organization URL (default: $DEFAULT_ORG)
+    ADO_PROJECT             Fallback project name when a work item lacks one
     ADO_OUTPUT_DIR          Default output directory (default: $DEFAULT_OUTPUT_DIR)
 EOF
     exit 0
@@ -146,12 +148,12 @@ get_project_from_workitem() {
     local id="$1"
     local json
     json=$(fetch_work_item "$id" "none") || return 1
-    echo "$json" | jq -r '.fields["System.TeamProject"] // "NZTD BAU"'
+    echo "$json" | jq -r --arg default "$DEFAULT_PROJECT" '.fields["System.TeamProject"] // $default'
 }
 
 fetch_comments() {
     local id="$1"
-    local project="${2:-NZTD BAU}"
+    local project="${2:-$DEFAULT_PROJECT}"
     # URL encode the project name
     local encoded_project
     encoded_project=$(printf '%s' "$project" | jq -sRr @uri)
@@ -160,7 +162,7 @@ fetch_comments() {
 
 fetch_revisions() {
     local id="$1"
-    local project="${2:-NZTD BAU}"
+    local project="${2:-$DEFAULT_PROJECT}"
     local encoded_project
     encoded_project=$(printf '%s' "$project" | jq -sRr @uri)
     api_call "wit/workItems/${id}/revisions?api-version=7.1" "$encoded_project"

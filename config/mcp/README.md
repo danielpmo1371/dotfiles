@@ -36,7 +36,9 @@ There are two browser MCP servers for different use cases:
 - **browser-network** (SSE at `http://10.0.0.102:3002/sse`) — Connects to a BrowserMCP instance running on another machine on the private network. Use this for remote browser automation.
 
 ### Other Servers
-- **azure-devops** (stdio) — Azure DevOps MCP for work items, repos, and pipelines
+- **azure-devops** (stdio) — Azure DevOps MCP for work items, repos, and pipelines.
+  Org/project/PAT are keychain-backed, not hardcoded: `secret_set AZDO_PAT "..."`,
+  `secret_set AZDO_ORG_URL "https://dev.azure.com/<org>"`, `secret_set AZDO_PROJECT "<project>"`.
 - **sequential-thinking** (stdio) — Step-by-step reasoning
 - **puppeteer** (stdio) — Browser automation via Puppeteer
 - **fetch** (stdio) — HTTP fetch utility

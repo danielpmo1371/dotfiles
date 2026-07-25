@@ -37,6 +37,80 @@ history since it was first added, so removal needs a history rewrite
      `config/claude/agents/fetch-azdo-logs.md` — check for client specifics
      inline, not just in the name.
 
+## Progress
+
+Working-tree org/project identifier cleanup is done (four follow-up commits
+on PR #4). This does NOT include the git-history rewrite from the Plan
+section below — everything here is a current-tree fix; the strings still
+exist in past commits until that history rewrite happens.
+
+**Keychain values now required** for previously-working functionality to
+keep working (all via `secret_set KEY "value"`):
+`AZDO_ORG` (org slug), `AZDO_ORG_URL` (full URL), `AZDO_PROJECT`,
+`PIPELINE_GUARD_TERRAFORM_ID`, `PIPELINE_GUARD_TERRAFORM_APPLY_STAGE`
+(`AZDO_PAT` already existed). Until set, `pipeline-guard.sh` fails closed —
+**every** pipeline trigger is blocked, not just terraform ones — by design;
+see the comment block at the top of that file.
+
+**`config/mcp/servers.json`'s positional org arg**: `installers/mcp.sh`'s
+`resolve_secrets()` now also rewrites `secret:KEY` inside `args` arrays
+(`resolve_arg_secrets()`), not just `env` blocks, and `servers.json` uses
+`"secret:AZDO_ORG"` in place of the literal org name. **Caveat, stated in
+code comments**: unlike `env`, it is *not verified* that Claude Code expands
+`${VAR}` inside `args` at spawn time the same way. If it doesn't, the
+azure-devops MCP server gets the literal string `${AZDO_ORG}` and fails
+loudly at connect time — the deliberately safe failure mode, since writing
+the raw secret into `args` on disk would defeat the whole point of the
+indirection. Needs a live test against a real Claude Code + keychain setup
+to confirm either way.
+
+**The AZDO pipeline safety system**
+(`config/claude/hooks/pipeline-guard.sh`, `scripts/pipeline-validator.sh`)
+no longer hardcodes pipeline id `802` / stage `apply_travellerdirectives`:
+- `pipeline-guard.sh`'s Check 4 (terraform apply-stage enforcement) now
+  reads `PIPELINE_GUARD_TERRAFORM_ID`/`PIPELINE_GUARD_TERRAFORM_APPLY_STAGE`
+  from the environment and **fails closed** (blocks ALL pipeline triggers,
+  not just terraform ones) when either is unset. This check deliberately
+  stays independent of `pipeline-registry.json` — it's the only protection
+  active when the AI isn't inside a registered project directory, so it
+  can't depend on a registry being found.
+- `pipeline-validator.sh`'s Rule 4 fallback (no registry match for a
+  terraform `pipelineId`) no longer emits a hardcoded guess-list of stage
+  names to skip (`apply_travellerdirectives`, `apply_flightchecker`,
+  `apply_advancedpassengerprocessing`, ...). It now **refuses to approve**
+  (`TERRAFORM_NOT_REGISTERED`) instead. This is a genuine safety
+  improvement, not just deidentification: a guessed stage-name list is
+  wrong by construction for any org whose terraform layout differs, so an
+  actual apply/destroy stage with a different name could have slipped
+  through unskipped. Refusing to guess can't make that mistake.
+- Both test suites (`tests/test-pipeline-hooks.sh`,
+  `tests/test-pipeline-validator.sh`) updated to match — 33/33 passing on
+  each, including new cases for the fail-closed-when-unconfigured path.
+- Doc/example references (`pipeline-runner.md`, `pipe-deploy.md`,
+  `REGISTRY.md`, the `sdlc-framework` plugin's example repo names) swapped
+  to generic placeholders.
+
+`docs/plans/*.md`, `docs/learning/*.md`, `workflow_state.md`: org/project
+name and the terraform-destroy incident's `Pipeline 802`/`td-iac` references
+genericized. Historical filename citations of the now-deleted
+`util-scripts/copy-mbie-pat.sh` were left as literal text (documenting what
+a past commit deleted, not a live identifier).
+
+## Still open
+
+- **The git-history rewrite itself** (see Plan below) — nothing in this
+  progress section touches history, only the current tree.
+- `router-backups/` — still present, still needs the byte-level check and
+  removal from history.
+- `secrets/secrets-list-macos` — still needs a look.
+- `config/claude/skills/archer-verification/`,
+  `config/claude/skills/fetch-azdo-logs/`,
+  `config/claude/agents/fetch-azdo-logs.md` — named after / may reference a
+  specific client project; not reviewed in this pass.
+- Live verification that the keychain-backed values actually work end to
+  end (`./install.sh --mcp`, then a real `ado-task` call and an actual
+  azure-devops MCP connection) — untestable from this environment.
+
 ## Plan
 
 1. Full-history secret/PII sweep (gitleaks with a wider ruleset than the

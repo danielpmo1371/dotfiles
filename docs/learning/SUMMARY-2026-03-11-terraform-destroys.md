@@ -4,14 +4,14 @@
 **Error Type**: Verification process failure -- failed to flag critical terraform plan output
 **Severity**: High (39 Azure resources could have been destroyed if pipeline apply proceeded)
 **Status**: Documented and safeguarded
-**Project**: td-iac (Service Bus Refactoring, Story 193236)
+**Project**: iac (Service Bus Refactoring, Story 193236)
 
 ---
 
 ## What Happened
 
 ### The Issue
-Build 270486 (SIT/AE, Pipeline 802, branch feature/193236-Refactor-ServiceBus) produced a terraform plan with 39 destroy actions. These destroys represent Service Bus application-level resources (subscriptions, subscription rules, SAS authorization policies) that exist in the Terraform state but were removed from the configuration as part of the Service Bus refactoring.
+Build 270486 (SIT/AE, the terraform pipeline, branch feature/193236-Refactor-ServiceBus) produced a terraform plan with 39 destroy actions. These destroys represent Service Bus application-level resources (subscriptions, subscription rules, SAS authorization policies) that exist in the Terraform state but were removed from the configuration as part of the Service Bus refactoring.
 
 ### The Mistake
 The reviewing agent marked the plan as PASS despite the 39 destroys. The correct action was to immediately flag this as a critical failure and recommend `removed` blocks in the Terraform configuration -- code changes that tell Terraform to forget the resources from state without destroying them in Azure.
@@ -75,7 +75,7 @@ The updated plan MUST show `0 to destroy` before any apply is permitted.
 ## Learning Mechanisms Implemented
 
 ### 1. Enhanced MEMORY.md Rules
-**File**: `~/.claude/projects/-Users-daniel-repos-td-td-iac/memory/MEMORY.md`
+**File**: `~/.claude/projects/-Users-daniel-repos-project-iac/memory/MEMORY.md`
 - Added explicit "Terraform Plan Verification Protocol" section
 - Destroy count > 0 is a HARD GATE -- automatic FAIL, no exceptions
 - Must be the FIRST check performed on any plan output
@@ -163,7 +163,7 @@ If the answer is not zero, the verdict is FAIL. No further analysis needed until
 
 ## Next Steps
 
-### td-iac Project
+### iac Project
 - Add `removed` blocks for the 39 resources identified in build 270486
 - Re-run terraform plan to verify destroys = 0
 - Document which specific SB resources were in the destroy list

@@ -404,17 +404,17 @@ This flow already exists and works well. No changes needed.
 
 | # | Action | Details |
 |---|--------|---------|
-| 1.1 | Clean `config/shell/env.sh` | Remove `AZDO_ORG="mbie-immigrationnz-prod"` (line 37). Keep `export AZDO_ORG` without value — let it come from env.local |
+| 1.1 | Clean `config/shell/env.sh` | Remove `AZDO_ORG="<azdo-org-slug>"` (line 37). Keep `export AZDO_ORG` without value — let it come from env.local |
 | 1.2 | Clean `config/shell/aliases.sh` | Remove lines 85-86 (`azsetmbdev`, `azsetmbsit`). Add `.local` sourcing at end |
 | 1.3 | Clean `config/bash/bash_aliases` | Remove lines 13, 17 (org name, pipeline ID). Or better: delete this file if superseded by `config/shell/aliases.sh` |
-| 1.4 | Create `config/mcp/servers.json.template` | Replace `10.0.0.102` with `${MCP_BROWSER_HOST}`, `mbie-immigrationnz-prod` with `${AZDO_ORG}` |
+| 1.4 | Create `config/mcp/servers.json.template` | Replace `10.0.0.102` with `${MCP_BROWSER_HOST}`, `<azdo-org-slug>` with `${AZDO_ORG}` |
 | 1.5 | Clean `config/mcp/README.md` | Replace `10.0.0.102` references with `<your-host-ip>` |
 | 1.6 | Clean `config/mcp/mcp-env.template` | Replace `192.168.1.107` with `<your-memory-server-ip>` |
 | 1.7 | Parameterize `azcli-scripts/ado-task` | Replace hardcoded `DEFAULT_ORG` with `${AZDO_ORG:-}` |
 | 1.8 | Delete `util-scripts/copy-mbie-pat.sh` | Move to dotfiles-private first |
 | 1.9 | Clean `bootstrap.sh` | Replace `danielpmo1371` with a configurable variable or remove if not needed |
 | 1.10 | Update `index.html` | Replace username-specific references |
-| 1.11 | Clean `config/nushell/aliases.nu` | Remove lines 69-70 (INZ_TDS_DEV, INZ_TDS_SIT) |
+| 1.11 | Clean `config/nushell/aliases.nu` | Remove lines 69-70 (<subscription-a>, <subscription-b>) |
 
 **Validation**: `grep -rn "mbie\|immigrationnz\|INZ_TDS\|10\.0\.0\.\|192\.168\.\|danielpmo" config/ azcli-scripts/ util-scripts/ --include="*.sh" --include="*.json" --include="*.md" --include="*.nu"` returns zero results.
 
@@ -543,10 +543,10 @@ Currently `danielpmo1371`. Files like `bootstrap.sh`, `index.html`, `README.md`,
 
 | File | What to Remove |
 |------|---------------|
-| `config/shell/env.sh:37` | `AZDO_ORG="mbie-immigrationnz-prod"` → `export AZDO_ORG` (no value) |
+| `config/shell/env.sh:37` | `AZDO_ORG="<azdo-org-slug>"` → `export AZDO_ORG` (no value) |
 | `config/shell/aliases.sh:85-86` | `azsetmbdev`, `azsetmbsit` aliases → private overlay |
 | `config/bash/bash_aliases:13,17` | Org name, pipeline ID → delete file if legacy |
-| `config/nushell/aliases.nu:69-70` | `INZ_TDS_DEV`, `INZ_TDS_SIT` → private overlay |
+| `config/nushell/aliases.nu:69-70` | `<subscription-a>`, `<subscription-b>` → private overlay |
 | `config/mcp/README.md` | `10.0.0.102` (3x) → `<your-host-ip>` |
 | `config/mcp/mcp-env.template:20` | `192.168.1.107` → `<your-memory-server-ip>` |
 | `azcli-scripts/ado-task:7` | Hardcoded `DEFAULT_ORG` → `${AZDO_ORG:-}` |
