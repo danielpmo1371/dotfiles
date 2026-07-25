@@ -39,7 +39,7 @@ $ gh repo view danielpmo1371/dotfiles --json visibility,isPrivate
 Additionally, `config/claude/claude.json` contains:
 - Employer org URL: `https://dev.azure.com/<azdo-org-slug>` (line 3251)
 - OAuth session IDs in `customApiKeyResponses` (lines 11-14)
-- Email: `danielpmo@gmail.com` (line 3417)
+- Email: `<user-email>` (line 3417)
 - GitHub repo permissions for `danielpmo1371/dotfiles` (line 3313)
 
 ---
@@ -103,7 +103,7 @@ The user's custom installer doesn't have a templating layer, which is what all m
 **Files that are clearly private**: PATs, email, org names
 **Files that are mixed (the hard case)**:
 - `config/shell/env.sh` — has both `EDITOR=nvim` (public) and `AZDO_ORG=<azdo-org-slug>` (private)
-- `config/mcp/servers.json` — has both generic servers (puppeteer, fetch) and private ones (browser-network at `10.0.0.102`, azure-devops with org name)
+- `config/mcp/servers.json` — has both generic servers (puppeteer, fetch) and private ones (browser-network at `<mcp-browser-host>`, azure-devops with org name)
 - `config/shell/aliases.sh` — has both universal aliases (`ls`, `gs`) and employer-specific ones (`azsetmbdev`, `azsetmbsit`)
 - `config/claude/claude.json` — Claude Code's runtime state file containing both settings and secrets/session data
 
@@ -169,10 +169,10 @@ Tools: `git filter-repo` (already present — `.git/filter-repo/` directory exis
 Private IPs found:
 | IP | File | Context |
 |----|------|---------|
-| `10.0.0.102` | `config/mcp/servers.json:8` | Browser MCP SSE endpoint |
-| `10.0.0.102` | `config/mcp/README.md` (3 occurrences) | Documentation |
-| `10.0.0.102` | `config/claude/claude.json:3275` | MCP server config |
-| `192.168.1.107` | `config/mcp/mcp-env.template:20` | Memory MCP server |
+| `<mcp-browser-host>` | `config/mcp/servers.json:8` | Browser MCP SSE endpoint |
+| `<mcp-browser-host>` | `config/mcp/README.md` (3 occurrences) | Documentation |
+| `<mcp-browser-host>` | `config/claude/claude.json:3275` | MCP server config |
+| `<memory-server-host>` | `config/mcp/mcp-env.template:20` | Memory MCP server |
 
 **Pattern needed**: Replace literal IPs with env var references (e.g., `$MCP_BROWSER_HOST`) and have the installer or shell sourcing substitute them.
 
@@ -246,7 +246,7 @@ Several files contain both public and private content:
 ```
 config/shell/env.sh      → EDITOR=nvim (public) + AZDO_ORG=<azdo-org-slug> (private)
 config/shell/aliases.sh  → ls='lsd' (public) + azsetmbdev (private)
-config/mcp/servers.json  → puppeteer (public) + browser-network@10.0.0.102 (private)
+config/mcp/servers.json  → puppeteer (public) + browser-network@<mcp-browser-host> (private)
 ```
 
 If these files live in the public repo, the private values must be removed. If they live in the private repo, the public values aren't available to other users. The file must either be:
@@ -410,7 +410,7 @@ Before any implementation planning can begin, these decisions must be made:
 | `config/shell/env.sh:37` | `AZDO_ORG="<azdo-org-slug>"` | Move to `.local` or env var |
 | `config/shell/aliases.sh:85-86` | `<subscription-a>`, `<subscription-b>` | Move to private overlay |
 | `config/mcp/servers.json:8,13` | Private IP, org name | Template with env vars |
-| `config/mcp/README.md` | Private IP `10.0.0.102` (3x) | Replace with placeholder |
+| `config/mcp/README.md` | Private IP `<mcp-browser-host>` (3x) | Replace with placeholder |
 | `config/bash/bash_aliases:13,17` | Org name, pipeline ID | Remove or move to private |
 | `config/nushell/aliases.nu:69-70` | `<subscription-a>`, `<subscription-b>` | Move to private overlay |
 | `azcli-scripts/ado-task:7` | Hardcoded DEFAULT_ORG | Parameterize with env var |

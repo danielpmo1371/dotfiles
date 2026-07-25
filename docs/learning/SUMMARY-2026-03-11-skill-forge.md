@@ -17,7 +17,7 @@ Created a complex 2001-line skill (`learn-from-mistake`) without using the `skil
 The skill used `context: fork` (isolated sub-agent execution) but made path assumptions without establishing environment context. This caused:
 - **Context ambiguity**: Forked agent wouldn't know to work in dotfiles repo
 - **Relative paths without anchors**: `docs/learning/`, `CLAUDE.md`, `workflow_state.md`
-- **Hardcoded paths**: `/Users/daniel/repos/dotfiles/...` in examples
+- **Hardcoded paths**: `/Users/you/repos/dotfiles/...` in examples
 - **Required fixes**: 61+ lines of Environment Context section + path clarifications
 
 **Meta-irony**: Created a skill about systematic learning from mistakes without using systematic skill-creation process.
@@ -53,7 +53,7 @@ The skill used `context: fork` (isolated sub-agent execution) but made path assu
    - Step 5: Added `$DOTFILES_REPO` anchor to all paths
    - Step 6: Distinguished project vs global CLAUDE.md
    - Integration Points: Full path examples
-   - EXAMPLES.md: Removed hardcoded `/Users/daniel/...` paths
+   - EXAMPLES.md: Removed hardcoded `/Users/you/...` paths
    - REFERENCE.md: Updated cross-reference diagram
 
 3. **Re-validation**

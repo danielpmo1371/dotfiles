@@ -407,9 +407,9 @@ This flow already exists and works well. No changes needed.
 | 1.1 | Clean `config/shell/env.sh` | Remove `AZDO_ORG="<azdo-org-slug>"` (line 37). Keep `export AZDO_ORG` without value — let it come from env.local |
 | 1.2 | Clean `config/shell/aliases.sh` | Remove lines 85-86 (`azsetmbdev`, `azsetmbsit`). Add `.local` sourcing at end |
 | 1.3 | Clean `config/bash/bash_aliases` | Remove lines 13, 17 (org name, pipeline ID). Or better: delete this file if superseded by `config/shell/aliases.sh` |
-| 1.4 | Create `config/mcp/servers.json.template` | Replace `10.0.0.102` with `${MCP_BROWSER_HOST}`, `<azdo-org-slug>` with `${AZDO_ORG}` |
-| 1.5 | Clean `config/mcp/README.md` | Replace `10.0.0.102` references with `<your-host-ip>` |
-| 1.6 | Clean `config/mcp/mcp-env.template` | Replace `192.168.1.107` with `<your-memory-server-ip>` |
+| 1.4 | Create `config/mcp/servers.json.template` | Replace `<mcp-browser-host>` with `${MCP_BROWSER_HOST}`, `<azdo-org-slug>` with `${AZDO_ORG}` |
+| 1.5 | Clean `config/mcp/README.md` | Replace `<mcp-browser-host>` references with `<your-host-ip>` |
+| 1.6 | Clean `config/mcp/mcp-env.template` | Replace `<memory-server-host>` with `<your-memory-server-ip>` |
 | 1.7 | Parameterize `azcli-scripts/ado-task` | Replace hardcoded `DEFAULT_ORG` with `${AZDO_ORG:-}` |
 | 1.8 | Delete `util-scripts/copy-mbie-pat.sh` | Move to dotfiles-private first |
 | 1.9 | Clean `bootstrap.sh` | Replace `danielpmo1371` with a configurable variable or remove if not needed |
@@ -547,8 +547,8 @@ Currently `danielpmo1371`. Files like `bootstrap.sh`, `index.html`, `README.md`,
 | `config/shell/aliases.sh:85-86` | `azsetmbdev`, `azsetmbsit` aliases → private overlay |
 | `config/bash/bash_aliases:13,17` | Org name, pipeline ID → delete file if legacy |
 | `config/nushell/aliases.nu:69-70` | `<subscription-a>`, `<subscription-b>` → private overlay |
-| `config/mcp/README.md` | `10.0.0.102` (3x) → `<your-host-ip>` |
-| `config/mcp/mcp-env.template:20` | `192.168.1.107` → `<your-memory-server-ip>` |
+| `config/mcp/README.md` | `<mcp-browser-host>` (3x) → `<your-host-ip>` |
+| `config/mcp/mcp-env.template:20` | `<memory-server-host>` → `<your-memory-server-ip>` |
 | `azcli-scripts/ado-task:7` | Hardcoded `DEFAULT_ORG` → `${AZDO_ORG:-}` |
 | `bootstrap.sh:4,8` | `danielpmo1371` → configurable or keep if desired |
 | `index.html` | Username references (4x) → update |
