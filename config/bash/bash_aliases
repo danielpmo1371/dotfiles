@@ -10,7 +10,6 @@ alias setup-vim="nvim ~/.config/nvim/init.lua"
 alias setup-tmux="nvim ~/.tmux.conf"
 alias re-tmux="tmux source-file ~/.tmux.conf"
 alias gg="gemini -p"
-alias conf-devops-mbie=' az devops configure --defaults organization="https://dev.azure.com/mbie- immigrationnz-prod" project="Travel Declaration"'
 alias tf="terraform"
 alias rgv='rg --line-number --color=always "$1" | fzf --ansi --delimiter : --preview "bat --color=always {1} --highlight-line {2}" | awk -F: '"'"'{ print "+"$2" "$1 }'"'"' | xargs nvim'
 

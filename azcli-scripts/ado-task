@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-readonly DEFAULT_ORG="https://dev.azure.com/mbie-immigrationnz-prod"
+readonly DEFAULT_ORG="https://dev.azure.com/${AZDO_ORG:-}"
 readonly PAT_FILE="${HOME}/.ado-pat"
 readonly DEFAULT_OUTPUT_DIR="${ADO_OUTPUT_DIR:-/repos/user_stories}"
 
