@@ -1,5 +1,42 @@
 # Workflow State
 
+## In Progress: Documentation review & README overhaul (2026-07-29)
+
+### State
+- **Status**: CONSTRUCT
+- **Branch**: main (docs-only change, reversible)
+
+### Goal
+Review the repo, bring the main README.md in line with reality (install.sh
+flags, directory structure, features), and tighten supporting docs.
+
+### Plan
+1. Explore agent audits docs vs code (install.sh flags, installers/, config/,
+   docs/, tests/) — identify stale claims, missing coverage, duplication.
+2. Rewrite README.md: correct the flag list and directory tree, add missing
+   features (MCP sync, `q` quick-query, agent teams, pipeline guards, test
+   harness, fonts/casks/llm installers), keep it lean — deep detail stays in
+   CLAUDE.md / docs/.
+3. Fix any stale statements found in docs/*.md only if clearly wrong (no
+   scope creep).
+
+### Log
+- 2026-07-29: Audit dispatched; README read. Awaiting audit report.
+- 2026-07-29: Audit returned — README covered 11/23 flags, `--secrets`
+  description stale in 3 places, directory tree/features incomplete.
+  Spot-checked contested claims: secrets.sh confirmed keychain-migration;
+  claude.sh:151-163 confirmed it DOES auto-run pipeline hooks (audit's doubt
+  on CLAUDE.md was wrong, claim kept).
+- 2026-07-29: Fixed stale `--secrets` text in install.sh:16, install.sh:590,
+  CLAUDE.md:24. Rewrote README.md: two-phase model, all 23 flags grouped,
+  design-principle section, secrets/keychain, `q`, MCP sync, agent hooks,
+  test harness, corrected tree, post-install now uses secret_set. Verified
+  tmux keybind claims against tmux.conf and all relative links resolve.
+- **Status**: COMPLETED (uncommitted; note docs/terminal-agnostic-config.md
+  is untracked — README links dangle on GitHub until it's committed)
+
+---
+
 ## Completed: Interactive Claude pane picker (2026-07-12)
 
 ### State
@@ -438,3 +475,50 @@ Commits: atomic per item, suite green before each; pathspec staging (zshrc is us
   - 1e79b86 tests/test-pipeline-hooks.sh: 32 cases across all three hooks incl. dirty-registry fail-closed and no-registry permissive fallback (pinned as known weakness); CLAUDE.md updated
 - Verification: 33+32 tests green; live example workspace re-validated (sitae approved, PROD_SHARED_STAGE blocked); installer delivered write-guard symlink; only user-dirty zshrc + this file remain uncommitted
 - Remaining known gaps (not in approved scope, surfaced to user): guard skips checks 0-2 with no registry; guard terraform constants (802) still hardcoded; agent-doc diagram claims guard invokes validator; stagesToSkip derived from caller allStages not registry stages.all
+
+## SESSION: Terminal.app font config in dotfiles (2026-07-20)
+- Symptom: Nerd Font glyphs/emoji not rendering in macOS built-in Terminal.app
+- Diagnosis (empirical): fonts are present (~/Library/Fonts has MesloLGS NF x4 + Hack Nerd Font set); LANG=en_US.UTF-8 OK. Root cause is the profile font — Terminal.app default settings set is "Homebrew", font AndaleMono 12 (confirmed twice: NSKeyedArchiver plist decode AND `osascript ... get font name of settings set "Homebrew"`)
+- Constraint discovered: Terminal.app rewrites com.apple.Terminal.plist from memory on quit, so `defaults write` while it runs is silently clobbered. Symlinking prefs is impossible (whole-file rewrite).
+- Chosen mechanism: AppleScript against the RUNNING app (`tell application "Terminal" to set font name of settings set <default> to "MesloLGS-NF-Regular"`). Applies live, persists on quit, idempotent. Automation permission already granted on this machine (read-only probe returned rc=0).
+- PostScript name resolved via fc-scan: "MesloLGS-NF-Regular" (NSName in the plist is the PostScript name, not the display family "MesloLGS NF")
+- Policy check: docs/terminal-agnostic-config.md explicitly lists font/rendering as legitimate layer-4 emulator config. Compliant.
+
+## Plan (NEEDS_PLAN_APPROVAL)
+1. installers/terminals.sh: add `install_terminal_app()` — macOS-only guard; resolve the default profile name from `defaults read com.apple.Terminal "Default Window Settings"`; set ONLY the font family via osascript; leave size/colors untouched. No-op + warn (non-fatal) if the font is missing or osascript is denied.
+2. Wire it into `install_terminals()` alongside Ghostty/Kitty; no new install.sh flag (runs under --terminals).
+3. Font name constant shared with installers/fonts.sh conventions (MesloLGS NF); no new config dir — nothing to symlink, so a config file would be dead weight.
+4. Docs: one line in CLAUDE.md terminals section + README if it lists terminals.
+5. Verify: re-run osascript read-back to prove font changed; visually confirm glyphs; re-run installer to prove idempotency.
+- Explicitly OUT of scope: Terminal.app is 256-color only (no truecolor) — p10k/tmux colors will still be approximated. Not fixing that here.
+
+## Log — 2026-07-20 MCP secret-interpolation verification
+
+Verified `${VAR}` expansion after removing literal PAT from `~/.claude.json`.
+- `~/.claude.json` contains no literal credential; `AZURE_DEVOPS_PAT` / `ADO_MCP_AUTH_TOKEN` = `${AZDO_PAT}`.
+- Live MCP calls OK: core_list_projects, repo_list_repos_by_project, wit_my_work_items, search_code, pipelines_get_build_definitions.
+- `az account show` OK (INZ_TDS_SIT); `az devops project list` OK (AZURE_DEVOPS_EXT_PAT path); `az group list` OK.
+- Drift found: 4 `AZURE_DEVOPS_*` env keys exist in `~/.claude.json` but not in `config/mcp/servers.json` (not reproducible on a fresh machine).
+- Incident: PAT value echoed into session transcript during verification — rotation recommended.
+
+## Actions (approved 2026-07-20, implemented)
+- installers/terminals.sh: added install_terminal_app() (macOS-only guard, dynamic default-profile resolution via `defaults read ... "Default Window Settings"`, osascript sets font family only, non-fatal warn on missing font / denied Automation / unreadable profile); wired into install_terminals(); added summary line. Font constant TERMINAL_APP_FONT="MesloLGS-NF-Regular" (PostScript name).
+- CLAUDE.md: documented the font mechanism + 256-color caveat under Key Patterns.
+- Verify: bash -n OK; live run set Homebrew profile font; osascript read-back = MesloLGS-NF-Regular; second run idempotent (same OK output, no error). No new config dir, no install.sh flag.
+- Status: COMPLETE. Not committed (awaiting user per git-workflow rules).
+
+## Log — 2026-07-29 MCP server pruning (approved by user)
+
+Assessment: transcript analysis (window since 2026-06-07) showed real tool-call usage only for
+azure-devops (156 calls), claude-in-chrome extension (109), context7 plugin (14), browser-network (4).
+sequential-thinking / fetch / puppeteer had a `u/` package-name typo since first commit (never worked);
+browser-local had zero calls and drops connection (needs BrowserMCP extension, not in use).
+
+Actions:
+- config/mcp/servers.json: removed sequential-thinking, fetch, puppeteer, browser-local (kept memory, browser-network, azure-devops).
+- ~/.claude.json: removed same 4 via `claude mcp remove -s user` (installer only merges, never deletes).
+- ~/.claude.json: cleared now-dead disabledMcpServers entries in nuvemlabs.site and archer-pro-active projects.
+- config/mcp/README.md: updated server list, noted removals + the merge-doesn't-delete caveat.
+- config/claude/CLAUDE.md: dropped sequencial-thinking instruction; replaced "Browser-Tools MCP" /
+  "Prefer browse mcp to chrome-for-claude" with claude-in-chrome (local) + browser-network (remote) guidance.
+- memory server KEPT: hostname memory-mcp currently unresolvable; user fixing DNS + /etc/hosts separately.

@@ -1,6 +1,7 @@
 # Dotfiles
 
-Personal dotfiles with modular installation system. Supports macOS and Linux.
+Personal dotfiles with a modular installation system. Supports macOS and Linux
+(Arch, Ubuntu, Debian, Fedora) with cross-platform package manager detection.
 
 ## Quick Install
 
@@ -15,64 +16,125 @@ Or clone manually:
 ```bash
 git clone https://github.com/danielpmo1371/dotfiles.git ~/repos/dotfiles
 cd ~/repos/dotfiles
-./install.sh
+./install.sh          # interactive dialog installer
+./install.sh --all    # or: install everything non-interactively
 ```
+
+## Design Principle: Terminal-Agnostic Config
+
+Behaviour lives in the most portable layer that can implement it:
+**tmux → shell → app config → terminal emulator**. Emulator configs (Ghostty,
+Kitty) stay deliberately thin — rendering, OS integration, and forwarding keys
+the OS swallows — so the whole workflow survives switching terminals.
+Rationale and the decision test: [docs/terminal-agnostic-config.md](docs/terminal-agnostic-config.md).
 
 ## What's Included
 
-- **Shell**: Zsh (with Zap plugin manager) and Bash configurations
-- **Terminal**: Ghostty configuration — deliberately thin. Behaviour lives in tmux
-  and the shell so it survives switching emulators; see
-  [docs/terminal-agnostic-config.md](docs/terminal-agnostic-config.md)
-- **Tmux**: Config with TPM and plugins (gruvbox, resurrect, continuum, floax)
-  - Claude pane picker (`prefix i`): fzf list of every pane running Claude Code with live preview — vi keys (j/k move, `i` to filter), Enter jumps to it
+- **Shell**: Zsh (Zap plugin manager, Powerlevel10k) and Bash, sharing modular
+  configs from `config/shell/` (env, path, aliases, git, tmux)
+- **Tmux**: TPM plugins (gruvbox, resurrect, continuum, floax) plus a popup
+  workflow backed by `util-scripts/` — highlights (prefix is `C-e`):
+  - `prefix i` — Claude pane picker: fzf list of every pane running Claude
+    Code with live preview; Enter jumps to it
+  - `C-a` / `C-w` / `C-s` — nvim, lazygit, and clean-shell popups
 - **Neovim**: LazyVim-based configuration
-- **CLI Tools**: ripgrep, fd, bat, fzf, zoxide, lsd, jq, htop
-- **Claude Code**: CLI settings, custom commands, and skills
+- **Terminals**: thin Ghostty and Kitty configs; on macOS, Terminal.app's
+  default font is set to a Nerd Font automatically
+- **CLI tools**: ripgrep, fd, bat, fzf, zoxide, lsd, jq, htop, and more
+- **Secrets**: OS-native keychain storage (macOS Keychain / Linux libsecret)
+  via the `nuvemlabs/secrets` library — `secret_set KEY VALUE` to store,
+  `secret KEY` to read; legacy `~/.accessTokens` files auto-migrate
+- **Quick AI query**: `q "your question"` — one-shot LLM answer in the
+  terminal, optimized for fast first token (Groq by default; switch providers
+  with `AI_PROVIDER`)
+- **Claude Code**: settings, custom commands, skills, agents, safety hooks,
+  and MCP server sync — see [Claude Code Setup](#claude-code-setup)
 
 ## Installation Options
 
-### Interactive Mode (Recommended)
+`./install.sh` with no arguments launches an interactive dialog installer
+(component checklist, package profiles, dependency resolution). All flags below
+run non-interactively.
+
+### Everything, or the core
 
 ```bash
-./install.sh              # Launch interactive dialog installer
+./install.sh --all        # Phase 1 (dotfiles core) then Phase 2 (Claude Code)
+./install.sh --dotfiles   # Phase 1 only: terminal & tmux workflow, no Claude Code
 ```
 
-The dialog mode provides:
-- Component selection checklist (brew, tools, shells, tmux, etc.)
-- Package profiles: Minimal, Developer, Full, or Custom
-- Individual package selection with pre-filled profiles
-- Dependency resolution with prompts
+Phase 1 runs, in order: brew (macOS) → tools → casks → secrets → fonts → tmux →
+bash → zsh → terminals → config-dirs → mcp → memory-hooks → logging-hooks →
+pipeline-hooks. Phase 2 installs the Claude Code CLI and symlinks its config.
 
-### CLI Mode
+### Individual components
 
 ```bash
-./install.sh --all        # Install everything
-./install.sh --brew       # Homebrew package manager
-./install.sh --tools      # Dev tools (nvim, ripgrep, fzf, etc.)
-./install.sh --secrets    # Create ~/.accessTokens template
-./install.sh --terminals  # Terminal emulators (Ghostty)
-./install.sh --tmux       # Tmux + TPM + plugins
-./install.sh --bash       # Bash configuration
-./install.sh --zsh        # Zsh + Zap plugin manager
-./install.sh --config-dirs # Symlink nvim config
-./install.sh --claude     # Claude Code CLI + settings
-./install.sh --help       # Show all options
+./install.sh --brew         # Homebrew package manager
+./install.sh --tools        # Dev tools (git, nvim, ripgrep, fzf, etc.)
+./install.sh --casks        # macOS GUI apps from config/brew/Brewfile (macOS only)
+./install.sh --secrets      # Keychain-backed secrets library (needs ~/repos/secrets clone)
+./install.sh --fonts        # MesloLGS Nerd Fonts for Powerlevel10k
+./install.sh --tmux         # Tmux + TPM + plugins
+./install.sh --bash         # Bash configuration
+./install.sh --zsh          # Zsh + Zap plugin manager
+./install.sh --terminals    # Ghostty/Kitty configs + Terminal.app font (macOS)
+./install.sh --config-dirs  # Symlink nvim and fastfetch into ~/.config/
 ```
+
+### Claude Code & AI
+
+```bash
+./install.sh --claude       # Claude Code CLI + settings (also installs pipeline hooks)
+./install.sh --mcp          # Sync config/mcp/servers.json into ~/.claude.json
+./install.sh --llm          # llm CLI + Groq plugin — powers the `q` quick-query
+./install.sh --memory-hooks # Persistent-memory hooks for Claude Code
+./install.sh --logging-hooks # Session logging hooks
+./install.sh --claude-azdo-pipeline-hooks  # Azure DevOps pipeline guard hooks
+```
+
+### Backup & restore
+
+Installers back up anything they replace. Manage backups with:
+
+```bash
+./install.sh --restore              # Interactive restore from backup
+./install.sh --list-backups         # List available backups
+./install.sh --cleanup-backups [N]  # Keep only N most recent (default: 5)
+```
+
+`./install.sh --help` shows the full list.
 
 ## Package Manager
 
-On first run, you'll be prompted to choose a package manager:
+On first run you're prompted to choose from the package managers detected on
+your system (brew, apt, dnf, pacman, choco); the choice is cached in
+`~/.dotfiles_pkg_manager`. Homebrew is recommended and can be installed
+automatically.
 
+## Claude Code Setup
+
+`config/claude/` is symlinked into `~/.claude/`: global instructions
+(`CLAUDE.md`), `settings.json`, custom slash commands, skills, and agents.
+Safety comes from PreToolUse hooks — a destructive-ops guard and three Azure
+DevOps pipeline guards that block accidental production triggers.
+
+MCP servers are defined once in `config/mcp/servers.json` and synced into
+`~/.claude.json` with `./install.sh --mcp`; secret references are rewritten to
+env-var placeholders so credentials never land on disk. Never edit
+`~/.claude.json` by hand — the installer overwrites it.
+
+Details: [CLAUDE.md](CLAUDE.md) and [config/mcp/README.md](config/mcp/README.md).
+
+## Testing
+
+```bash
+tests/test-installer.sh <component|all>   # Validate an installer's results
+tests/validate-symlinks.sh                # Check all expected symlinks
+tests/test-docker.sh <distro|all>         # Full e2e install in Docker (arch, ubuntu, debian, fedora)
+tests/test-pipeline-validator.sh          # Hermetic safety tests for the pipeline validator
+tests/test-pipeline-hooks.sh              # Hermetic safety tests for the guard hooks
 ```
-Available package managers:
-  1) brew (will be installed)
-  2) pacman
-
-Choose package manager [1-2] (default: 1):
-```
-
-Homebrew is recommended and will be installed automatically if selected. Your choice is cached in `~/.dotfiles_pkg_manager`.
 
 ## Directory Structure
 
@@ -80,48 +142,37 @@ Homebrew is recommended and will be installed automatically if selected. Your ch
 dotfiles/
 ├── bootstrap.sh          # One-line installer
 ├── install.sh            # Main installer (dialog + CLI modes)
-├── installers/           # Individual installer scripts
-│   ├── brew.sh           # Homebrew with OS detection
-│   ├── tools.sh          # CLI tools
-│   ├── secrets.sh        # ~/.accessTokens template
-│   ├── terminals.sh      # Ghostty config
-│   ├── tmux.sh           # Tmux + TPM + plugins
-│   ├── bash.sh           # Bash configuration
-│   ├── zsh.sh            # Zsh + Zap
-│   ├── config-dirs.sh    # ~/.config symlinks
-│   └── claude.sh         # Claude Code
-├── lib/                  # Shared functions
-│   ├── install-common.sh # Logging, symlinks, backups
-│   ├── install-packages.sh # Package manager abstraction
-│   └── dialog-ui.sh      # Dialog TUI wrapper functions
-└── config/               # Configuration files
-    ├── shell/            # Shared shell configs (env, path, aliases)
-    ├── bash/             # Bash-specific
-    ├── zsh/              # Zsh-specific
-    ├── tmux/             # tmux.conf
-    ├── nvim/             # Neovim (LazyVim)
-    ├── ghostty/          # Ghostty terminal
-    └── claude/           # Claude Code settings
+├── installers/           # One script per component (tools, zsh, tmux, claude, mcp, ...)
+├── lib/                  # Shared functions (logging, symlinks, backups, packages, secrets)
+├── config/               # Configuration files, one directory per tool
+│   ├── shell/            # Shared shell configs sourced by bash and zsh
+│   ├── bash/  zsh/       # Shell-specific configs
+│   ├── tmux/             # tmux.conf
+│   ├── nvim/             # Neovim (LazyVim)
+│   ├── ghostty/  kitty/  # Terminal emulator configs (+ Ghostty shaders)
+│   ├── brew/             # Brewfile for macOS GUI apps
+│   ├── mcp/              # MCP server definitions (canonical source)
+│   └── claude/           # Claude Code settings, commands, skills, agents, hooks
+├── util-scripts/         # Scripts backing the tmux popup workflow
+├── tests/                # Test harness + Docker e2e images
+└── docs/                 # Design docs, plans, and post-mortem learning notes
 ```
+
+External dependencies and where to edit them: [DEPENDENCIES.md](DEPENDENCIES.md).
 
 ## Post-Install
 
 ```bash
-# Reload shell config
-source ~/.zshrc   # or ~/.bashrc
-
-# Configure powerlevel10k prompt (zsh)
-p10k configure
-
-# Add API keys
-nvim ~/.accessTokens
+source ~/.zshrc              # reload shell config (or ~/.bashrc)
+p10k configure               # configure the zsh prompt
+secret_set GROQ_API_KEY ...  # store API keys in the OS keychain
 ```
 
 ## Requirements
 
 - `git` and `curl` (for bootstrap)
-- `dialog` (for interactive mode, optional - falls back to CLI)
-- macOS or Linux (Arch, Ubuntu, Fedora, etc.)
+- `dialog` (only for interactive mode)
+- macOS or Linux (Arch, Ubuntu, Debian, Fedora)
 
 ## License
 

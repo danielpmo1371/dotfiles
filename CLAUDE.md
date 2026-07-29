@@ -21,7 +21,7 @@ Personal dotfiles repository with modular installation system. Supports macOS an
 # Individual components
 ./install.sh --tools        # Dev tools (git, nvim, ripgrep, etc.)
 ./install.sh --casks        # macOS GUI apps from config/brew/Brewfile (macOS only)
-./install.sh --secrets      # Create ~/.accessTokens template
+./install.sh --secrets      # Keychain-backed secrets library (migrates ~/.accessTokens; requires ~/repos/secrets clone)
 ./install.sh --tmux         # Tmux + TPM + plugins (requires: git)
 ./install.sh --bash         # Bash configuration
 ./install.sh --zsh          # Zsh configuration (requires: git, zsh, curl)
