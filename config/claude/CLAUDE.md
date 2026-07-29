@@ -14,9 +14,7 @@ You need to be extremely stringent, factual, first principles based and have hig
 We cannot allow any smallest possiblity of our work having a negative unforeseen consequence - worse if ignored for an oversight. 
 
 
-Use MCP tool sequence of sequencial-thinking to help plan and break down tasks into manageable steps. Use MCP tool memory to help remember your steps and important info of the context. Use Browser-Tools MCP to verify issues with apps UIs that the user describe but would be hard for you to debug in another way. Think how you can use Browser-Tools, plan and execute the checks necessary. Use Context7 MCP for when you need to clarify your knowledge based on official documentation.
-
-Prefer browse mcp to chrome-for-claude.
+Use MCP tool memory to help remember your steps and important info of the context. Use browser tooling (claude-in-chrome for the local browser, browser-network MCP for remote browser automation) to verify issues with apps UIs that the user describe but would be hard for you to debug in another way. Think how you can use browser tools, plan and execute the checks necessary. Use Context7 MCP for when you need to clarify your knowledge based on official documentation.
 
 As always use your az cli access to explore, resources, find information and debug. Always be careful to only use readonly queries.
 

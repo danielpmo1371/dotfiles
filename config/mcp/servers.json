@@ -18,25 +18,5 @@
       "AZURE_DEVOPS_DEFAULT_PROJECT": "secret:AZDO_PROJECT",
       "ADO_MCP_AUTH_TOKEN": "secret:AZDO_PAT"
     }
-  },
-  "sequential-thinking": {
-    "type": "stdio",
-    "command": "npx",
-    "args": ["-y", "u/modelcontextprotocol/server-sequential-thinking"]
-  },
-  "puppeteer": {
-    "type": "stdio",
-    "command": "npx",
-    "args": ["-y", "u/modelcontextprotocol/server-puppeteer"]
-  },
-  "fetch": {
-    "type": "stdio",
-    "command": "npx",
-    "args": ["-y", "u/kazuph/mcp-fetch"]
-  },
-  "browser-local": {
-    "type": "stdio",
-    "command": "npx",
-    "args": ["@browsermcp/mcp@latest"]
   }
 }

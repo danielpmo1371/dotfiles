@@ -28,20 +28,19 @@ This directory contains MCP (Model Context Protocol) server definitions used by 
 - **Purpose**: Long-term memory storage for Claude
 - **Note**: `memory-mcp` resolves via `/etc/hosts` to the LXC container running the memory service
 
-### Browser Servers
+### Browser Server
 
-There are two browser MCP servers for different use cases:
-
-- **browser-local** (stdio) — Runs `@browsermcp/mcp` locally via npx. Use this when the browser is on the same machine as Claude.
-- **browser-network** (SSE at `http://10.0.0.102:3002/sse`) — Connects to a BrowserMCP instance running on another machine on the private network. Use this for remote browser automation.
+- **browser-network** (SSE at `http://10.0.0.102:3002/sse`) — Connects to a BrowserMCP instance running on another machine on the private network. Use this for remote browser automation. Local browsing is handled by the Claude-in-Chrome extension, not an MCP server in this config.
 
 ### Other Servers
 - **azure-devops** (stdio) — Azure DevOps MCP for work items, repos, and pipelines.
   Org/project/PAT are keychain-backed, not hardcoded: `secret_set AZDO_PAT "..."`,
   `secret_set AZDO_ORG_URL "https://dev.azure.com/<org>"`, `secret_set AZDO_PROJECT "<project>"`.
-- **sequential-thinking** (stdio) — Step-by-step reasoning
-- **puppeteer** (stdio) — Browser automation via Puppeteer
-- **fetch** (stdio) — HTTP fetch utility
+
+> Removed 2026-07-29: `browser-local`, `sequential-thinking`, `puppeteer`, `fetch` — never used
+> (the latter three were broken since first commit via a `u/` package-name typo). Removing an
+> entry here does NOT remove it from `~/.claude.json` (the installer only merges);
+> also run `claude mcp remove -s user <name>`.
 
 ## Claude Desktop Configuration
 
