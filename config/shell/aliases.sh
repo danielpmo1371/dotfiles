@@ -111,7 +111,7 @@ q() {
     local tmp
     tmp="$(mktemp)" || return 1
     if [ -t 1 ] && command -v bat >/dev/null 2>&1; then
-        llm -m "$model" "$@" | tee "$tmp" | bat --style=plain --paging=never --language=md
+        llm -m "$model" "$@" | tee "$tmp" | bat --style=plain --language=md --paging=always --pager='less -RFX'
     else
         llm -m "$model" "$@" | tee "$tmp"
     fi
