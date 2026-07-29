@@ -55,6 +55,7 @@ install_tools() {
         "tree|tree|tree|"
         "gdu|gdu|gdu|"
         "fastfetch|fastfetch|fastfetch|"
+        "az|azure-cli|azure-cli|"
     )
     # Platform-specific desktop notifier
     if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -82,6 +83,7 @@ install_tools() {
     echo "  rg, fd, bat, delta, lsd, zoxide - modern replacements"
     echo "  fzf, jq, htop, tree            - utilities"
     echo "  lazydocker                     - docker TUI"
+    echo "  az                             - Azure CLI"
     echo ""
     echo "To reset package manager preference: rm ~/.dotfiles_pkg_manager"
 }
