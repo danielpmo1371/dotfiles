@@ -83,6 +83,25 @@ alias gg='gemini -p'
 alias g='gemini --model gemini-2.5-flash --prompt'
 alias update-claude='sudo npm i -g @anthropic-ai/claude-code'
 alias cdang='claude --dangerously-skip-permissions --rc'
+# Re-run the exact `claude --resume "<name>"` hint claude prints on quit, with
+# cdang's flags. Scrapes THIS pane's scrollback for the last such line, so it
+# resumes this pane's session even if newer sessions were started in other tabs
+# (which would win with --continue). Tmux-only by design.
+cres() {
+    if [ -z "$TMUX" ]; then
+        echo "cres: not inside tmux — can't read scrollback for the resume hint" >&2
+        return 1
+    fi
+    local session
+    session=$(tmux capture-pane -p -S - -t "$TMUX_PANE" \
+        | grep -Eo 'claude --resume "[^"]+"' | tail -1 \
+        | sed -E 's/^claude --resume "(.+)"$/\1/')
+    if [ -z "$session" ]; then
+        echo "cres: no 'claude --resume \"...\"' hint found in this pane's scrollback" >&2
+        return 1
+    fi
+    cdang --resume "$session"
+}
 
 # Fast one-shot query via `llm`. Provider chosen by $AI_PROVIDER (see env.sh);
 # defaults to Groq for the lowest time-to-first-token. Streams to stdout.
