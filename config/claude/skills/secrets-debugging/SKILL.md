@@ -26,7 +26,7 @@ secrets-doctor AZDO_PAT           # one key
 secrets-doctor PIPELINE_GUARD     # prefix — expands to all matching keys
 ```
 
-Lives at `$DOTFILES_DIR/util-scripts/secrets-doctor` (on PATH). Exit codes: 0 = chain intact, 1 = at least one break, 2 = setup error. `--help` for details.
+Installed at `~/.local/bin/secrets-doctor` (on PATH); source of truth is `~/repos/secrets/bin/secrets-doctor` (nuvemlabs/secrets repo) — fix bugs there and re-run `./install.sh --secrets`, never edit the installed copy. Exit codes: 0 = chain intact, 1 = at least one break, 2 = setup error. `--help` for details.
 
 Escalation flags (still never print values — the value is read in-process and only pass/fail facts are reported):
 
@@ -71,7 +71,7 @@ Reading: the store and export line are fine, so nothing to fix in the keychain o
 2. **ENV reflects the invoking shell.** A green ENV in your Bash tool session does not vouch for a GUI app, daemon, or a different tmux pane — say which context was tested.
 3. **Don't bypass a red link to fake a green result** (e.g. exporting the var inline just to make a tool run). Fix the broken link, then re-run `secrets-doctor` to prove it.
 4. **New secrets need two links**: `secret_set KEY ...` (user) AND an export line in `config/shell/secrets.sh` (committed to dotfiles). One without the other is the top-two failure patterns above.
-5. If `secrets-doctor` itself is missing (new machine), it comes from the dotfiles repo (`util-scripts/`); check PATH wiring in `config/shell/path.sh` before reinventing the checks.
+5. If `secrets-doctor` itself is missing (new machine), install via dotfiles `./install.sh --secrets` — it copies `~/repos/secrets/bin/secrets-doctor` to `~/.local/bin/`. Don't reinvent the checks inline, and never edit the installed copy (fix at source in the secrets repo).
 
 ## Verification
 

@@ -38,8 +38,10 @@ install_secrets() {
         fi
     fi
 
-    # ── Install nuvemlabs/secrets library ───────────────────────────────────
-    if [[ -f "$SECRETS_INSTALL_DIR/secrets.sh" ]]; then
+    # ── Install nuvemlabs/secrets library + CLI tools ───────────────────────
+    # Library AND doctor must both be present, or (re)run the installer —
+    # machines that installed before the CLI tools existed pick them up here.
+    if [[ -f "$SECRETS_INSTALL_DIR/secrets.sh" && -x "$HOME/.local/bin/secrets-doctor" ]]; then
         log_success "nuvemlabs/secrets already installed at $SECRETS_INSTALL_DIR"
     else
         log_info "Installing nuvemlabs/secrets library..."

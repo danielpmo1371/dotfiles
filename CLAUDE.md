@@ -74,7 +74,7 @@ config/              # Configuration files organized by tool
 
 **Package Manager**: Auto-detects available managers, prompts user on first run, caches choice in `~/.dotfiles_pkg_manager`.
 
-**Secrets diagnostics (`secrets-doctor`)**: `util-scripts/secrets-doctor [KEY|PREFIX ...]` reports where the secret chain breaks (OS store → `config/shell/secrets.sh` export → shell env) without ever printing values — names-only by design. No args checks every key `secrets.sh` reads from the store; exit 0 = chain intact, 1 = broken. Use this instead of ad-hoc `security`/grep pipelines when a token (e.g. `AZDO_PAT`, `PIPELINE_GUARD_*`) isn't reaching a tool. The `secrets-debugging` skill (`config/claude/skills/secrets-debugging/`) makes this the canonical workflow for agent sessions.
+**Secrets diagnostics (`secrets-doctor`)**: `secrets-doctor [KEY|PREFIX ...]` (from `nuvemlabs/secrets`, installed to `~/.local/bin` by `./install.sh --secrets`; source lives in `~/repos/secrets/bin/` — fix bugs THERE, not in the installed copy) reports where the secret chain breaks (OS store → `config/shell/secrets.sh` export → shell env) without ever printing values — names-only by design. No args checks every key `secrets.sh` reads from the store; exit 0 = chain intact, 1 = broken. Use this instead of ad-hoc `security`/grep pipelines when a token (e.g. `AZDO_PAT`, `PIPELINE_GUARD_*`) isn't reaching a tool. The `secrets-debugging` skill (`config/claude/skills/secrets-debugging/`) makes this the canonical workflow for agent sessions.
 
 **Terminal.app font (macOS)**: `installers/terminals.sh` sets the default profile's font to a Nerd Font (`MesloLGS-NF-Regular`) via AppleScript against the running app — Terminal.app rewrites its plist on quit, so `defaults write`/symlinks don't stick. Only the font family is changed; runs under `--terminals`. Requires the font (`--fonts`) and Automation permission; non-fatal warn otherwise. Note: Terminal.app is 256-color only, so p10k/tmux colors remain approximated.
 
@@ -194,7 +194,7 @@ readlink -f <file_path>  # Should point to repo directory
 ```
 
 **Common External Dependencies:**
-- `nuvemlabs/secrets` → Source: `~/repos/secrets/` → Installed: `~/.local/lib/secrets/`
+- `nuvemlabs/secrets` → Source: `~/repos/secrets/` → Installed: `~/.local/lib/secrets/` (library) + `~/.local/bin/secrets-doctor` (CLI)
 - System packages (brew, apt, etc.) → Never edit installed files
 - Symlinked configs → Edit source in `config/`, not `~/.config/`
 

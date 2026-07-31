@@ -576,3 +576,27 @@ Actions:
 - Validated with skill-forge validate-skill.sh: 17 pass, 0 warnings, 0 errors (EXCELLENT).
 - Live immediately via existing ~/.claude/skills symlink.
 - CLAUDE.md secrets-doctor line extended to reference the skill (still uncommitted with user WIP).
+
+## Log — 2026-07-31 secrets-doctor --probe / --match (approved by user)
+
+- util-scripts/secrets-doctor: opt-in value validation. --probe reads value in-process (bash
+  built-ins only: never stdout/argv/child-env) and flags EMPTY / ctrl-chars; --match REGEX adds
+  shape check on store+env values, reporting pass/fail only. Default mode unchanged (names-only).
+  xtrace defense (set +x) verified: probed value absent from bash -x trace.
+- Tested: real keys probe ok*, --match pass/fail (exit 0/1), unknown flag (exit 2), stub-lib
+  unit test covering EMPTY / ctrl-chars / ok* branches, default-mode regression.
+- skills/secrets-debugging: table gains EMPTY/ctrl-chars row + probe escalation guidance;
+  re-validated EXCELLENT.
+
+## Log — 2026-07-31 secrets-doctor moved to nuvemlabs/secrets repo (approved by user)
+
+- util-scripts/secrets-doctor removed: source of truth is now ~/repos/secrets/bin/secrets-doctor
+  (commit bf5914f there), installed to ~/.local/bin (already on PATH via path.sh) with chmod +x.
+- installers/secrets.sh: already-installed check now also requires ~/.local/bin/secrets-doctor,
+  so existing machines pick up the CLI on next ./install.sh --secrets.
+- config/shell/secrets.sh: exports SECRETS_EXPORTS_FILE (self-declaration) so the now-generic
+  doctor finds the exports mapping from any child process.
+- CLAUDE.md + secrets-debugging skill updated to new location + fix-at-source warning;
+  skill re-validated EXCELLENT.
+- Verified: installer run installs 755 copy; fresh login shell resolves ~/.local/bin/secrets-doctor
+  and full chain check passes (exit 0); secrets repo test suite 20/20.
