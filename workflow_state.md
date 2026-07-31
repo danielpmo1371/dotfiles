@@ -567,3 +567,12 @@ Actions:
 - CLAUDE.md: documented under shell features (uncommitted — file already had unrelated WIP hunk).
 - Verified: default run (7 keys, all green), prefix match, derived key, bogus key (exit 1),
   env -u AZDO_PAT break detection (exit 1), --help.
+
+## Log — 2026-07-31 secrets-debugging skill (skill-forge)
+
+- config/claude/skills/secrets-debugging/SKILL.md: new skill making secrets-doctor the canonical
+  secret-propagation debugging method. Triggers on missing tokens / 401s / keychain questions.
+  Contains chain diagram, failure-pattern→fix table, worked example, names-only + no-bypass rules.
+- Validated with skill-forge validate-skill.sh: 17 pass, 0 warnings, 0 errors (EXCELLENT).
+- Live immediately via existing ~/.claude/skills symlink.
+- CLAUDE.md secrets-doctor line extended to reference the skill (still uncommitted with user WIP).
