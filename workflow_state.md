@@ -553,3 +553,17 @@ Actions:
 - config/claude/CLAUDE.md: dropped sequencial-thinking instruction; replaced "Browser-Tools MCP" /
   "Prefer browse mcp to chrome-for-claude" with claude-in-chrome (local) + browser-network (remote) guidance.
 - memory server KEPT: hostname memory-mcp currently unresolvable; user fixing DNS + /etc/hosts separately.
+
+## Log — 2026-07-31 secrets-doctor util-script (approved by user)
+
+Motivation: diagnosing secret propagation kept requiring an ad-hoc three-command pipeline
+(env test + keychain grep + secrets.sh grep) whose no-value-leak property was implicit.
+
+Actions:
+- util-scripts/secrets-doctor: new single-purpose diagnostic — reports STORE (via secret_list,
+  names only) → EXPORTS (config/shell/secrets.sh line) → ENV per key; prefix expansion
+  (e.g. PIPELINE_GUARD); derived vars (aliases like AZURE_DEVOPS_PAT) marked n/a for store;
+  exit 0 intact / 1 broken / 2 setup error. Never reads secret values — structural guarantee.
+- CLAUDE.md: documented under shell features (uncommitted — file already had unrelated WIP hunk).
+- Verified: default run (7 keys, all green), prefix match, derived key, bogus key (exit 1),
+  env -u AZDO_PAT break detection (exit 1), --help.
