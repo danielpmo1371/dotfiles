@@ -1,6 +1,37 @@
 # Workflow State
 
-## In Progress: Documentation review & README overhaul (2026-07-29)
+## In Progress: Features & benefits documentation (2026-07-30)
+
+### State
+- **Status**: CONSTRUCT
+- **Branch**: main (docs-only, reversible)
+
+### Goal
+Document the features the dotfiles provide and the concrete workflow benefits
+of each — the "why it matters" companion to the README's "what it is".
+
+### Plan
+1. Explore agent inventories all user-facing features: tmux binds +
+   util-scripts, shell aliases/functions, git niceties, Claude Code
+   commands/skills/agents/hooks, machine lifecycle, nvim highlights, extras.
+2. Write docs/features-and-benefits.md organized by workflow benefit
+   (terminal workflow, AI-assisted dev, safety nets, portability,
+   reproducible setup) — each feature: trigger, what it does, benefit.
+3. Link it from README.md.
+
+### Log
+- 2026-07-30: Inventory agent dispatched.
+- 2026-07-30: Inventory returned (tmux binds+scripts, shell layer, git,
+  Claude hooks/commands/skills, lifecycle, nvim, ghostty/kitty extras).
+  Wrote docs/features-and-benefits.md (8 benefit-led sections). Fixed my own
+  README error: floax listed as active plugin but it's commented out in
+  tmux.conf — replaced with the real active set; linked the new doc from
+  README. Spot-verified rm()→~/bin, `*`→q ZLE widget, C-q popup bind.
+- **Status**: COMPLETED (staged with previous docs work)
+
+---
+
+## Completed: Documentation review & README overhaul (2026-07-29)
 
 ### State
 - **Status**: CONSTRUCT

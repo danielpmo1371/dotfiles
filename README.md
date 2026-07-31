@@ -30,10 +30,14 @@ Rationale and the decision test: [docs/terminal-agnostic-config.md](docs/termina
 
 ## What's Included
 
+What each feature buys you day-to-day:
+[docs/features-and-benefits.md](docs/features-and-benefits.md).
+
 - **Shell**: Zsh (Zap plugin manager, Powerlevel10k) and Bash, sharing modular
   configs from `config/shell/` (env, path, aliases, git, tmux)
-- **Tmux**: TPM plugins (gruvbox, resurrect, continuum, floax) plus a popup
-  workflow backed by `util-scripts/` — highlights (prefix is `C-e`):
+- **Tmux**: TPM plugins (gruvbox, resurrect + continuum session persistence,
+  which-key, vim-tmux-navigator) plus a hand-rolled popup workflow backed by
+  `util-scripts/` — highlights (prefix is `C-e`):
   - `prefix i` — Claude pane picker: fzf list of every pane running Claude
     Code with live preview; Enter jumps to it
   - `C-a` / `C-w` / `C-s` — nvim, lazygit, and clean-shell popups
