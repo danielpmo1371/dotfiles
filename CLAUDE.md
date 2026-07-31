@@ -74,6 +74,10 @@ config/              # Configuration files organized by tool
 
 **Package Manager**: Auto-detects available managers, prompts user on first run, caches choice in `~/.dotfiles_pkg_manager`.
 
+**Secrets diagnostics (`secrets-doctor`)**: `util-scripts/secrets-doctor [KEY|PREFIX ...]` reports where the secret chain breaks (OS store → `config/shell/secrets.sh` export → shell env) without ever printing values — names-only by design. No args checks every key `secrets.sh` reads from the store; exit 0 = chain intact, 1 = broken. Use this instead of ad-hoc `security`/grep pipelines when a token (e.g. `AZDO_PAT`, `PIPELINE_GUARD_*`) isn't reaching a tool.
+
+**Terminal.app font (macOS)**: `installers/terminals.sh` sets the default profile's font to a Nerd Font (`MesloLGS-NF-Regular`) via AppleScript against the running app — Terminal.app rewrites its plist on quit, so `defaults write`/symlinks don't stick. Only the font family is changed; runs under `--terminals`. Requires the font (`--fonts`) and Automation permission; non-fatal warn otherwise. Note: Terminal.app is 256-color only, so p10k/tmux colors remain approximated.
+
 ### Terminal-Agnostic Configuration (binding decisions)
 
 **Never reach for `config/ghostty/config` first.** Implement behaviour in the most
