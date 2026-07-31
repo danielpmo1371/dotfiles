@@ -28,6 +28,15 @@ secrets-doctor PIPELINE_GUARD     # prefix — expands to all matching keys
 
 Lives at `$DOTFILES_DIR/util-scripts/secrets-doctor` (on PATH). Exit codes: 0 = chain intact, 1 = at least one break, 2 = setup error. `--help` for details.
 
+Escalation flags (still never print values — the value is read in-process and only pass/fail facts are reported):
+
+```bash
+secrets-doctor --probe KEY               # also flag EMPTY values and embedded newlines/ctrl chars
+secrets-doctor --match '^.{20,}$' KEY    # value must match regex (length floor, shape check)
+```
+
+Start plain; add `--probe` when presence checks all pass but the tool still fails.
+
 ## Interpreting the output
 
 The failure pattern IS the diagnosis:
@@ -36,7 +45,8 @@ The failure pattern IS the diagnosis:
 |---------|---------|---------|-----------------|
 | MISSING | L*n*    | MISSING | Secret never stored → `secret_set KEY <value>` (ask the user to run it with the real value — never handle the value yourself) |
 | ok      | MISSING | MISSING | Stored but not exported → add `export KEY="$(secret KEY 2>/dev/null)"` to `config/shell/secrets.sh` |
-| ok      | L*n*    | MISSING | Chain fine, the current shell is stale → user restarts shell or re-sources `secrets.sh`; long-running processes (MCP servers, tmux panes) need a restart too |
+| ok      | L*n*    | MISSING | Chain fine, the current shell is stale → user restarts shell or re-sources `secrets.sh`; long-running processes (MCP servers, tmux panes) need a restart too. If a restart doesn't turn ENV green, re-run with `--probe` — the stored value may be `EMPTY` |
+| EMPTY / ctrl-chars | L*n* | MISSING | (`--probe` mode) Entry exists but the value is empty or has embedded newlines (paste bug) → user re-runs `secret_set KEY <value>` |
 | ok      | L*n*    | set     | Not a secrets problem — stop here and look elsewhere (wrong var name expected by the tool, scope/permissions of the token, network) |
 | n/a     | L*n* (derived) | MISSING | Alias var (e.g. AZURE_DEVOPS_PAT re-exports AZDO_PAT) → diagnose the source key instead |
 
