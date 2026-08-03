@@ -194,3 +194,6 @@ alias taskmaster='task-master'
 alias work='ta WORK'
 alias logout-claude='unset CLAUDE_CODE_OAUTH_TOKEN'
 alias dns-flush='sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder'
+
+# Hermes Agent — ensure ~/.local/bin is on PATH
+export PATH="$HOME/.local/bin:$PATH"
