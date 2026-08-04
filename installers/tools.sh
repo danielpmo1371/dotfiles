@@ -60,6 +60,8 @@ install_tools() {
     # Platform-specific desktop notifier
     if [[ "$OSTYPE" == "darwin"* ]]; then
         specs+=("terminal-notifier|terminal-notifier|terminal-notifier|")
+        # Display layout CLI (resolution, arrangement, rotation) - macOS only
+        specs+=("displayplacer|displayplacer||")
     else
         specs+=("notify-send|libnotify|libnotify-bin|libnotify")
     fi
