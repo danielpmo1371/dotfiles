@@ -21,6 +21,10 @@ alias ...='cd ../..'
 # ─────────────────────────────────────────────────────────────────────────────
 #   Custom terminal commands behaviour
 # ─────────────────────────────────────────────────────────────────────────────
+# Case-insensitive grep for interactive use (aliases don't leak into scripts).
+# rg gets the same via RIPGREP_CONFIG_PATH (env.sh) -> config/ripgrep/config.
+alias grep='grep -i'
+
 # Override rm to move to a bin folder
 rm() {
     # Ensure the bin directory exists before moving files
