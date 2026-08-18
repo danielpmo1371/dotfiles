@@ -36,6 +36,9 @@ install_tools() {
     local specs=(
         "tmux|tmux|tmux|"
         "nvim|neovim|neovim|"
+        # nvim-treesitter (main branch) needs the CLI to build/install parsers
+        # (brew's plain "tree-sitter" formula is only the C library)
+        "tree-sitter|tree-sitter-cli|tree-sitter-cli|"
         "git|git|git|"
         "zsh|zsh|zsh|"
         "curl|curl|curl|"
