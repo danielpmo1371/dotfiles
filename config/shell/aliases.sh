@@ -120,7 +120,7 @@ q() {
     local model="$AI_MODEL"
     if [ -z "$model" ]; then
         case "${AI_PROVIDER:-groq}" in
-            groq)   model="groq/llama-3.1-8b-instant" ;;
+            groq)   model="groq/openai/gpt-oss-20b" ;;
             gemini) model="gemini-2.5-flash" ;;
             openai) model="gpt-4o-mini" ;;
             claude) model="claude-haiku-4-5-20251001" ;;
