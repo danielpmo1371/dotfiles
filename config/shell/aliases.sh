@@ -240,6 +240,49 @@ alias fetch='fastfetch'
 # fi
 
 # ─────────────────────────────────────────────────────────────────────────────
+#   macOS power management (lid / caffeinate)
+# ─────────────────────────────────────────────────────────────────────────────
+if [[ "$OSTYPE" == darwin* ]]; then
+    # lid off|on|status — control whether closing the lid sleeps the Mac.
+    # disablesleep persists across reboots: a closed MacBook in a bag stays
+    # awake, runs hot and drains — hence the warning and the status command.
+    lid() {
+        case "$1" in
+            off)
+                sudo pmset -a disablesleep 1 && \
+                    echo "⚠️  Lid close no longer sleeps this Mac (persists across reboots)." && \
+                    echo "   Battery drains and heat builds if closed in a bag. Restore: lid on"
+                ;;
+            on)
+                sudo pmset -a disablesleep 0 && echo "Normal lid-close sleep restored."
+                ;;
+            status|"")
+                pmset -g | grep -E 'disablesleep|^ sleep|SleepDisabled' || \
+                    echo "disablesleep not set (normal lid behavior)"
+                ;;
+            *)
+                echo "usage: lid off|on|status" >&2
+                return 1
+                ;;
+        esac
+    }
+    alias insomnia='lid off'
+    alias rest='lid on'
+
+    # caff [cmd...] — keep the Mac awake (lid OPEN only; caffeinate cannot
+    # override a closed lid — that's what `lid off` is for).
+    # No args: awake until Ctrl+C. With args: awake only while <cmd> runs.
+    caff() {
+        if [[ $# -eq 0 ]]; then
+            echo "Staying awake until Ctrl+C (lid must stay open)..."
+            caffeinate -is
+        else
+            caffeinate -is "$@"
+        fi
+    }
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
 #   Shell functions
 # ─────────────────────────────────────────────────────────────────────────────
 # Load the add-shortcut function form so `add-shortcut <name>` can capture the
