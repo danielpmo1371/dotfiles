@@ -17,4 +17,4 @@ OLLAMA_API_KEY=your_ollama_key_here
 TASK_MASTER_TOOLS=core
 
 # Memory Server Configuration
-MCP_MEMORY_SERVER_URL=http://192.168.1.107:8000
+MCP_MEMORY_SERVER_URL=http://<your-memory-server-ip>:8000

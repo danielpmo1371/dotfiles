@@ -49,7 +49,7 @@ Fixed the bug in the **installed** version at `~/.local/lib/secrets/secrets.sh` 
 
 ### 1. Applied Fix to Source Repository
 
-**File**: `/Users/daniel/repos/secrets/secrets.sh`
+**File**: `/Users/you/repos/secrets/secrets.sh`
 
 **Change**:
 ```bash
@@ -86,14 +86,14 @@ diff ~/repos/secrets/secrets.sh ~/.local/lib/secrets/secrets.sh
 ## Learning Mechanisms Implemented
 
 ### 1. Comprehensive Analysis Document
-**File**: `/Users/daniel/repos/dotfiles/docs/judgment-error-analysis.md`
+**File**: `/Users/you/repos/dotfiles/docs/judgment-error-analysis.md`
 - Complete root cause analysis
 - Mental model failures identified
 - Red flags that should have triggered "wait..."
 - Decision tree for external dependencies
 
 ### 2. External Dependency Tracking
-**File**: `/Users/daniel/repos/dotfiles/DEPENDENCIES.md`
+**File**: `/Users/you/repos/dotfiles/DEPENDENCIES.md`
 - Documents ALL external dependencies
 - Source repo locations
 - Install locations
@@ -102,7 +102,7 @@ diff ~/repos/secrets/secrets.sh ~/.local/lib/secrets/secrets.sh
 - Quick reference table
 
 ### 3. CLAUDE.md Safety Rules (Project-Level)
-**File**: `/Users/daniel/repos/dotfiles/CLAUDE.md`
+**File**: `/Users/you/repos/dotfiles/CLAUDE.md`
 
 New section: **External Dependency Safety Rules**
 - Mandatory `git ls-files` check before editing
@@ -111,7 +111,7 @@ New section: **External Dependency Safety Rules**
 - Fix workflow documented
 
 ### 4. CLAUDE.md Safety Protocol (Global User Rules)
-**File**: `/Users/daniel/.claude/CLAUDE.md`
+**File**: `/Users/you/.claude/CLAUDE.md`
 
 New section: **File Editing Safety Protocol**
 - Pre-edit verification checklist
@@ -126,7 +126,7 @@ New section: **File Editing Safety Protocol**
 - Queryable for future reference
 
 ### 6. Workflow State Tracking
-**File**: `/Users/daniel/repos/dotfiles/workflow_state.md`
+**File**: `/Users/you/repos/dotfiles/workflow_state.md`
 - Logged the entire incident
 - Documented fix application steps
 - Verified outcomes

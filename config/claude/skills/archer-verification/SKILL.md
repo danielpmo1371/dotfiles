@@ -26,7 +26,7 @@ The archer-pro-active project is a Docker container running:
 - **Conversation logging** (daily markdown logs)
 - **Memory and journal persistence** (Docker volumes)
 
-Project path: `/Users/daniel/repos/archer-pro-active`
+Project path: `/Users/you/repos/archer-pro-active`
 
 ## Verification Protocol
 
@@ -38,7 +38,7 @@ Execute in this order. **FAIL IMMEDIATELY** if any step fails.
 
 ```bash
 # Navigate to project
-cd /Users/daniel/repos/archer-pro-active
+cd /Users/you/repos/archer-pro-active
 
 # Verify project structure
 ls -la Dockerfile docker-compose.yml entrypoint.sh
@@ -58,7 +58,7 @@ pip list | grep -E "pytest|pytest-cov|pytest-mock"
 #### 1.2 Unit Tests (Target: <10s, 100% pass)
 
 ```bash
-cd /Users/daniel/repos/archer-pro-active
+cd /Users/you/repos/archer-pro-active
 pytest tests/unit/ -v -m unit --tb=short
 ```
 
@@ -396,7 +396,7 @@ Provide results in this structured format:
 # Archer-Pro-Active Verification Report
 Date: [YYYY-MM-DD HH:MM:SS]
 Verifier: Claude Verification Agent
-Project Path: /Users/daniel/repos/archer-pro-active
+Project Path: /Users/you/repos/archer-pro-active
 Git Commit: [hash from git rev-parse HEAD]
 
 ## Executive Summary
@@ -631,7 +631,7 @@ To run this verification agent:
 
 ```bash
 # From any directory
-claude /Users/daniel/repos/dotfiles/config/claude/skills/archer-verification
+claude /Users/you/repos/dotfiles/config/claude/skills/archer-verification
 
 # Or if configured as skill
 /archer-verification

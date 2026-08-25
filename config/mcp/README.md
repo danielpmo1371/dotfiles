@@ -30,7 +30,11 @@ This directory contains MCP (Model Context Protocol) server definitions used by 
 
 ### Browser Server
 
-- **browser-network** (SSE at `http://10.0.0.102:3002/sse`) — Connects to a BrowserMCP instance running on another machine on the private network. Use this for remote browser automation. Local browsing is handled by the Claude-in-Chrome extension, not an MCP server in this config.
+There are two browser MCP servers for different use cases:
+
+- **browser-local** (stdio) — Runs `@browsermcp/mcp` locally via npx. Use this when the browser is on the same machine as Claude.
+- **browser-network** (SSE at `http://<your-browser-mcp-host>:3002/sse`) — Connects to a BrowserMCP instance running on another machine on the private network. Use this for remote browser automation.
+
 
 ### Other Servers
 - **azure-devops** (stdio) — Azure DevOps MCP for work items, repos, and pipelines.
@@ -58,7 +62,7 @@ For URL-based servers (memory, browser-network), Claude Desktop uses `mcp-remote
   },
   "browser-network": {
     "command": "npx",
-    "args": ["mcp-remote", "http://10.0.0.102:3002/sse", "--allow-http", "--transport", "sse-only"]
+    "args": ["mcp-remote", "http://<your-browser-mcp-host>:3002/sse", "--allow-http", "--transport", "sse-only"]
   }
 }
 ```
@@ -92,7 +96,7 @@ The installer also supports syncing to Claude Desktop (opt-in with `--desktop` f
 3. Verify systemd service on the container: `systemctl status mcp-memory`
 
 ### Browser Network Server Not Connecting
-1. Check the remote host is reachable: `curl -I http://10.0.0.102:3002/sse`
+1. Check the remote host is reachable: `curl -I http://<your-browser-mcp-host>:3002/sse`
 2. Verify BrowserMCP is running on the remote machine
 
 ### MCP Not Loading in Claude Code

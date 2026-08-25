@@ -4,7 +4,7 @@
 
 ## The Error
 
-Fixed a zsh compatibility bug in `/Users/daniel/.local/lib/secrets/secrets.sh` (installed library) instead of the source code at `/Users/daniel/repos/secrets/secrets.sh`.
+Fixed a zsh compatibility bug in `/Users/you/.local/lib/secrets/secrets.sh` (installed library) instead of the source code at `/Users/you/repos/secrets/secrets.sh`.
 
 ### What Was Patched
 
@@ -70,8 +70,8 @@ The fix is correct and necessary (the original line's nested parameter expansion
 
 **Source Repository:**
 - Repo: `https://github.com/nuvemlabs/secrets.git`
-- Local clone: `/Users/daniel/repos/secrets/`
-- File to edit: `/Users/daniel/repos/secrets/secrets.sh`
+- Local clone: `/Users/you/repos/secrets/`
+- File to edit: `/Users/you/repos/secrets/secrets.sh`
 
 **Fix Persistence Strategy:**
 1. Edit source in `~/repos/secrets/secrets.sh`

@@ -3,7 +3,7 @@
 alias setup="nvim ~/.bashrc"
 alias root="cd /c/repos/"
 alias reterm="source ~/.bashrc"
-alias setupclaude="vim /mnt/c/Users/daniel.paiva/.claude/settings.json"
+alias setupclaude="vim /mnt/c/Users/$USER/.claude/settings.json"
 alias cc="claude -p"
 alias xclip="xclip -selection clipboard"
 alias setup-vim="nvim ~/.config/nvim/init.lua"

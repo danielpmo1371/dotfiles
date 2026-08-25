@@ -18,7 +18,7 @@ Created a complex 2001-line skill (`learn-from-mistake`) without using the speci
 **What happened as a result:**
 - Context ambiguity: Forked agent wouldn't know to work in dotfiles repo
 - Relative paths (`docs/learning/`, `CLAUDE.md`, `workflow_state.md`) had no anchor
-- Hardcoded paths in EXAMPLES.md (`/Users/daniel/repos/dotfiles/...`)
+- Hardcoded paths in EXAMPLES.md (`/Users/you/repos/dotfiles/...`)
 - Required 61+ lines of Environment Context fixes after creation
 - Generated 185-line skill-forge review document identifying issues
 
@@ -290,7 +290,7 @@ Creating/Editing Skill?
    - Used `$DOTFILES_REPO` anchor consistently
 
 5. **Fixed EXAMPLES.md Hardcoded Paths**
-   - Before: `/Users/daniel/repos/dotfiles/docs/learning/judgment-error-analysis.md`
+   - Before: `/Users/you/repos/dotfiles/docs/learning/judgment-error-analysis.md`
    - After: `docs/learning/judgment-error-analysis.md` (relative, with context)
 
 6. **Fixed REFERENCE.md Cross-Reference Diagram**
