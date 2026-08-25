@@ -1,0 +1,649 @@
+#!/usr/bin/env python3
+"""pr-radar — generate a dynamic HTML dashboard of your open pull requests.
+
+Sources: Azure DevOps (az CLI) and GitHub (gh CLI).
+
+Usage:
+  pr-radar                          # both sources, opens the page
+  pr-radar --source azdo            # Azure DevOps only
+  pr-radar --source github          # GitHub only
+  pr-radar --org https://dev.azure.com/other-org
+  pr-radar --project "Travel Declaration" --project Platform
+  pr-radar -o ~/prs.html --no-open
+
+Auth:
+  Azure DevOps uses AZURE_DEVOPS_EXT_PAT (falls back to AZDO_PAT from the
+  keychain-backed secrets library). GitHub uses the gh CLI's own auth.
+
+Identity:
+  --creator defaults to $PR_RADAR_CREATOR, then `git config user.email`.
+  --github-user defaults to `gh api user`.
+"""
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from string import Template
+
+WI_IN_TITLE = re.compile(r"US#\s*(\d{4,7})|^(\d{5,7})\s*[:\-]")
+
+
+def die(msg):
+    print(f"pr-radar: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def run(cmd, ok_fail=False):
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    if res.returncode != 0:
+        if ok_fail:
+            return None
+        die(f"command failed: {' '.join(cmd)}\n{res.stderr.strip()}")
+    return res.stdout
+
+
+def run_json(cmd, ok_fail=False):
+    out = run(cmd, ok_fail=ok_fail)
+    if out is None:
+        return None
+    try:
+        return json.loads(out)
+    except json.JSONDecodeError:
+        if ok_fail:
+            return None
+        die(f"unparseable JSON from: {' '.join(cmd)}")
+
+
+def default_azdo_org():
+    cfg = Path.home() / ".azure" / "azuredevops" / "config"
+    if cfg.is_file():
+        for line in cfg.read_text().splitlines():
+            if line.strip().startswith("organization"):
+                return line.split("=", 1)[1].strip()
+    return None
+
+
+def default_creator():
+    env = os.environ.get("PR_RADAR_CREATOR")
+    if env:
+        return env
+    out = run(["git", "config", "user.email"], ok_fail=True)
+    return out.strip() if out else None
+
+
+def ensure_azdo_pat():
+    if os.environ.get("AZURE_DEVOPS_EXT_PAT"):
+        return
+    pat = os.environ.get("AZDO_PAT")
+    if pat:
+        os.environ["AZURE_DEVOPS_EXT_PAT"] = pat
+        return
+    # Last resort: the keychain entry the secrets library manages.
+    out = run(["security", "find-generic-password", "-s", "AZDO_PAT", "-w"], ok_fail=True)
+    if out and out.strip():
+        os.environ["AZURE_DEVOPS_EXT_PAT"] = out.strip()
+
+
+def fetch_azdo(org, projects, creator):
+    ensure_azdo_pat()
+    if not os.environ.get("AZURE_DEVOPS_EXT_PAT"):
+        die("no Azure DevOps PAT found (AZURE_DEVOPS_EXT_PAT / AZDO_PAT); "
+            "run secrets-doctor AZDO_PAT")
+    if not projects:
+        listed = run_json(["az", "devops", "project", "list", "--org", org,
+                           "--query", "value[].name", "-o", "json"])
+        projects = listed or []
+    prs, skipped = [], []
+    for proj in projects:
+        raw = run_json(["az", "repos", "pr", "list", "--status", "active",
+                        "--org", org, "--project", proj, "-o", "json"], ok_fail=True)
+        if raw is None:
+            skipped.append(proj)
+            continue
+        for p in raw:
+            if creator.lower() not in p["createdBy"].get("uniqueName", "").lower():
+                continue
+            wi = None
+            m = WI_IN_TITLE.search(p["title"])
+            if m:
+                wi = m.group(1) or m.group(2)
+            prs.append({
+                "src": "azdo",
+                "id": str(p["pullRequestId"]),
+                "title": p["title"],
+                "repo": p["repository"]["name"],
+                "project": p["repository"]["project"]["name"],
+                "created": p["creationDate"],
+                "draft": p["isDraft"],
+                "source": p["sourceRefName"].removeprefix("refs/heads/"),
+                "target": p["targetRefName"].removeprefix("refs/heads/"),
+                "reviewers": [{"name": r["displayName"], "vote": r["vote"]}
+                              for r in p.get("reviewers") or []],
+                "wi": wi,
+                "url": (f"{org}/{quote(p['repository']['project']['name'])}/_git/"
+                        f"{quote(p['repository']['name'])}/pullrequest/{p['pullRequestId']}"),
+            })
+    if skipped:
+        print(f"pr-radar: skipped inaccessible project(s): {', '.join(skipped)}",
+              file=sys.stderr)
+    return prs
+
+
+def fetch_work_items(org, ids):
+    stories = {}
+    for wi in sorted(ids):
+        item = run_json(["az", "boards", "work-item", "show", "--id", wi,
+                         "--org", org, "-o", "json"], ok_fail=True)
+        if item:
+            f = item.get("fields", {})
+            stories[wi] = {"title": f.get("System.Title", ""),
+                           "type": f.get("System.WorkItemType", ""),
+                           "state": f.get("System.State", "")}
+    return stories
+
+
+def fetch_github(user):
+    if not shutil.which("gh"):
+        die("gh CLI not found")
+    if not user:
+        user = run(["gh", "api", "user", "--jq", ".login"]).strip()
+    raw = run_json(["gh", "search", "prs", "--author", user, "--state", "open",
+                    "--json", "title,url,repository,createdAt,isDraft,number"])
+    return user, [{
+        "src": "github",
+        "id": f"#{p['number']}",
+        "title": p["title"],
+        "repo": p["repository"]["name"],
+        "project": p["repository"]["nameWithOwner"].split("/")[0],
+        "created": p["createdAt"],
+        "draft": p["isDraft"],
+        "source": "", "target": "", "reviewers": [], "wi": None,
+        "url": p["url"],
+    } for p in raw]
+
+
+def quote(s):
+    from urllib.parse import quote as q
+    return q(s, safe="")
+
+
+def build_html(data):
+    return Template(TEMPLATE).safe_substitute(DATA=json.dumps(data, ensure_ascii=False))
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="pr-radar", description=__doc__.splitlines()[0])
+    ap.add_argument("--source", choices=["all", "azdo", "github"], default="all",
+                    help="which PR source(s) to include (default: all)")
+    ap.add_argument("--org", default=None,
+                    help="Azure DevOps org URL (default: az devops configure)")
+    ap.add_argument("--project", action="append", default=None,
+                    help="AzDO project to scan; repeatable (default: all projects)")
+    ap.add_argument("--creator", default=None,
+                    help="AzDO creator email substring (default: $PR_RADAR_CREATOR "
+                         "or git config user.email)")
+    ap.add_argument("--github-user", default=None,
+                    help="GitHub login (default: gh api user)")
+    ap.add_argument("--group-by", choices=["story", "repo"], default="story",
+                    help="initial AzDO grouping: story>repo or repo>story "
+                         "(default: story; toggleable on the page)")
+    ap.add_argument("-o", "--out", default=None,
+                    help="output HTML path (default: ~/.cache/pr-radar/index.html)")
+    ap.add_argument("--open", dest="open_page", action="store_true", default=True,
+                    help="open the page when done (default)")
+    ap.add_argument("--no-open", dest="open_page", action="store_false")
+    ap.add_argument("--json", action="store_true",
+                    help="print the collected PR data as JSON instead of HTML")
+    args = ap.parse_args()
+
+    prs, stories, org, gh_user, creator = [], {}, None, None, None
+
+    if args.source in ("all", "azdo"):
+        org = args.org or default_azdo_org()
+        if not org:
+            die("no AzDO org: pass --org or set one via az devops configure")
+        creator = args.creator or default_creator()
+        if not creator:
+            die("no creator identity: pass --creator or set PR_RADAR_CREATOR")
+        azdo = fetch_azdo(org, args.project, creator)
+        prs += azdo
+        stories = fetch_work_items(org, {p["wi"] for p in azdo if p["wi"]})
+
+    if args.source in ("all", "github"):
+        gh_user, gh_prs = fetch_github(args.github_user)
+        prs += gh_prs
+
+    data = {
+        "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "source": args.source,
+        "org": org, "creator": creator, "githubUser": gh_user,
+        "groupBy": args.group_by,
+        "prs": prs, "stories": stories,
+    }
+
+    if args.json:
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+        return
+
+    out = Path(args.out).expanduser() if args.out else \
+        Path.home() / ".cache" / "pr-radar" / "index.html"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(build_html(data), encoding="utf-8")
+    print(f"pr-radar: {len(prs)} open PRs -> {out}")
+
+    if args.open_page:
+        opener = "open" if sys.platform == "darwin" else "xdg-open"
+        subprocess.run([opener, str(out)], check=False)
+
+
+TEMPLATE = r"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Open PR Radar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #F6F7F5; --surface: #FFFFFF; --surface-2: #EEF0EC;
+    --ink: #20262E; --ink-2: #5A626C; --ink-3: #8B929B; --line: #DDE0DA;
+    --accent: #0E7C86; --accent-ink: #0A5C64; --accent-soft: #E0EFF0;
+    --good: #2E844A; --good-soft: #E3F1E7;
+    --warn: #B7791F; --warn-soft: #F6EDDC;
+    --bad: #C4432B; --bad-soft: #F8E6E1;
+    --draft: #6B5CA5; --draft-soft: #ECE8F6;
+    --on-accent: #FFFFFF;
+    --shadow: 0 1px 2px rgba(32,38,46,.06), 0 4px 14px rgba(32,38,46,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]):not([data-theme="medium"]) {
+      --bg: #14181D; --surface: #1C2229; --surface-2: #232A32;
+      --ink: #E8EBE6; --ink-2: #A6ADB5; --ink-3: #767E87; --line: #2E363F;
+      --accent: #4FB8C1; --accent-ink: #7BD0D8; --accent-soft: #16333A;
+      --good: #5CBF7A; --good-soft: #1B3324;
+      --warn: #D9A24A; --warn-soft: #382C15;
+      --bad: #E4705A; --bad-soft: #3D1F17;
+      --draft: #A79AE0; --draft-soft: #2A2540;
+      --on-accent: #10262A;
+      --shadow: 0 1px 2px rgba(0,0,0,.35), 0 4px 14px rgba(0,0,0,.25);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14181D; --surface: #1C2229; --surface-2: #232A32;
+    --ink: #E8EBE6; --ink-2: #A6ADB5; --ink-3: #767E87; --line: #2E363F;
+    --accent: #4FB8C1; --accent-ink: #7BD0D8; --accent-soft: #16333A;
+    --good: #5CBF7A; --good-soft: #1B3324;
+    --warn: #D9A24A; --warn-soft: #382C15;
+    --bad: #E4705A; --bad-soft: #3D1F17;
+    --draft: #A79AE0; --draft-soft: #2A2540;
+    --on-accent: #10262A;
+    --shadow: 0 1px 2px rgba(0,0,0,.35), 0 4px 14px rgba(0,0,0,.25);
+  }
+  :root[data-theme="medium"] {
+    --bg: #3B434E; --surface: #454E5A; --surface-2: #515B68;
+    --ink: #ECEEF0; --ink-2: #BCC3CC; --ink-3: #959DA8; --line: #59636F;
+    --accent: #6FC7CE; --accent-ink: #9ADDE2; --accent-soft: #2C4A50;
+    --good: #7BCB93; --good-soft: #2E4636;
+    --warn: #E0B266; --warn-soft: #4A3D22;
+    --bad: #E88A76; --bad-soft: #4C2C24;
+    --draft: #B7ABE8; --draft-soft: #3A3552;
+    --on-accent: #16262B;
+    --shadow: 0 1px 2px rgba(0,0,0,.25), 0 4px 14px rgba(0,0,0,.18);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+    font-size: 15px; line-height: 1.5;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 40px 24px 80px; }
+  header .row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  header h1 {
+    font-family: "Archivo", "Helvetica Neue", sans-serif; font-weight: 700;
+    font-size: clamp(26px, 4vw, 34px); letter-spacing: -0.01em;
+    margin: 0 0 4px; text-wrap: balance;
+  }
+  header .sub { color: var(--ink-2); margin: 0 0 28px; }
+  header .sub .mono { font-family: "IBM Plex Mono", monospace; font-size: 13px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 28px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; box-shadow: var(--shadow); }
+  .stat .n { font-family: "Archivo", sans-serif; font-weight: 600; font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .stat .l { color: var(--ink-2); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.07em; margin-top: 2px; }
+  .stat.alert .n { color: var(--bad); }
+  .stat.attn .n { color: var(--warn); }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+  .toolbar input[type="search"] {
+    flex: 1 1 220px; padding: 8px 12px; border: 1px solid var(--line);
+    border-radius: 7px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px;
+  }
+  .toolbar input[type="search"]:focus-visible, .chip:focus-visible,
+  .seg button:focus-visible, .toolbar select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; background: var(--surface); }
+  .seg button { border: 0; background: transparent; color: var(--ink-2); padding: 8px 14px; font: inherit; font-size: 13.5px; font-weight: 500; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.on { background: var(--accent); color: var(--on-accent); }
+  .toolbar select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13.5px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+  .chip { border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); border-radius: 999px; padding: 5px 13px; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+  .chip .cnt { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
+  .chip.on .cnt { color: var(--accent-ink); }
+  .group-h {
+    font-family: "Archivo", sans-serif; font-weight: 600; font-size: 13px;
+    text-transform: uppercase; letter-spacing: 0.09em; color: var(--ink-2);
+    margin: 30px 0 10px; display: flex; align-items: baseline; gap: 10px;
+  }
+  .group-h .rule { flex: 1; height: 1px; background: var(--line); align-self: center; }
+  .story { margin-bottom: 18px; }
+  .repo-grp { margin-bottom: 6px; }
+  .story .repo-grp { margin-left: 14px; }
+  .repo-h {
+    display: flex; align-items: baseline; gap: 8px;
+    font-family: "IBM Plex Mono", monospace; font-size: 12.5px; font-weight: 500;
+    color: var(--ink-2); margin: 8px 0 6px; padding-left: 2px;
+  }
+  .repo-h::before { content: "\2514"; color: var(--ink-3); }
+  .repo-grp:first-of-type .repo-h, #list > .repo-grp .repo-h { margin-top: 0; }
+  #list > .repo-grp .repo-h::before { content: none; }
+  .repo-h .cnt { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .repo-grp .pr { margin-left: 14px; }
+  .repo-grp .story { margin-left: 14px; margin-bottom: 10px; }
+  #list > .repo-grp { margin-bottom: 16px; }
+  #list > .repo-grp > .repo-h { font-size: 13.5px; color: var(--ink); }
+  .story-h { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+  .story-h th {
+    text-align: left; font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--ink-3); padding: 0 12px 3px;
+  }
+  .story-h td {
+    background: var(--surface-2); border: 1px solid var(--line);
+    padding: 7px 12px; font-size: 13.5px;
+  }
+  .story-h td.us { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; white-space: nowrap; color: var(--accent-ink); font-weight: 500; width: 1%; border-radius: 6px 0 0 6px; border-right: 0; }
+  .story-h td.us-title { font-weight: 600; border-radius: 0 6px 6px 0; }
+  .story-h td.us-title .wistate { font-weight: 400; color: var(--ink-3); font-size: 12px; margin-left: 8px; }
+  .pr {
+    display: block; text-decoration: none; color: inherit;
+    background: var(--surface); border: 1px solid var(--line);
+    border-left: 3px solid var(--accent); border-radius: 8px;
+    padding: 13px 16px; margin-bottom: 10px; box-shadow: var(--shadow);
+    transition: border-color .12s, transform .12s;
+  }
+  .pr:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .pr.stale { border-left-color: var(--bad); }
+  .pr.aging { border-left-color: var(--warn); }
+  .pr.draft-pr { border-left-color: var(--draft); }
+  @media (prefers-reduced-motion: reduce) { .pr { transition: none; } .pr:hover { transform: none; } }
+  .pr .top { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+  .pr .title { font-weight: 600; font-size: 15px; }
+  .pr .meta { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: 13px; color: var(--ink-2); }
+  .pr .meta .mono { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; }
+  .pr .meta .arrow { color: var(--ink-3); }
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .badge.age { background: var(--surface-2); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .badge.age.warn { background: var(--warn-soft); color: var(--warn); }
+  .badge.age.bad { background: var(--bad-soft); color: var(--bad); }
+  .badge.draft { background: var(--draft-soft); color: var(--draft); }
+  .badge.approved { background: var(--good-soft); color: var(--good); }
+  .badge.suggestions { background: var(--warn-soft); color: var(--warn); }
+  .badge.noreview { background: var(--surface-2); color: var(--ink-3); }
+  .empty { text-align: center; color: var(--ink-2); padding: 48px 0; border: 1px dashed var(--line); border-radius: 8px; }
+  footer { margin-top: 40px; color: var(--ink-3); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="row">
+      <h1>Open PR Radar</h1>
+      <div class="seg" id="themeSeg" role="group" aria-label="Theme">
+        <button data-theme-opt="light">Light</button>
+        <button data-theme-opt="medium">Medium</button>
+        <button data-theme-opt="dark">Dark</button>
+      </div>
+    </div>
+    <p class="sub" id="subtitle"></p>
+  </header>
+  <div class="stats" id="stats"></div>
+  <div class="toolbar">
+    <input type="search" id="q" placeholder="Search title, repo, branch, work item&hellip;" aria-label="Search pull requests">
+    <div class="seg" id="srcSeg" role="group" aria-label="Source filter"></div>
+    <div class="seg" id="groupSeg" role="group" aria-label="Grouping">
+      <button data-group="story">Story &rsaquo; Repo</button>
+      <button data-group="repo">Repo &rsaquo; Story</button>
+    </div>
+    <select id="sort" aria-label="Sort order">
+      <option value="oldest">Oldest first</option>
+      <option value="newest" selected>Newest first</option>
+    </select>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div id="list"></div>
+  <footer>Age thresholds: <strong>amber</strong> &gt; 30 days, <strong>red</strong> &gt; 90 days.
+    Left edge colour mirrors the worst signal on the row. Reviewer badge shows the best
+    vote received (Azure DevOps only). Work-item headers come from Azure Boards.</footer>
+</div>
+<script>
+const DATA = $DATA;
+const PRS = DATA.prs, STORIES = DATA.stories || {};
+PRS.forEach(p => { p.ageDays = Math.max(0, Math.floor((Date.now() - new Date(p.created).getTime()) / 86400000)); });
+
+const state = { q: "", src: "all", project: null, sort: "newest", group: "story" };
+const STRIP = /^\s*(?:US#?\s*\d{4,7}|\d{5,7})\s*[:\-]\s*/i;
+
+function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+function ageBadge(d) {
+  const cls = d > 90 ? "bad" : d > 30 ? "warn" : "";
+  const label = d === 0 ? "today" : d === 1 ? "1 day" : d < 60 ? d + " days" : Math.round(d / 30.44) + " months";
+  return `<span class="badge age ${cls}">${label} open</span>`;
+}
+function reviewBadge(p) {
+  if (p.src === "github") return "";
+  const votes = p.reviewers.map(r => r.vote);
+  if (votes.some(v => v === 10)) return `<span class="badge approved">approved</span>`;
+  if (votes.some(v => v === 5)) return `<span class="badge suggestions">approved w/ suggestions</span>`;
+  if (p.reviewers.length) return `<span class="badge noreview">awaiting review</span>`;
+  return `<span class="badge noreview">no reviewers</span>`;
+}
+function rowClass(p) {
+  if (p.ageDays > 90) return "stale";
+  if (p.ageDays > 30) return "aging";
+  if (p.draft) return "draft-pr";
+  return "";
+}
+function prCard(p, stripped, hideRepo) {
+  const title = stripped ? (p.title.replace(STRIP, "") || p.title) : p.title;
+  const ref = p.src === "azdo" ? "!" + p.id : p.id;
+  return `
+    <a class="pr ${rowClass(p)}" href="${p.url}" target="_blank" rel="noopener">
+      <div class="top">
+        <span class="title">${esc(title)}</span>
+        ${p.draft ? `<span class="badge draft">draft</span>` : ""}
+        ${ageBadge(p.ageDays)}
+        ${reviewBadge(p)}
+      </div>
+      <div class="meta">
+        <span class="mono">${hideRepo ? ref : esc(p.repo) + " " + ref}</span>
+        ${p.source ? `<span class="mono">${esc(p.source)} <span class="arrow">&rarr;</span> ${esc(p.target)}</span>` : ""}
+        <span>${new Date(p.created).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</span>
+      </div>
+    </a>`;
+}
+function filtered() {
+  const q = state.q.toLowerCase();
+  const hay = p => (p.title + " " + p.repo + " " + p.source + " " + p.target + " " + p.id
+    + " " + (p.wi || "") + " " + (p.wi && STORIES[p.wi] ? STORIES[p.wi].title : "")).toLowerCase();
+  let out = PRS.filter(p =>
+    (state.src === "all" || p.src === state.src) &&
+    (!state.project || p.project === state.project) &&
+    (!q || hay(p).includes(q)));
+  out.sort((a, b) => state.sort === "newest"
+    ? new Date(b.created) - new Date(a.created)
+    : new Date(a.created) - new Date(b.created));
+  return out;
+}
+function renderStats() {
+  const stale = PRS.filter(p => p.ageDays > 90).length;
+  const aging = PRS.filter(p => p.ageDays > 30 && p.ageDays <= 90).length;
+  const drafts = PRS.filter(p => p.draft).length;
+  const azdo = PRS.filter(p => p.src === "azdo").length;
+  const gh = PRS.filter(p => p.src === "github").length;
+  const noRev = PRS.filter(p => p.src === "azdo" && !p.reviewers.some(r => r.vote > 0)).length;
+  let cells = `<div class="stat"><div class="n">${PRS.length}</div><div class="l">Open PRs</div></div>`;
+  if (azdo && gh) cells += `<div class="stat"><div class="n">${azdo} / ${gh}</div><div class="l">Azure DevOps / GitHub</div></div>`;
+  if (azdo) cells += `<div class="stat attn"><div class="n">${noRev}</div><div class="l">Unapproved on AzDO</div></div>`;
+  cells += `<div class="stat alert"><div class="n">${stale}</div><div class="l">Stale (&gt;90 days)</div></div>
+    <div class="stat attn"><div class="n">${aging}</div><div class="l">Aging (31&ndash;90 days)</div></div>
+    <div class="stat"><div class="n">${drafts}</div><div class="l">Drafts</div></div>`;
+  document.getElementById("stats").innerHTML = cells;
+}
+function renderChips() {
+  const counts = {};
+  PRS.filter(p => state.src === "all" || p.src === state.src)
+     .forEach(p => counts[p.project] = (counts[p.project] || 0) + 1);
+  const el = document.getElementById("chips");
+  el.innerHTML = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([proj, n]) =>
+    `<button class="chip ${state.project === proj ? "on" : ""}" data-proj="${esc(proj)}">${esc(proj)} <span class="cnt">${n}</span></button>`).join("");
+  el.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => {
+    state.project = state.project === c.dataset.proj ? null : c.dataset.proj;
+    render();
+  }));
+}
+function storyHeader(wi) {
+  const s = STORIES[wi];
+  const title = s ? s.title : "(work item not resolved)";
+  const kind = s && s.type ? s.type : "WI";
+  const state_ = s && s.state ? `<span class="wistate">${esc(s.state)}</span>` : "";
+  return `<table class="story-h">
+    <tr><th scope="col">${esc(kind)} #</th><th scope="col">Work item title</th></tr>
+    <tr><td class="us">#${esc(wi)}</td><td class="us-title">${esc(title)}${state_}</td></tr>
+  </table>`;
+}
+function byRepo(prs) {
+  const m = new Map();
+  prs.forEach(p => { if (!m.has(p.repo)) m.set(p.repo, []); m.get(p.repo).push(p); });
+  return [...m.entries()];
+}
+function repoBlock(repo, prs, stripped) {
+  return `<div class="repo-grp">
+    <div class="repo-h">${esc(repo)} <span class="cnt">(${prs.length})</span></div>
+    ${prs.map(p => prCard(p, stripped, true)).join("")}
+  </div>`;
+}
+function splitByStory(items) {
+  const groups = new Map(); const loose = [];
+  items.forEach(p => {
+    if (p.wi) { if (!groups.has(p.wi)) groups.set(p.wi, []); groups.get(p.wi).push(p); }
+    else loose.push(p);
+  });
+  const ordered = [...groups.entries()].sort((a, b) =>
+    Math.max(...b[1].map(p => +new Date(p.created))) - Math.max(...a[1].map(p => +new Date(p.created))));
+  if (state.sort === "oldest") ordered.reverse();
+  return { ordered, loose };
+}
+function renderStoryFirst(items) {
+  const { ordered, loose } = splitByStory(items);
+  let html = "";
+  for (const [wi, prs] of ordered)
+    html += `<div class="story">${storyHeader(wi)}${byRepo(prs).map(([r, ps]) => repoBlock(r, ps, true)).join("")}</div>`;
+  html += byRepo(loose).map(([r, ps]) => repoBlock(r, ps, false)).join("");
+  return html;
+}
+function renderRepoFirst(items) {
+  const repos = byRepo(items).sort((a, b) =>
+    Math.max(...b[1].map(p => +new Date(p.created))) - Math.max(...a[1].map(p => +new Date(p.created))));
+  if (state.sort === "oldest") repos.reverse();
+  let html = "";
+  for (const [repo, prs] of repos) {
+    const { ordered, loose } = splitByStory(prs);
+    html += `<div class="repo-grp"><div class="repo-h">${esc(repo)} <span class="cnt">(${prs.length})</span></div>`;
+    for (const [wi, ps] of ordered)
+      html += `<div class="story">${storyHeader(wi)}${ps.map(p => prCard(p, true, true)).join("")}</div>`;
+    html += loose.map(p => prCard(p, false, true)).join("");
+    html += `</div>`;
+  }
+  return html;
+}
+function renderAzdo(items) {
+  return state.group === "repo" ? renderRepoFirst(items) : renderStoryFirst(items);
+}
+function renderList() {
+  const rows = filtered();
+  const el = document.getElementById("list");
+  if (!rows.length) { el.innerHTML = `<div class="empty">No pull requests match &mdash; clear the search or filters above.</div>`; return; }
+  const azdo = rows.filter(p => p.src === "azdo"), gh = rows.filter(p => p.src === "github");
+  const head = (label, n) => `<div class="group-h">${label} <span class="cnt">(${n})</span><span class="rule"></span></div>`;
+  let html = "";
+  if (azdo.length) html += head("Azure DevOps" + (DATA.org ? " &middot; " + esc(DATA.org.replace(/^https?:\/\/dev\.azure\.com\//, "")) : ""), azdo.length) + renderAzdo(azdo);
+  if (gh.length) html += head("GitHub" + (DATA.githubUser ? " &middot; " + esc(DATA.githubUser) : ""), gh.length) + gh.map(p => prCard(p, false)).join("");
+  el.innerHTML = html;
+}
+function render() { renderChips(); renderList(); }
+
+(function init() {
+  const gen = new Date(DATA.generated);
+  const who = [DATA.creator && `<span class="mono">${esc(DATA.creator)}</span> on Azure DevOps`,
+               DATA.githubUser && `<span class="mono">${esc(DATA.githubUser)}</span> on GitHub`]
+              .filter(Boolean).join(" &middot; ");
+  document.getElementById("subtitle").innerHTML =
+    `Open pull requests &mdash; ${who}. Snapshot ${gen.toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}; ages update live. Regenerate with <span class="mono">pr-radar</span>.`;
+  const seg = document.getElementById("srcSeg");
+  const srcs = [["all", "All"], ["azdo", "Azure DevOps"], ["github", "GitHub"]]
+    .filter(([k]) => k === "all" ? DATA.source === "all" : PRS.some(p => p.src === k));
+  seg.innerHTML = srcs.map(([k, l], i) => `<button data-src="${k}" class="${i === 0 ? "on" : ""}">${l}</button>`).join("");
+  state.src = srcs[0][0];
+  seg.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    seg.querySelectorAll("button").forEach(x => x.classList.remove("on"));
+    b.classList.add("on"); state.src = b.dataset.src; state.project = null; render();
+  }));
+  document.getElementById("q").addEventListener("input", e => { state.q = e.target.value; render(); });
+  document.getElementById("sort").addEventListener("change", e => { state.sort = e.target.value; render(); });
+
+  const GROUP_KEY = "pr-radar-group";
+  const groupSeg = document.getElementById("groupSeg");
+  function applyGroup(g) {
+    state.group = g;
+    groupSeg.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.group === g));
+  }
+  if (!PRS.some(p => p.src === "azdo")) groupSeg.style.display = "none";
+  groupSeg.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    applyGroup(b.dataset.group);
+    try { localStorage.setItem(GROUP_KEY, b.dataset.group); } catch (e) {}
+    render();
+  }));
+  let savedGroup = null;
+  try { savedGroup = localStorage.getItem(GROUP_KEY); } catch (e) {}
+  applyGroup(["story", "repo"].includes(savedGroup) ? savedGroup
+    : (DATA.groupBy === "repo" ? "repo" : "story"));
+
+  const THEME_KEY = "pr-radar-theme";
+  function applyTheme(t) {
+    if (t) document.documentElement.setAttribute("data-theme", t);
+    else document.documentElement.removeAttribute("data-theme");
+    document.querySelectorAll("#themeSeg button").forEach(b =>
+      b.classList.toggle("on", b.dataset.themeOpt === t));
+  }
+  document.querySelectorAll("#themeSeg button").forEach(b => b.addEventListener("click", () => {
+    applyTheme(b.dataset.themeOpt);
+    try { localStorage.setItem(THEME_KEY, b.dataset.themeOpt); } catch (e) {}
+  }));
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
+  if (["light", "medium", "dark"].includes(saved)) applyTheme(saved);
+
+  renderStats(); render();
+})();
+</script>
+</body>
+</html>
+"""
+
+if __name__ == "__main__":
+    main()
