@@ -11,6 +11,9 @@
 SECRETS_LIB="${HOME}/.local/lib/secrets/secrets.sh"
 if [[ -f "$SECRETS_LIB" ]]; then
     export SECRETS_SERVICE="dotfiles"
+    # Self-declaration: tells secrets-doctor (nuvemlabs/secrets CLI) which file
+    # maps store keys to env vars, so it works from any child process.
+    [[ -n "$DOTFILES_DIR" ]] && export SECRETS_EXPORTS_FILE="$DOTFILES_DIR/config/shell/secrets.sh"
     source "$SECRETS_LIB"
 
     # Source migration logic (dotfiles-specific, not part of nuvemlabs/secrets)

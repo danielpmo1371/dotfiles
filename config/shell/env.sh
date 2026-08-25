@@ -16,6 +16,12 @@ export EDITOR="nvim"
 export VISUAL="nvim"
 
 # ─────────────────────────────────────────────────────────────────────────────
+#   Ripgrep
+# ─────────────────────────────────────────────────────────────────────────────
+# rg only reads a config file when this is set (symlinked by --config-dirs)
+export RIPGREP_CONFIG_PATH="$XDG_CONFIG_HOME/ripgrep/config"
+
+# ─────────────────────────────────────────────────────────────────────────────
 #   FZF
 # ─────────────────────────────────────────────────────────────────────────────
 export FZF_COMPLETION_TRIGGER='**'

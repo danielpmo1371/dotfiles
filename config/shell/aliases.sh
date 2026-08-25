@@ -21,6 +21,10 @@ alias ...='cd ../..'
 # ─────────────────────────────────────────────────────────────────────────────
 #   Custom terminal commands behaviour
 # ─────────────────────────────────────────────────────────────────────────────
+# Case-insensitive grep for interactive use (aliases don't leak into scripts).
+# rg gets the same via RIPGREP_CONFIG_PATH (env.sh) -> config/ripgrep/config.
+alias grep='grep -i'
+
 # Override rm to move to a bin folder
 rm() {
     # Ensure the bin directory exists before moving files
@@ -83,6 +87,25 @@ alias gg='gemini -p'
 alias g='gemini --model gemini-2.5-flash --prompt'
 alias update-claude='sudo npm i -g @anthropic-ai/claude-code'
 alias cdang='claude --dangerously-skip-permissions --rc'
+# Re-run the exact `claude --resume "<name>"` hint claude prints on quit, with
+# cdang's flags. Scrapes THIS pane's scrollback for the last such line, so it
+# resumes this pane's session even if newer sessions were started in other tabs
+# (which would win with --continue). Tmux-only by design.
+cres() {
+    if [ -z "$TMUX" ]; then
+        echo "cres: not inside tmux — can't read scrollback for the resume hint" >&2
+        return 1
+    fi
+    local session
+    session=$(tmux capture-pane -p -S - -t "$TMUX_PANE" \
+        | grep -Eo 'claude --resume "[^"]+"' | tail -1 \
+        | sed -E 's/^claude --resume "(.+)"$/\1/')
+    if [ -z "$session" ]; then
+        echo "cres: no 'claude --resume \"...\"' hint found in this pane's scrollback" >&2
+        return 1
+    fi
+    cdang --resume "$session"
+}
 
 # Fast one-shot query via `llm`. Provider chosen by $AI_PROVIDER (see env.sh);
 # defaults to Groq for the lowest time-to-first-token. Streams to stdout.
@@ -97,7 +120,7 @@ q() {
     local model="$AI_MODEL"
     if [ -z "$model" ]; then
         case "${AI_PROVIDER:-groq}" in
-            groq)   model="groq/llama-3.1-8b-instant" ;;
+            groq)   model="groq/openai/gpt-oss-20b" ;;
             gemini) model="gemini-2.5-flash" ;;
             openai) model="gpt-4o-mini" ;;
             claude) model="claude-haiku-4-5-20251001" ;;
@@ -111,7 +134,7 @@ q() {
     local tmp
     tmp="$(mktemp)" || return 1
     if [ -t 1 ] && command -v bat >/dev/null 2>&1; then
-        llm -m "$model" "$@" | tee "$tmp" | bat --style=plain --paging=never --language=md
+        llm -m "$model" "$@" | tee "$tmp" | bat --style=plain --language=md --paging=always --pager='less -RFX'
     else
         llm -m "$model" "$@" | tee "$tmp"
     fi

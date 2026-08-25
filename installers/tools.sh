@@ -36,6 +36,9 @@ install_tools() {
     local specs=(
         "tmux|tmux|tmux|"
         "nvim|neovim|neovim|"
+        # nvim-treesitter (main branch) needs the CLI to build/install parsers
+        # (brew's plain "tree-sitter" formula is only the C library)
+        "tree-sitter|tree-sitter-cli|tree-sitter-cli|"
         "git|git|git|"
         "zsh|zsh|zsh|"
         "curl|curl|curl|"
@@ -55,10 +58,13 @@ install_tools() {
         "tree|tree|tree|"
         "gdu|gdu|gdu|"
         "fastfetch|fastfetch|fastfetch|"
+        "az|azure-cli|azure-cli|"
     )
     # Platform-specific desktop notifier
     if [[ "$OSTYPE" == "darwin"* ]]; then
         specs+=("terminal-notifier|terminal-notifier|terminal-notifier|")
+        # Display layout CLI (resolution, arrangement, rotation) - macOS only
+        specs+=("displayplacer|displayplacer||")
     else
         specs+=("notify-send|libnotify|libnotify-bin|libnotify")
     fi
@@ -82,6 +88,7 @@ install_tools() {
     echo "  rg, fd, bat, delta, lsd, zoxide - modern replacements"
     echo "  fzf, jq, htop, tree            - utilities"
     echo "  lazydocker                     - docker TUI"
+    echo "  az                             - Azure CLI"
     echo ""
     echo "To reset package manager preference: rm ~/.dotfiles_pkg_manager"
 }

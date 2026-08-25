@@ -157,6 +157,15 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [[ \"$TOOL_INPUT_file_path\" == *.md ]]; then open -a 'MacDown 3000' \"$TOOL_INPUT_file_path\" 2>/dev/null; fi"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -208,7 +217,13 @@
   },
   "alwaysThinkingEnabled": true,
   "skipDangerousModePermissionPrompt": true,
+  "inputNeededNotifEnabled": true,
   "agentPushNotifEnabled": true,
+  "voiceEnabled": true,
+  "voice": {
+    "enabled": true,
+    "mode": "hold"
+  },
   "remoteControlAtStartup": true,
   "model": "claude-fable-5[1m]"
 }
