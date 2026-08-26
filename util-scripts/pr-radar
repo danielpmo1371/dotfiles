@@ -21,12 +21,15 @@ Identity:
 """
 
 import argparse
+import base64
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from string import Template
@@ -132,7 +135,32 @@ def fetch_azdo(org, projects, creator):
     if skipped:
         print(f"pr-radar: skipped inaccessible project(s): {', '.join(skipped)}",
               file=sys.stderr)
+    fetch_comment_counts(org, prs)
     return prs
+
+
+def fetch_comment_counts(org, prs):
+    """Annotate each AzDO PR with human comment-thread counts (total + unresolved)."""
+    auth = base64.b64encode(f":{os.environ['AZURE_DEVOPS_EXT_PAT']}".encode()).decode()
+
+    def count(p):
+        url = (f"{org}/{quote(p['project'])}/_apis/git/repositories/"
+               f"{quote(p['repo'])}/pullRequests/{p['id']}/threads?api-version=7.1")
+        try:
+            req = urllib.request.Request(url, headers={"Authorization": f"Basic {auth}"})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                threads = json.loads(r.read()).get("value", [])
+        except Exception as e:
+            print(f"pr-radar: threads fetch failed for PR {p['id']}: {e}", file=sys.stderr)
+            return
+        human = [t for t in threads if any(
+            c.get("commentType") == "text" and not c.get("isDeleted")
+            for c in t.get("comments", []))]
+        p["comments"] = len(human)
+        p["activeComments"] = sum(1 for t in human if t.get("status") in ("active", "pending"))
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        list(ex.map(count, prs))
 
 
 def fetch_work_items(org, ids):
@@ -154,8 +182,9 @@ def fetch_github(user):
     if not user:
         user = run(["gh", "api", "user", "--jq", ".login"]).strip()
     raw = run_json(["gh", "search", "prs", "--author", user, "--state", "open",
-                    "--json", "title,url,repository,createdAt,isDraft,number"])
+                    "--json", "title,url,repository,createdAt,isDraft,number,commentsCount"])
     return user, [{
+        "comments": p.get("commentsCount", 0), "activeComments": 0,
         "src": "github",
         "id": f"#{p['number']}",
         "title": p["title"],
@@ -312,12 +341,21 @@ TEMPLATE = r"""<!doctype html>
   }
   header .sub { color: var(--ink-2); margin: 0 0 28px; }
   header .sub .mono { font-family: "IBM Plex Mono", monospace; font-size: 13px; }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 28px; }
-  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; box-shadow: var(--shadow); }
-  .stat .n { font-family: "Archivo", sans-serif; font-weight: 600; font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
-  .stat .l { color: var(--ink-2); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.07em; margin-top: 2px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 8px; margin-bottom: 28px; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 9px 12px; box-shadow: var(--shadow); cursor: pointer;
+    font: inherit; color: inherit; text-align: left; transition: border-color .12s;
+  }
+  .stat:hover { border-color: var(--accent); }
+  .stat:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .stat.on { border-color: var(--accent); background: var(--accent-soft); }
+  .stat.on .l { color: var(--accent-ink); }
+  .stat .n { font-family: "Archivo", sans-serif; font-weight: 600; font-size: 22px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .stat .l { color: var(--ink-2); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
   .stat.alert .n { color: var(--bad); }
   .stat.attn .n { color: var(--warn); }
+  .stat.ok .n { color: var(--good); }
   .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
   .toolbar input[type="search"] {
     flex: 1 1 220px; padding: 8px 12px; border: 1px solid var(--line);
@@ -394,6 +432,8 @@ TEMPLATE = r"""<!doctype html>
   .badge.approved { background: var(--good-soft); color: var(--good); }
   .badge.suggestions { background: var(--warn-soft); color: var(--warn); }
   .badge.noreview { background: var(--surface-2); color: var(--ink-3); }
+  .badge.commented { background: var(--accent-soft); color: var(--accent-ink); }
+  .badge.unresolved { background: var(--warn-soft); color: var(--warn); }
   .empty { text-align: center; color: var(--ink-2); padding: 48px 0; border: 1px dashed var(--line); border-radius: 8px; }
   footer { margin-top: 40px; color: var(--ink-3); font-size: 12.5px; }
 </style>
@@ -435,7 +475,17 @@ const DATA = $DATA;
 const PRS = DATA.prs, STORIES = DATA.stories || {};
 PRS.forEach(p => { p.ageDays = Math.max(0, Math.floor((Date.now() - new Date(p.created).getTime()) / 86400000)); });
 
-const state = { q: "", src: "all", project: null, sort: "newest", group: "story" };
+const state = { q: "", src: "all", project: null, sort: "newest", group: "story", stat: null };
+const approverCount = p => p.src === "azdo" ? p.reviewers.filter(r => r.vote >= 5).length : 0;
+const STAT_FILTERS = {
+  unapproved: p => p.src === "azdo" && !p.reviewers.some(r => r.vote > 0),
+  approved1: p => approverCount(p) === 1,
+  approved2: p => approverCount(p) >= 2,
+  stale: p => p.ageDays > 90,
+  aging: p => p.ageDays > 30 && p.ageDays <= 90,
+  drafts: p => p.draft,
+  comments: p => (p.activeComments || 0) > 0,
+};
 const STRIP = /^\s*(?:US#?\s*\d{4,7}|\d{5,7})\s*[:\-]\s*/i;
 
 function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
@@ -451,6 +501,12 @@ function reviewBadge(p) {
   if (votes.some(v => v === 5)) return `<span class="badge suggestions">approved w/ suggestions</span>`;
   if (p.reviewers.length) return `<span class="badge noreview">awaiting review</span>`;
   return `<span class="badge noreview">no reviewers</span>`;
+}
+function commentBadge(p) {
+  const n = p.comments || 0;
+  if (!n) return "";
+  if (p.activeComments) return `<span class="badge unresolved">${p.activeComments} unresolved of ${n}</span>`;
+  return `<span class="badge commented">${n} comment thread${n > 1 ? "s" : ""}</span>`;
 }
 function rowClass(p) {
   if (p.ageDays > 90) return "stale";
@@ -468,6 +524,7 @@ function prCard(p, stripped, hideRepo) {
         ${p.draft ? `<span class="badge draft">draft</span>` : ""}
         ${ageBadge(p.ageDays)}
         ${reviewBadge(p)}
+        ${commentBadge(p)}
       </div>
       <div class="meta">
         <span class="mono">${hideRepo ? ref : esc(p.repo) + " " + ref}</span>
@@ -483,6 +540,7 @@ function filtered() {
   let out = PRS.filter(p =>
     (state.src === "all" || p.src === state.src) &&
     (!state.project || p.project === state.project) &&
+    (!state.stat || STAT_FILTERS[state.stat](p)) &&
     (!q || hay(p).includes(q)));
   out.sort((a, b) => state.sort === "newest"
     ? new Date(b.created) - new Date(a.created)
@@ -496,13 +554,27 @@ function renderStats() {
   const azdo = PRS.filter(p => p.src === "azdo").length;
   const gh = PRS.filter(p => p.src === "github").length;
   const noRev = PRS.filter(p => p.src === "azdo" && !p.reviewers.some(r => r.vote > 0)).length;
-  let cells = `<div class="stat"><div class="n">${PRS.length}</div><div class="l">Open PRs</div></div>`;
-  if (azdo && gh) cells += `<div class="stat"><div class="n">${azdo} / ${gh}</div><div class="l">Azure DevOps / GitHub</div></div>`;
-  if (azdo) cells += `<div class="stat attn"><div class="n">${noRev}</div><div class="l">Unapproved on AzDO</div></div>`;
-  cells += `<div class="stat alert"><div class="n">${stale}</div><div class="l">Stale (&gt;90 days)</div></div>
-    <div class="stat attn"><div class="n">${aging}</div><div class="l">Aging (31&ndash;90 days)</div></div>
-    <div class="stat"><div class="n">${drafts}</div><div class="l">Drafts</div></div>`;
-  document.getElementById("stats").innerHTML = cells;
+  let cells = `<button class="stat" data-stat=""><div class="n">${PRS.length}</div><div class="l">Open PRs</div></button>`;
+  if (azdo && gh) cells += `<div class="stat" style="cursor:default"><div class="n">${azdo} / ${gh}</div><div class="l">AzDO / GitHub</div></div>`;
+  if (azdo) {
+    const ap1 = PRS.filter(STAT_FILTERS.approved1).length;
+    const ap2 = PRS.filter(STAT_FILTERS.approved2).length;
+    cells += `<button class="stat attn" data-stat="unapproved"><div class="n">${noRev}</div><div class="l">Unapproved</div></button>
+      <button class="stat ok" data-stat="approved1"><div class="n">${ap1}</div><div class="l">1 approver</div></button>
+      <button class="stat ok" data-stat="approved2"><div class="n">${ap2}</div><div class="l">2+ approvers</div></button>`;
+  }
+  cells += `<button class="stat alert" data-stat="stale"><div class="n">${stale}</div><div class="l">Stale &gt;90d</div></button>
+    <button class="stat attn" data-stat="aging"><div class="n">${aging}</div><div class="l">Aging 31&ndash;90d</div></button>
+    <button class="stat" data-stat="drafts"><div class="n">${drafts}</div><div class="l">Drafts</div></button>
+    <button class="stat attn" data-stat="comments"><div class="n">${PRS.filter(STAT_FILTERS.comments).length}</div><div class="l">Unresolved comments</div></button>`;
+  const el = document.getElementById("stats");
+  el.innerHTML = cells;
+  el.querySelectorAll("button.stat").forEach(b => b.addEventListener("click", () => {
+    state.stat = (b.dataset.stat && state.stat !== b.dataset.stat) ? b.dataset.stat : null;
+    el.querySelectorAll("button.stat").forEach(x =>
+      x.classList.toggle("on", !!state.stat && x.dataset.stat === state.stat));
+    render();
+  }));
 }
 function renderChips() {
   const counts = {};
