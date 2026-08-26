@@ -86,7 +86,10 @@ alias cc='claude -p --model haiku'
 alias gg='gemini -p'
 alias g='gemini --model gemini-2.5-flash --prompt'
 alias update-claude='sudo npm i -g @anthropic-ai/claude-code'
-alias cdang='claude --dangerously-skip-permissions --rc'
+# --rc (--remote-control) takes an optional [name], so it must not be the last
+# flag — anything appended after it (e.g. a starter prompt) would be eaten as
+# the session name instead of reaching claude as the prompt.
+alias cdang='claude --rc --dangerously-skip-permissions'
 # Re-run the exact `claude --resume "<name>"` hint claude prints on quit, with
 # cdang's flags. Scrapes THIS pane's scrollback for the last such line, so it
 # resumes this pane's session even if newer sessions were started in other tabs
