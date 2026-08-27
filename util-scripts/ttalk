@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# ttalk — speak a short message aloud (task-completion notifications).
+# Replaces the former Deepgram-based termtalk project: local TTS needs no
+# API key or network, so notifications can never silently die on auth.
+# Exits 0 even with no TTS engine available — callers (Claude sessions,
+# scripts) must never fail because audio is missing.
+
+set -u
+
+msg="$*"
+[[ -z "$msg" ]] && { echo "usage: ttalk <message>" >&2; exit 1; }
+
+speak() {
+    if command -v say >/dev/null 2>&1; then          # macOS
+        say "$msg"
+    elif command -v espeak-ng >/dev/null 2>&1; then  # Linux
+        espeak-ng "$msg"
+    elif command -v spd-say >/dev/null 2>&1; then    # Linux (speech-dispatcher)
+        spd-say "$msg"
+    fi
+}
+
+# Background so the caller isn't blocked for the duration of the speech.
+speak >/dev/null 2>&1 &
+
+exit 0
