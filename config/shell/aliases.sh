@@ -25,6 +25,9 @@ alias ...='cd ../..'
 # rg gets the same via RIPGREP_CONFIG_PATH (env.sh) -> config/ripgrep/config.
 alias grep='grep -i'
 
+# Image cat: timg speaks the kitty/iTerm2 graphics protocols (Ghostty-compatible)
+alias icat='timg'
+
 # Override rm to move to a bin folder
 rm() {
     # Ensure the bin directory exists before moving files
