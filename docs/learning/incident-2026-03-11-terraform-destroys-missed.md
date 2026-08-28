@@ -4,7 +4,7 @@
 
 ## The Error
 
-When reviewing the terraform plan output for build 270486 (SIT/AE, Pipeline 802), the agent marked the plan as PASS despite the output containing 39 destroy actions. The project MEMORY.md explicitly states: "If destroys appear in plan, use `removed` blocks in Terraform config (code fix, not state fix)." The CLAUDE.md has strict terraform safety rules that treat any unexpected plan output as a critical issue requiring code fixes, not approval. The 39 destroys should have been immediately flagged as a critical blocker.
+When reviewing the terraform plan output for build 270486 (SIT/AE, the terraform pipeline), the agent marked the plan as PASS despite the output containing 39 destroy actions. The project MEMORY.md explicitly states: "If destroys appear in plan, use `removed` blocks in Terraform config (code fix, not state fix)." The CLAUDE.md has strict terraform safety rules that treat any unexpected plan output as a critical issue requiring code fixes, not approval. The 39 destroys should have been immediately flagged as a critical blocker.
 
 ### What Was Done
 
@@ -119,7 +119,7 @@ For resources that should be forgotten (not destroyed):
 ## Learning Mechanisms Implemented
 
 ### A. Documentation
-**File**: `~/.claude/projects/-Users-daniel-repos-td-td-iac/memory/MEMORY.md`
+**File**: `~/.claude/projects/-Users-daniel-repos-project-iac/memory/MEMORY.md`
 **Section**: Terraform Safety -- ABSOLUTE RULE (enhanced)
 **Content**: Added explicit rule about destroy count verification being a hard gate, not a judgment call
 

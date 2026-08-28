@@ -16,6 +16,12 @@ export EDITOR="nvim"
 export VISUAL="nvim"
 
 # ─────────────────────────────────────────────────────────────────────────────
+#   Ripgrep
+# ─────────────────────────────────────────────────────────────────────────────
+# rg only reads a config file when this is set (symlinked by --config-dirs)
+export RIPGREP_CONFIG_PATH="$XDG_CONFIG_HOME/ripgrep/config"
+
+# ─────────────────────────────────────────────────────────────────────────────
 #   FZF
 # ─────────────────────────────────────────────────────────────────────────────
 export FZF_COMPLETION_TRIGGER='**'
@@ -33,7 +39,9 @@ export AI_PROVIDER="groq"   # groq | gemini | openai | claude
 # ─────────────────────────────────────────────────────────────────────────────
 #   Azure DevOps
 # ─────────────────────────────────────────────────────────────────────────────
-export AZDO_ORG="mbie-immigrationnz-prod"
+# AZDO_ORG is machine/employer-specific — set via `secret_set AZDO_ORG "<org-slug>"`
+# (config/shell/secrets.sh exports it from the OS keychain, same as AZDO_PAT).
+export AZDO_ORG
 export AZURE_DEVOPS_PAT
 
 # ─────────────────────────────────────────────────────────────────────────────

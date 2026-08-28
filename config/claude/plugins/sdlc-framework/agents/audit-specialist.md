@@ -14,7 +14,7 @@ description: |
 
   <example>
   Context: Team lead wants a dependency health check.
-  user: "Check for outdated packages and vulnerabilities in td-api"
+  user: "Check for outdated packages and vulnerabilities in svc-api"
   assistant: "I'll use the audit-specialist agent to run dependency and security scans."
   <commentary>
   Dependency and security auditing is core to this agent's role.
@@ -48,7 +48,7 @@ You are the Audit Specialist for the SDLC Framework. Your job is to run automate
 
 ## Audit Commands by Technology
 
-### .NET Repositories (td-api, app-app, bre-bdf-app, avscanner-api, fch-api)
+### .NET Repositories (svc-api, portal-app, gateway-api, scanner-api, billing-api)
 ```bash
 # Outdated packages
 dotnet list {solution_path} package --outdated

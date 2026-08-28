@@ -46,7 +46,7 @@ If no CI or CD pipeline exists for the service, inform the user.
 
 ### Step 2b: Terraform Pipeline Flow
 
-When the service has a `terraform` key (e.g., td-iac):
+When the service has a `terraform` key (e.g., iac):
 
 1. Parse `$ARGUMENTS` for environment and location:
    - If arguments contain an environment name (dev/sit/uat): use it
@@ -54,7 +54,7 @@ When the service has a `terraform` key (e.g., td-iac):
    - Otherwise: ask the user which environment (dev/sit/uat) and location (ae/ase, default: ae)
 2. Validate through pipeline-validator.sh with `type: "terraform"`:
    ```bash
-   echo '{"service":"td-iac","type":"terraform","branch":"BRANCH","pipelineId":"802","project":"Travel Declaration","environment":"ENV","location":"LOC"}' | ~/.claude/scripts/pipeline-validator.sh
+   echo '{"service":"iac","type":"terraform","branch":"BRANCH","pipelineId":"<TERRAFORM_PIPELINE_ID>","project":"Example Project","environment":"ENV","location":"LOC"}' | ~/.claude/scripts/pipeline-validator.sh
    ```
 3. If approved, trigger via MCP using the validator's returned `templateParameters` and `stagesToSkip`
 4. Monitor using the same polling pattern as Step 4

@@ -14,6 +14,7 @@ source "$DOTFILES_ROOT/lib/install-common.sh"
 CONFIG_DIRS=(
     "nvim"
     "fastfetch"
+    "ripgrep"
 )
 
 install_config_dirs() {

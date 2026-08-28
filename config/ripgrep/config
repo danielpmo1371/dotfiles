@@ -1,0 +1,5 @@
+# Ripgrep configuration
+# Loaded via RIPGREP_CONFIG_PATH (exported in config/shell/env.sh).
+# One flag per line. Override per-invocation with -s/--case-sensitive.
+
+--ignore-case

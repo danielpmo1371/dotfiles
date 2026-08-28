@@ -41,7 +41,7 @@ detect_service() {
     return 0
   fi
 
-  # Check if we're inside a service subfolder (e.g., td-api/src/)
+  # Check if we're inside a service subfolder (e.g., svc-api/src/)
   while [[ "$dir" != "/" ]]; do
     basename=$(basename "$dir")
     if jq -e --arg svc "$basename" '.services[$svc]' "$registry" > /dev/null 2>&1; then
@@ -66,7 +66,7 @@ if [[ -n "$SERVICE_OVERRIDE" ]]; then
 else
   SERVICE=$(detect_service "$REGISTRY") || {
     jq -n --arg cwd "$CWD" \
-      '{"error": "Could not detect service from current directory", "cwd": $cwd, "hint": "Run from a service folder (e.g., td-api/) or pass service name as argument"}'
+      '{"error": "Could not detect service from current directory", "cwd": $cwd, "hint": "Run from a service folder (e.g., svc-api/) or pass service name as argument"}'
     exit 1
   }
 fi

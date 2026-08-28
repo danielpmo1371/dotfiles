@@ -19,4 +19,7 @@ require("lazy").setup({
 		{ import = "plugins" },
 	},
 	defaults = { lazy = true },
+	-- No plugin needs luarocks; disabling stops lazy's hererocks
+	-- bootstrap and its checkhealth error on machines without lua 5.1
+	rocks = { enabled = false, hererocks = false },
 })

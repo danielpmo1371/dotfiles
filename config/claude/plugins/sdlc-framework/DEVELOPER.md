@@ -50,8 +50,8 @@ Place `.sdlc.json` in your project root. It is version-controlled and declarativ
 
   "repositories": [
     {
-      "name": "string — Repository identifier (e.g., td-api)",
-      "path": "string — Relative path from project root (e.g., ./td-api)",
+      "name": "string — Repository identifier (e.g., svc-api)",
+      "path": "string — Relative path from project root (e.g., ./svc-api)",
       "type": "string — Tech stack: dotnet | node | angular | terraform | bicep",
       "branches": {
         "pattern": "string — Branch naming pattern (e.g., candidate/*)",
@@ -240,12 +240,12 @@ Templates provide project-specific formatting for plans, reports, and other deli
 
 2. Test individual auditors:
    ```bash
-   bash .claude/plugins/sdlc-td/auditors/nuget-consolidation.sh ./td-api
+   bash .claude/plugins/sdlc-td/auditors/nuget-consolidation.sh ./svc-api
    ```
 
 3. Test validators:
    ```bash
-   bash .claude/plugins/sdlc-td/validators/candidate-branch-checker.sh ./td-api
+   bash .claude/plugins/sdlc-td/validators/candidate-branch-checker.sh ./svc-api
    ```
 
 ### Integration Testing

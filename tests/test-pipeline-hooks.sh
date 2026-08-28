@@ -57,9 +57,9 @@ cat > "$WS/.claude/pipeline-registry.json" << 'EOF'
       "cd": null,
       "terraform": { "id": 802, "name": "Test - Terraform" },
       "stages": {
-        "all": ["plan_travellerdirectives", "apply_travellerdirectives"],
-        "allowed": ["plan_travellerdirectives"],
-        "blocked": ["apply_travellerdirectives"]
+        "all": ["plan_infra", "apply_infra"],
+        "allowed": ["plan_infra"],
+        "blocked": ["apply_infra"]
       }
     }
   }
@@ -84,10 +84,30 @@ mkdir -p "$WS_BARE"
 
 # run_hook <hook> <workspace-dir> <input-json>
 # Sets RC. Never trips set -e.
+#
+# pipeline-guard.sh fails closed unless PIPELINE_GUARD_TERRAFORM_ID/
+# PIPELINE_GUARD_TERRAFORM_APPLY_STAGE are set (see that file's header) — this
+# harness supplies test-fixture values matching the "iac" service above so
+# the rest of the suite exercises the intended logic, not the unconfigured
+# fail-closed path. That path gets its own dedicated test below.
 run_hook() {
     local hook="$1" ws="$2" json="$3"
     set +e
-    (cd "$ws" && HOME="$FAKE_HOME" "$hook" <<< "$json" >/dev/null 2>&1)
+    (cd "$ws" && HOME="$FAKE_HOME" \
+        PIPELINE_GUARD_TERRAFORM_ID="802" \
+        PIPELINE_GUARD_TERRAFORM_APPLY_STAGE="apply_infra" \
+        "$hook" <<< "$json" >/dev/null 2>&1)
+    RC=$?
+    set -e
+}
+
+# Same as run_hook but with the terraform env vars explicitly unset —
+# exercises pipeline-guard's fail-closed-when-unconfigured path.
+run_hook_unconfigured() {
+    local hook="$1" ws="$2" json="$3"
+    set +e
+    (cd "$ws" && HOME="$FAKE_HOME" env -u PIPELINE_GUARD_TERRAFORM_ID -u PIPELINE_GUARD_TERRAFORM_APPLY_STAGE \
+        "$hook" <<< "$json" >/dev/null 2>&1)
     RC=$?
     set -e
 }
@@ -96,6 +116,21 @@ run_hook() {
 expect() {
     local want="$1" hook="$2" ws="$3" label="$4" json="$5"
     run_hook "$hook" "$ws" "$json"
+    local want_rc=0
+    [[ "$want" == "block" ]] && want_rc=2
+    if [[ $RC -eq $want_rc ]]; then
+        echo -e "  ${GREEN}PASS${NC} $label"
+        PASS=$((PASS + 1))
+    else
+        echo -e "  ${RED}FAIL${NC} $label — expected rc=$want_rc ($want), got rc=$RC"
+        FAIL=$((FAIL + 1))
+    fi
+}
+
+# Same as expect, but via run_hook_unconfigured (terraform env vars unset)
+expect_unconfigured() {
+    local want="$1" hook="$2" ws="$3" label="$4" json="$5"
+    run_hook_unconfigured "$hook" "$ws" "$json"
     local want_rc=0
     [[ "$want" == "block" ]] && want_rc=2
     if [[ $RC -eq $want_rc ]]; then
@@ -130,15 +165,17 @@ expect block "$PIPELINE_GUARD" "$WS" "parameter referencing blocked environment 
 expect block "$PIPELINE_GUARD" "$WS" "terraform 802 without apply stage in stagesToSkip" \
     "$(mcp_input '{"pipelineId":802,"project":"P","stagesToSkip":["something_else"],"templateParameters":{"requireManualApproval":"True"}}')"
 expect block "$PIPELINE_GUARD" "$WS" "terraform 802 without requireManualApproval=True" \
-    "$(mcp_input '{"pipelineId":802,"project":"P","stagesToSkip":["apply_travellerdirectives"]}')"
+    "$(mcp_input '{"pipelineId":802,"project":"P","stagesToSkip":["apply_infra"]}')"
 expect allow "$PIPELINE_GUARD" "$WS" "terraform 802 plan-only with manual approval allowed" \
-    "$(mcp_input '{"pipelineId":802,"project":"P","stagesToSkip":["apply_travellerdirectives"],"templateParameters":{"requireManualApproval":"True"}}')"
+    "$(mcp_input '{"pipelineId":802,"project":"P","stagesToSkip":["apply_infra"],"templateParameters":{"requireManualApproval":"True"}}')"
 expect block "$PIPELINE_GUARD" "$WS_DIRTY" "registry with uncommitted changes fails closed" \
     "$(mcp_input '{"pipelineId":900,"project":"P","stagesToSkip":["Shared_Zone"]}')"
 # Pins CURRENT behavior: without a registry, checks 0-2 are skipped and only
-# the parameter grep + terraform-802 checks stand. Known weakness, documented.
+# the parameter grep + terraform checks stand. Known weakness, documented.
 expect allow "$PIPELINE_GUARD" "$WS_BARE" "no registry: registry checks skipped (current behavior)" \
     "$(mcp_input '{"pipelineId":900,"project":"P","stagesToSkip":[]}')"
+expect_unconfigured block "$PIPELINE_GUARD" "$WS" "unconfigured (no PIPELINE_GUARD_TERRAFORM_ID/STAGE): fails closed, blocks even a harmless CI id" \
+    "$(mcp_input '{"pipelineId":100,"project":"P"}')"
 
 echo -e "${BLUE}=== pipeline-trigger-guard.sh (Bash trigger chokepoint) ===${NC}"
 expect block "$TRIGGER_GUARD" "$WS_BARE" "az pipelines run blocked" \

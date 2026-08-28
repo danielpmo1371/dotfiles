@@ -62,7 +62,7 @@ Phase Progress:
 Current State:
   Phase:      3. Audit
   Specialist: audit-specialist
-  Task:       Running NuGet package analysis on td-api
+  Task:       Running NuGet package analysis on svc-api
   Mode:       Autonomous
   Complexity: Complex
   Progress:   2/10 phases complete
@@ -71,7 +71,7 @@ Blockers:
   (none)
 
 Recent Decisions:
-  - Scope includes td-api, app-app (2 repos)
+  - Scope includes svc-api, portal-app (2 repos)
   - Complexity assessed as "complex" (>5 files affected)
   - Using candidate/8.12.0 as base branch
 ```

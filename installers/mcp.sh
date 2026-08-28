@@ -24,8 +24,14 @@ CLAUDE_DESKTOP_CONFIG="$HOME/Library/Application Support/Claude/claude_desktop_c
 # Flags
 SYNC_DESKTOP=false
 
-# Resolve secret:KEY_NAME references in env blocks
-# Replaces values like "secret:AZDO_PAT" with the actual secret from keychain
+# Rewrite secret:KEY_NAME references in env blocks to ${KEY_NAME}
+# Claude Code expands ${VAR} from its environment when it spawns the server, so the
+# credential never lands on disk. The shell exports these from the OS keychain
+# (config/shell/secrets.sh), which stays the single source of truth.
+#
+# Caveat: this relies on the consuming app inheriting the shell environment. True for
+# the Claude Code CLI; NOT true for GUI-launched Claude Desktop (--desktop), which
+# would see an empty value. Desktop sync is opt-in and off by default for that reason.
 resolve_secrets() {
     local config_file="$1"
     local has_secrets
@@ -38,13 +44,12 @@ resolve_secrets() {
         return 0
     fi
 
-    log_info "Resolving $has_secrets secret reference(s) from keychain..."
+    log_info "Rewriting $has_secrets secret reference(s) to \${VAR} expansion..."
 
-    local resolved="$config_file"
     local tmpfile
     tmpfile=$(mktemp)
 
-    # Extract secret references and resolve them
+    # Extract secret references and point them at the environment
     jq -r '
         .mcpServers // {} | to_entries[] |
         .key as $server |
@@ -52,16 +57,66 @@ resolve_secrets() {
         select(.value | startswith("secret:")) |
         "\($server)\t\(.key)\t\(.value | ltrimstr("secret:"))"
     ' "$config_file" | while IFS=$'\t' read -r server env_key secret_key; do
-        local secret_value
-        secret_value=$(secret "$secret_key" 2>/dev/null)
+        jq --arg server "$server" --arg key "$env_key" --arg val "\${${secret_key}}" '
+            .mcpServers[$server].env[$key] = $val
+        ' "$config_file" > "$tmpfile" && mv "$tmpfile" "$config_file"
 
-        if [[ -n "$secret_value" ]]; then
-            jq --arg server "$server" --arg key "$env_key" --arg val "$secret_value" '
-                .mcpServers[$server].env[$key] = $val
-            ' "$config_file" > "$tmpfile" && mv "$tmpfile" "$config_file"
-            log_success "Resolved secret for $server.$env_key"
+        # The value arrives at runtime from the environment, so check the keychain can
+        # supply it now - otherwise the server fails later with an opaque auth error.
+        if [[ -n "$(secret "$secret_key" 2>/dev/null)" ]]; then
+            log_success "Linked $server.$env_key -> \${$secret_key}"
         else
-            log_warn "Secret '$secret_key' not found for $server.$env_key"
+            log_warn "Secret '$secret_key' not in keychain; $server.$env_key will be empty at runtime"
+        fi
+    done
+
+    resolve_arg_secrets "$config_file"
+}
+
+# Same rewrite as resolve_secrets, but for positional args (e.g. the
+# azure-devops server's org name, which the package takes as argv not env).
+#
+# UNTESTED: env blocks are documented to get ${VAR} expansion when Claude Code
+# spawns the server; it is NOT verified whether the same expansion applies to
+# args. If it doesn't, the server receives the literal string "${VAR}" and
+# fails loudly/obviously at connect time — deliberately: substituting the raw
+# secret value into args instead would put it in plaintext in ~/.claude.json,
+# defeating the entire point of this indirection. Fails loud, not silently
+# insecure. If this turns out not to work, args-based secrets need Claude
+# Code's own template/expansion feature, not something this installer can
+# work around alone.
+resolve_arg_secrets() {
+    local config_file="$1"
+    local has_arg_secrets
+    has_arg_secrets=$(jq -r '
+        [.mcpServers // {} | to_entries[] | .value.args // [] | .[] |
+         select(type == "string" and startswith("secret:"))] | length
+    ' "$config_file")
+
+    if [[ "$has_arg_secrets" -eq 0 ]]; then
+        return 0
+    fi
+
+    log_info "Rewriting $has_arg_secrets secret reference(s) in args to \${VAR} expansion (untested for args — see comment above)..."
+
+    local tmpfile
+    tmpfile=$(mktemp)
+
+    jq -r '
+        .mcpServers // {} | to_entries[] |
+        .key as $server |
+        (.value.args // []) | to_entries[] |
+        select(.value | type == "string" and startswith("secret:")) |
+        "\($server)\t\(.key)\t\(.value | ltrimstr("secret:"))"
+    ' "$config_file" | while IFS=$'\t' read -r server arg_index secret_key; do
+        jq --arg server "$server" --argjson idx "$arg_index" --arg val "\${${secret_key}}" '
+            .mcpServers[$server].args[$idx] = $val
+        ' "$config_file" > "$tmpfile" && mv "$tmpfile" "$config_file"
+
+        if [[ -n "$(secret "$secret_key" 2>/dev/null)" ]]; then
+            log_success "Linked $server.args[$arg_index] -> \${$secret_key}"
+        else
+            log_warn "Secret '$secret_key' not in keychain; $server.args[$arg_index] will be literal \${$secret_key} at runtime"
         fi
     done
 }

@@ -21,7 +21,7 @@ Personal dotfiles repository with modular installation system. Supports macOS an
 # Individual components
 ./install.sh --tools        # Dev tools (git, nvim, ripgrep, etc.)
 ./install.sh --casks        # macOS GUI apps from config/brew/Brewfile (macOS only)
-./install.sh --secrets      # Create ~/.accessTokens template
+./install.sh --secrets      # Keychain-backed secrets library (migrates ~/.accessTokens; requires ~/repos/secrets clone)
 ./install.sh --tmux         # Tmux + TPM + plugins (requires: git)
 ./install.sh --bash         # Bash configuration
 ./install.sh --zsh          # Zsh configuration (requires: git, zsh, curl)
@@ -75,6 +75,22 @@ config/              # Configuration files organized by tool
 **Package Manager**: Auto-detects available managers, prompts user on first run, caches choice in `~/.dotfiles_pkg_manager`.
 
 **Keybinding architecture (meta layer)**: Keyboard shortcut *semantics* live in repo-tracked config — `config/tmux/tmux.conf` (prefix2 `M-e`, popup/pane-nav/scrollback bindings, both `C-` and `M-` families), `config/nvim/lua/plugins/tmux-navigator.lua` (vim-aware pane nav), and mirrored meta blocks in `config/zsh/zshrc` + `config/bash/bashrc` (keep in sync; both shells are vi-mode, so every meta key the terminal can emit must be bound in insert AND command keymaps — unbound ESC+char executes as a vi command). The terminal emulator is a thin adapter only: `config/ghostty/config` maps Cmd+key to the same ESC-prefix bytes Alt produces natively on Linux and Option produces on macOS (`macos-option-as-alt`). On Linux (any emulator, SSH, bare TTY) no emulator config is needed — Alt works out of the box. Exceptions that must stay emulator-level control bytes: Cmd+C/Z (SIGINT/SIGTSTP are kernel tty semantics). Caveat: tmux `escape-time 0` can split ESC+key on slow SSH links.
+
+**Secrets diagnostics (`secrets-doctor`)**: `secrets-doctor [KEY|PREFIX ...]` (from `nuvemlabs/secrets`, installed to `~/.local/bin` by `./install.sh --secrets`; source lives in `~/repos/secrets/bin/` — fix bugs THERE, not in the installed copy) reports where the secret chain breaks (OS store → `config/shell/secrets.sh` export → shell env) without ever printing values — names-only by design. No args checks every key `secrets.sh` reads from the store; exit 0 = chain intact, 1 = broken. Use this instead of ad-hoc `security`/grep pipelines when a token (e.g. `AZDO_PAT`, `PIPELINE_GUARD_*`) isn't reaching a tool. The `secrets-debugging` skill (`config/claude/skills/secrets-debugging/`) makes this the canonical workflow for agent sessions.
+
+**Terminal.app font (macOS)**: `installers/terminals.sh` sets the default profile's font to a Nerd Font (`MesloLGS-NF-Regular`) via AppleScript against the running app — Terminal.app rewrites its plist on quit, so `defaults write`/symlinks don't stick. Only the font family is changed; runs under `--terminals`. Requires the font (`--fonts`) and Automation permission; non-fatal warn otherwise. Note: Terminal.app is 256-color only, so p10k/tmux colors remain approximated.
+
+### Terminal-Agnostic Configuration (binding decisions)
+
+**Never reach for `config/ghostty/config` first.** Implement behaviour in the most
+portable layer that can do it: tmux → shell → app config → emulator. Emulator
+config is limited to rendering, OS/window integration, and forwarding keys the OS
+swallows (the `super+<key>` → control-code table) — it must never *implement* a
+behaviour tmux or the shell could own.
+
+Rationale and the decision test: [docs/terminal-agnostic-config.md](docs/terminal-agnostic-config.md).
+Adding a Ghostty setting that fails that test means the workflow breaks under
+every other terminal and the config has to be rewritten per emulator.
 
 ### Neovim Setup
 
@@ -180,7 +196,7 @@ readlink -f <file_path>  # Should point to repo directory
 ```
 
 **Common External Dependencies:**
-- `nuvemlabs/secrets` → Source: `~/repos/secrets/` → Installed: `~/.local/lib/secrets/`
+- `nuvemlabs/secrets` → Source: `~/repos/secrets/` → Installed: `~/.local/lib/secrets/` (library) + `~/.local/bin/secrets-doctor` (CLI)
 - System packages (brew, apt, etc.) → Never edit installed files
 - Symlinked configs → Edit source in `config/`, not `~/.config/`
 

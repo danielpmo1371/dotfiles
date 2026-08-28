@@ -37,7 +37,7 @@ $ gh repo view danielpmo1371/dotfiles --json visibility,isPrivate
 **These PATs must be revoked IMMEDIATELY — before any other work begins.** Even if git history is scrubbed, the tokens have been publicly accessible since they were committed. Any scrub only prevents future discovery; the damage window is already open.
 
 Additionally, `config/claude/claude.json` contains:
-- Employer org URL: `https://dev.azure.com/mbie-immigrationnz-prod` (line 3251)
+- Employer org URL: `https://dev.azure.com/<azdo-org-slug>` (line 3251)
 - OAuth session IDs in `customApiKeyResponses` (lines 11-14)
 - Email: `danielpmo@gmail.com` (line 3417)
 - GitHub repo permissions for `danielpmo1371/dotfiles` (line 3313)
@@ -52,7 +52,7 @@ Additionally, `config/claude/claude.json` contains:
 
 This creates a dedicated directory for environment variable management, separating the **template** (tracked) from the **values** (gitignored `.local` file). The pattern already exists in `config/mcp/` with `mcp-env.template` / `mcp-env.local`.
 
-**Hidden complexity**: The relationship to `config/shell/env.sh` is unclear. Currently `env.sh` **is** the environment variable file — it's both template and values. Some entries (like `AZDO_ORG="mbie-immigrationnz-prod"`) are private values that should be in a `.local` file, while others (`EDITOR="nvim"`) are public defaults. This means `env.sh` needs to be split, not just supplemented.
+**Hidden complexity**: The relationship to `config/shell/env.sh` is unclear. Currently `env.sh` **is** the environment variable file — it's both template and values. Some entries (like `AZDO_ORG="<azdo-org-slug>"`) are private values that should be in a `.local` file, while others (`EDITOR="nvim"`) are public defaults. This means `env.sh` needs to be split, not just supplemented.
 
 **Conflicts**: None.
 
@@ -102,7 +102,7 @@ The user's custom installer doesn't have a templating layer, which is what all m
 **Files that are clearly public**: aliases.sh (most of them), git.sh, tmux.conf, nvim config
 **Files that are clearly private**: PATs, email, org names
 **Files that are mixed (the hard case)**:
-- `config/shell/env.sh` — has both `EDITOR=nvim` (public) and `AZDO_ORG=mbie-immigrationnz-prod` (private)
+- `config/shell/env.sh` — has both `EDITOR=nvim` (public) and `AZDO_ORG=<azdo-org-slug>` (private)
 - `config/mcp/servers.json` — has both generic servers (puppeteer, fetch) and private ones (browser-network at `10.0.0.102`, azure-devops with org name)
 - `config/shell/aliases.sh` — has both universal aliases (`ls`, `gs`) and employer-specific ones (`azsetmbdev`, `azsetmbsit`)
 - `config/claude/claude.json` — Claude Code's runtime state file containing both settings and secrets/session data
@@ -127,7 +127,7 @@ The user's reasoning: they want these files tracked for convenience (settings pe
 2. **Hook installation is per-clone.** New contributors or new machines won't have the hook until they run the installer. The window between clone and hook installation is unprotected.
 3. **`claude.json` is a runtime-managed file.** Claude Code writes to it during operation (tips history, session counts, cached gates). It's not designed to be user-curated — tracking it in git means constant noisy diffs.
 4. **The file mixes settings and secrets.** Lines 1-100 are preferences; lines 3240-3260 contain literal PATs. There's no API to separate them.
-5. **`tmp/claude/sessions/` contains work context.** The session files reference employer project names (`app-apim`, `avscanner-api`, `td-api`), Azure DevOps URLs, and work item IDs. These are already gitignored by the `tmp/` rule and should stay that way.
+5. **`tmp/claude/sessions/` contains work context.** The session files reference employer project names (`svc-apim`, `scanner-api`, `svc-api`), Azure DevOps URLs, and work item IDs. These are already gitignored by the `tmp/` rule and should stay that way.
 
 **Recommendation**: This requirement conflicts with security goals. A `.gitignore` is a **persistent, portable, always-active** protection. A pre-commit hook is an **opt-in, per-clone, bypassable** protection. For files containing secrets, gitignore is the correct tool.
 
@@ -244,7 +244,7 @@ Most widely-adopted dotfiles use established managers (chezmoi, stow, yadm) or a
 Several files contain both public and private content:
 
 ```
-config/shell/env.sh      → EDITOR=nvim (public) + AZDO_ORG=mbie (private)
+config/shell/env.sh      → EDITOR=nvim (public) + AZDO_ORG=<azdo-org-slug> (private)
 config/shell/aliases.sh  → ls='lsd' (public) + azsetmbdev (private)
 config/mcp/servers.json  → puppeteer (public) + browser-network@10.0.0.102 (private)
 ```
@@ -261,7 +261,7 @@ Each approach has different maintenance costs.
 **Severity: MEDIUM**
 
 The `azcli-scripts/` directory contains employer-specific tooling:
-- `ado-task` — hardcodes `https://dev.azure.com/mbie-immigrationnz-prod` as DEFAULT_ORG
+- `ado-task` — hardcodes `https://dev.azure.com/<azdo-org-slug>` as DEFAULT_ORG
 - `find-peps.sh` — Azure Private Endpoints query
 - `azqprop.sh`, `azq-name.sh` — Azure resource queries
 
@@ -312,7 +312,7 @@ These scripts are employer-specific but generically useful. Options:
 
 ### Q7: What about `config/bash/bash_aliases`?
 
-This file has legacy employer-specific content (line 13: Azure DevOps configure with `mbie-immigrationnz-prod`, line 17: pipeline run with `INZ_TDS_DEV`). Is this file still sourced, or has it been superseded by `config/shell/aliases.sh`?
+This file has legacy employer-specific content (line 13: Azure DevOps configure with `<azdo-org-slug>`, line 17: pipeline run with `<subscription-a>`). Is this file still sourced, or has it been superseded by `config/shell/aliases.sh`?
 
 ---
 
@@ -407,12 +407,12 @@ Before any implementation planning can begin, these decisions must be made:
 
 | File | Private Content | Action |
 |------|----------------|--------|
-| `config/shell/env.sh:37` | `AZDO_ORG="mbie-immigrationnz-prod"` | Move to `.local` or env var |
-| `config/shell/aliases.sh:85-86` | `INZ_TDS_DEV`, `INZ_TDS_SIT` | Move to private overlay |
+| `config/shell/env.sh:37` | `AZDO_ORG="<azdo-org-slug>"` | Move to `.local` or env var |
+| `config/shell/aliases.sh:85-86` | `<subscription-a>`, `<subscription-b>` | Move to private overlay |
 | `config/mcp/servers.json:8,13` | Private IP, org name | Template with env vars |
 | `config/mcp/README.md` | Private IP `10.0.0.102` (3x) | Replace with placeholder |
 | `config/bash/bash_aliases:13,17` | Org name, pipeline ID | Remove or move to private |
-| `config/nushell/aliases.nu:69-70` | `INZ_TDS_DEV`, `INZ_TDS_SIT` | Move to private overlay |
+| `config/nushell/aliases.nu:69-70` | `<subscription-a>`, `<subscription-b>` | Move to private overlay |
 | `azcli-scripts/ado-task:7` | Hardcoded DEFAULT_ORG | Parameterize with env var |
 | `bootstrap.sh:4,8` | Username `danielpmo1371` | Parameterize or decide on final username |
 | `README.md` | Username references | Update to final username |

@@ -13,7 +13,7 @@
 #   1. brew.sh       - Homebrew package manager - no dependencies
 #   2. tools.sh      - Base dev tools (git, nvim, ripgrep, etc.) - no dependencies
 #   2b. casks.sh     - macOS GUI apps via Brewfile - requires: brew (macOS only)
-#   3. secrets.sh    - Create ~/.accessTokens template - no dependencies
+#   3. secrets.sh    - Keychain-backed secrets library (migrates ~/.accessTokens) - requires: ~/repos/secrets clone
 #   4. terminals.sh  - Terminal emulators (Ghostty, etc.) - no dependencies
 #   5. fonts.sh      - Nerd Fonts for Powerlevel10k - requires: curl
 #   6. tmux.sh       - Tmux + TPM + plugins - requires: git, terminal config
@@ -587,7 +587,7 @@ show_help() {
     echo "  --brew         Install Homebrew"
     echo "  --tools        Install common dev tools"
     echo "  --casks        Install macOS GUI apps from Brewfile (macOS only)"
-    echo "  --secrets      Create ~/.accessTokens template"
+    echo "  --secrets      Install keychain-backed secrets library (migrates ~/.accessTokens)"
     echo "  --tmux         Install tmux and plugins"
     echo "  --bash         Install bash configuration"
     echo "  --zsh          Install zsh configuration"

@@ -63,7 +63,7 @@ every service repo checked out under the workspace root.
       "ci": null,
       "cd": null,
       "terraform": {
-        "id": 802,
+        "id": 12345,
         "name": "My - Terraform",
         "defaultParameters": { "deployToggle": "plan", "TF_LOG": "NONE" },
         "alwaysSkipStages": ["apply_mystack"],       // optional; skipped on every run
@@ -100,8 +100,8 @@ Checks run in this order — earlier rules cannot be overridden by later ones:
    in `pipeline-validator.sh` itself and is never consulted from the registry.
 2. **Registry `blocked` list** (whenever a service entry matches, regardless of
    `allowed`): a stage in `stages.blocked` is blocked. This is the only layer that can
-   block prod stages whose names carry no pre/prd/prod substring (e.g. td-apim's
-   `INZ_PaaS_SHARED`) — which is why `blocked` must list them explicitly, and why
+   block prod stages whose names carry no pre/prd/prod substring (e.g. svc-apim's
+   `PROD_SHARED_STAGE`) — which is why `blocked` must list them explicitly, and why
    the registry must be authored carefully and kept in version control.
 3. **Registry `allowed` list** (when the entry's `stages.allowed` is non-empty): a
    stage not in `stages.allowed` is blocked (default-deny).
@@ -114,7 +114,7 @@ Checks run in this order — earlier rules cannot be overridden by later ones:
 - **A missing registry falls back silently.** No registry in any parent directory
   drops the validator to the prefix fallback with only a line in
   `~/.claude/logs/pipeline-validator.log`. Fallback still fails closed, but
-  service-specific stage names (like `INZ_PaaS_SHARED_SIT`) will be wrongly blocked.
+  service-specific stage names (like `PROD_SHARED_STAGE_SIT`) will be wrongly blocked.
 - **An unparseable registry aborts hard.** Invalid JSON makes the validator exit
   non-zero with no decision output at all (jq parse failure under `set -e`) — also
   fail-closed, but the symptom is an opaque error rather than a BLOCKED reason. In

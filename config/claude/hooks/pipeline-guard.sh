@@ -15,10 +15,22 @@ set -euo pipefail
 
 # ============================================================================
 # HARD-CODED SAFETY RULES — MIRRORS pipeline-validator.sh
+#
+# TERRAFORM_PIPELINE_ID / TERRAFORM_APPLY_STAGE identify YOUR org's terraform
+# pipeline and its apply stage — they are deliberately NOT read from
+# pipeline-registry.json (checks 0-3 are skipped entirely when no registry is
+# found for the CWD; this check must still fire in that case — it is the
+# only protection active when the AI is not inside a registered project
+# directory). Configure via the OS keychain, same mechanism as AZDO_ORG:
+#   secret_set PIPELINE_GUARD_TERRAFORM_ID "<pipeline-id>"
+#   secret_set PIPELINE_GUARD_TERRAFORM_APPLY_STAGE "<apply-stage-name>"
+# config/shell/secrets.sh exports both. UNSET = FAIL CLOSED: every pipeline
+# trigger is blocked below, not silently allowed. This is what "the guard
+# breaks until configured" looks like on a fresh clone — that is intentional.
 # ============================================================================
 BLOCKED_STAGE_PATTERNS=("pre" "prd" "prod" "production")
-TERRAFORM_PIPELINE_ID="802"
-TERRAFORM_APPLY_STAGE="apply_travellerdirectives"
+TERRAFORM_PIPELINE_ID="${PIPELINE_GUARD_TERRAFORM_ID:-}"
+TERRAFORM_APPLY_STAGE="${PIPELINE_GUARD_TERRAFORM_APPLY_STAGE:-}"
 # ============================================================================
 
 LOG_DIR="$HOME/.claude/logs"
@@ -87,6 +99,19 @@ log_detail "Branch: $BRANCH"
 log_detail "stagesToSkip: $STAGES_TO_SKIP_LIST"
 log_detail "templateParameters: $TEMPLATE_PARAMS_JSON"
 log_detail "Full tool_input: $TOOL_INPUT"
+
+# ============================================================================
+# Fail closed if unconfigured — see the constants block above. Without a
+# known terraform pipeline id/stage, this hook cannot tell an infra-destroy
+# pipeline from a harmless CI run, so it refuses ALL triggers rather than
+# silently skip the one check that has no registry fallback.
+# ============================================================================
+if [[ -z "$TERRAFORM_PIPELINE_ID" || -z "$TERRAFORM_APPLY_STAGE" ]]; then
+  log_detail "BLOCKED: pipeline-guard not configured (PIPELINE_GUARD_TERRAFORM_ID / PIPELINE_GUARD_TERRAFORM_APPLY_STAGE unset)"
+  log_audit "blocked" "pipeline-guard not configured — see PIPELINE_GUARD_TERRAFORM_ID / PIPELINE_GUARD_TERRAFORM_APPLY_STAGE in config/claude/hooks/pipeline-guard.sh"
+  echo "BLOCKED by pipeline-guard hook: not configured. Set PIPELINE_GUARD_TERRAFORM_ID and PIPELINE_GUARD_TERRAFORM_APPLY_STAGE (secret_set PIPELINE_GUARD_TERRAFORM_ID \"...\"; secret_set PIPELINE_GUARD_TERRAFORM_APPLY_STAGE \"...\") before any pipeline can be triggered. This hook fails closed when unconfigured." >&2
+  exit 2
+fi
 
 # ============================================================================
 # Registry lookup — find pipeline-registry.json from CWD
@@ -229,8 +254,8 @@ if [[ "$PIPELINE_ID" == "$TERRAFORM_PIPELINE_ID" ]]; then
   if [[ "$HAS_APPLY_SKIP" != "1" ]]; then
     log_detail "BLOCKED: Terraform pipeline missing '$TERRAFORM_APPLY_STAGE' in stagesToSkip!"
     log_detail "stagesToSkip was: $STAGES_TO_SKIP_JSON"
-    log_audit "blocked" "CRITICAL: Terraform pipeline 802 triggered WITHOUT '$TERRAFORM_APPLY_STAGE' in stagesToSkip. stagesToSkip=$STAGES_TO_SKIP_JSON"
-    echo "BLOCKED by pipeline-guard hook: Terraform pipeline 802 MUST include '$TERRAFORM_APPLY_STAGE' in stagesToSkip. The apply stage is NEVER allowed. Got stagesToSkip=$STAGES_TO_SKIP_JSON" >&2
+    log_audit "blocked" "CRITICAL: Terraform pipeline $TERRAFORM_PIPELINE_ID triggered WITHOUT '$TERRAFORM_APPLY_STAGE' in stagesToSkip. stagesToSkip=$STAGES_TO_SKIP_JSON"
+    echo "BLOCKED by pipeline-guard hook: Terraform pipeline $TERRAFORM_PIPELINE_ID MUST include '$TERRAFORM_APPLY_STAGE' in stagesToSkip. The apply stage is NEVER allowed. Got stagesToSkip=$STAGES_TO_SKIP_JSON" >&2
     exit 2
   fi
 
@@ -241,7 +266,7 @@ if [[ "$PIPELINE_ID" == "$TERRAFORM_PIPELINE_ID" ]]; then
   if [[ "$MANUAL_APPROVAL" != "True" && "$MANUAL_APPROVAL" != "true" ]]; then
     log_detail "BLOCKED: requireManualApproval is '$MANUAL_APPROVAL' (must be True)"
     log_audit "blocked" "Terraform pipeline requireManualApproval='$MANUAL_APPROVAL' (must be True)"
-    echo "BLOCKED by pipeline-guard hook: Terraform pipeline 802 MUST have requireManualApproval=True. Got '$MANUAL_APPROVAL'" >&2
+    echo "BLOCKED by pipeline-guard hook: Terraform pipeline $TERRAFORM_PIPELINE_ID MUST have requireManualApproval=True. Got '$MANUAL_APPROVAL'" >&2
     exit 2
   fi
 

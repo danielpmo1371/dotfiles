@@ -29,7 +29,7 @@ log_validator() {
 
 # Locate the project pipeline-registry.json by walking up from CWD.
 # The registry is the source of truth for service-specific stage names
-# (e.g. td-apim's INZ_PaaS_SHARED_* stages) that the generic prefix
+# (e.g. svc-apim's PROD_SHARED_STAGE_* stages) that the generic prefix
 # lists above cannot express.
 find_registry_from_cwd() {
   local dir
@@ -169,9 +169,9 @@ if [[ "$TYPE" == "cd" ]]; then
   done
 
   # Registry lookup: service-specific stage lists take precedence over the
-  # generic prefix lists, because stage names like INZ_PaaS_SHARED_SIT
-  # (td-apim) are invisible to prefix matching — including its PROD stage
-  # INZ_PaaS_SHARED, which the substring blocklist above does NOT catch.
+  # generic prefix lists, because stage names like PROD_SHARED_STAGE_SIT
+  # (svc-apim) are invisible to prefix matching — including its PROD stage
+  # PROD_SHARED_STAGE, which the substring blocklist above does NOT catch.
   # Match by cd.id FIRST — the pipeline ID is what actually gets triggered,
   # and pipeline-guard.sh matches by ID only, so a name/ID mismatch must
   # validate against the ID's entry. Service name is the fallback for
@@ -398,19 +398,18 @@ if [[ "$TYPE" == "terraform" ]]; then
     REG_SVC_NAME=$(echo "$SERVICE_ENTRY" | jq -r '.key')
     REASON="Terraform PLAN-ONLY approved for service '$REG_SVC_NAME' env=$TF_ENV_LOWER loc=$TF_LOC_LOWER (registry-driven: blocked stages + alwaysSkipStages applied)"
   else
-    # Fallback (fail-closed): no registry match. Skip any stage named like apply/destroy.
-    log_validator "WARNING: pipelineId $PIPELINE_ID not found in registry; using conservative plan-only defaults"
-    STAGES_TO_SKIP='["apply_travellerdirectives","apply_flightchecker","apply_advancedpassengerprocessing","destroy_advancedpassengerprocessing","RemoveThisStageWhenOtherPipelinesUsesHostedAgents"]'
-    TEMPLATE_PARAMS=$(jq -nc \
-      --arg env "$TF_ENV_LOWER" \
-      --arg loc "$TF_LOC_LOWER" \
-      '{
-        "environment": $env,
-        "location": $loc,
-        "deployToggle": "plan",
-        "TF_LOG": "NONE"
-      }')
-    REASON="Terraform PLAN-ONLY approved (fallback mode — pipelineId $PIPELINE_ID not in registry) env=$TF_ENV_LOWER loc=$TF_LOC_LOWER"
+    # Fail closed: no registry entry for this pipelineId means we have no
+    # verified list of its stages, so we cannot safely compute stagesToSkip.
+    # A prior version of this rule shipped a hardcoded guess-list of stage
+    # names specific to one org's terraform layout — reused elsewhere, a
+    # differently-named apply/destroy stage would have silently slipped
+    # through unskipped. Refusing to guess is strictly safer: register the
+    # pipeline (.claude/pipeline-registry.json in the target project repo)
+    # instead of relying on this fallback.
+    log_validator "BLOCKED: pipelineId $PIPELINE_ID not found in registry — refusing to guess stagesToSkip"
+    jq -n --arg reason "BLOCKED: pipelineId $PIPELINE_ID not found in pipeline-registry.json. Terraform pipelines require a registry entry (services.<svc>.terraform.id) so stagesToSkip can be derived from real data, not guessed." \
+      '{"approved": false, "reason": $reason, "rule": "TERRAFORM_NOT_REGISTERED"}'
+    exit 1
   fi
 
   VALIDATOR_OUTPUT=$(jq -n \

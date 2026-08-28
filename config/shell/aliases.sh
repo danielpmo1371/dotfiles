@@ -21,6 +21,10 @@ alias ...='cd ../..'
 # ─────────────────────────────────────────────────────────────────────────────
 #   Custom terminal commands behaviour
 # ─────────────────────────────────────────────────────────────────────────────
+# Case-insensitive grep for interactive use (aliases don't leak into scripts).
+# rg gets the same via RIPGREP_CONFIG_PATH (env.sh) -> config/ripgrep/config.
+alias grep='grep -i'
+
 # Override rm to move to a bin folder
 rm() {
     # Ensure the bin directory exists before moving files
@@ -82,7 +86,29 @@ alias cc='claude -p --model haiku'
 alias gg='gemini -p'
 alias g='gemini --model gemini-2.5-flash --prompt'
 alias update-claude='sudo npm i -g @anthropic-ai/claude-code'
-alias cdang='claude --dangerously-skip-permissions'
+# --rc (--remote-control) takes an optional [name], so it must not be the last
+# flag — anything appended after it (e.g. a starter prompt) would be eaten as
+# the session name instead of reaching claude as the prompt.
+alias cdang='claude --rc --dangerously-skip-permissions'
+# Re-run the exact `claude --resume "<name>"` hint claude prints on quit, with
+# cdang's flags. Scrapes THIS pane's scrollback for the last such line, so it
+# resumes this pane's session even if newer sessions were started in other tabs
+# (which would win with --continue). Tmux-only by design.
+cres() {
+    if [ -z "$TMUX" ]; then
+        echo "cres: not inside tmux — can't read scrollback for the resume hint" >&2
+        return 1
+    fi
+    local session
+    session=$(tmux capture-pane -p -S - -t "$TMUX_PANE" \
+        | grep -Eo 'claude --resume "[^"]+"' | tail -1 \
+        | sed -E 's/^claude --resume "(.+)"$/\1/')
+    if [ -z "$session" ]; then
+        echo "cres: no 'claude --resume \"...\"' hint found in this pane's scrollback" >&2
+        return 1
+    fi
+    cdang --resume "$session"
+}
 
 # Fast one-shot query via `llm`. Provider chosen by $AI_PROVIDER (see env.sh);
 # defaults to Groq for the lowest time-to-first-token. Streams to stdout.
@@ -97,7 +123,7 @@ q() {
     local model="$AI_MODEL"
     if [ -z "$model" ]; then
         case "${AI_PROVIDER:-groq}" in
-            groq)   model="groq/llama-3.1-8b-instant" ;;
+            groq)   model="groq/openai/gpt-oss-20b" ;;
             gemini) model="gemini-2.5-flash" ;;
             openai) model="gpt-4o-mini" ;;
             claude) model="claude-haiku-4-5-20251001" ;;
@@ -111,7 +137,7 @@ q() {
     local tmp
     tmp="$(mktemp)" || return 1
     if [ -t 1 ] && command -v bat >/dev/null 2>&1; then
-        llm -m "$model" "$@" | tee "$tmp" | bat --style=plain --paging=never --language=md
+        llm -m "$model" "$@" | tee "$tmp" | bat --style=plain --language=md --paging=always --pager='less -RFX'
     else
         llm -m "$model" "$@" | tee "$tmp"
     fi
@@ -145,8 +171,6 @@ alias tf='terraform'
 alias az-show='az account show'
 alias azl='az account list | grep name'
 alias az-list='az account list | grep name'
-alias azsetmbdev='az account set --name "INZ_TDS_DEV"'
-alias azsetmbsit='az account set --name "INZ_TDS_SIT"'
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   File listing (uses lsd if available, falls back to ls)
@@ -217,6 +241,49 @@ alias fetch='fastfetch'
 #         fi
 #     }
 # fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+#   macOS power management (lid / caffeinate)
+# ─────────────────────────────────────────────────────────────────────────────
+if [[ "$OSTYPE" == darwin* ]]; then
+    # lid off|on|status — control whether closing the lid sleeps the Mac.
+    # disablesleep persists across reboots: a closed MacBook in a bag stays
+    # awake, runs hot and drains — hence the warning and the status command.
+    lid() {
+        case "$1" in
+            off)
+                sudo pmset -a disablesleep 1 && \
+                    echo "⚠️  Lid close no longer sleeps this Mac (persists across reboots)." && \
+                    echo "   Battery drains and heat builds if closed in a bag. Restore: lid on"
+                ;;
+            on)
+                sudo pmset -a disablesleep 0 && echo "Normal lid-close sleep restored."
+                ;;
+            status|"")
+                pmset -g | grep -E 'disablesleep|^ sleep|SleepDisabled' || \
+                    echo "disablesleep not set (normal lid behavior)"
+                ;;
+            *)
+                echo "usage: lid off|on|status" >&2
+                return 1
+                ;;
+        esac
+    }
+    alias insomnia='lid off'
+    alias rest='lid on'
+
+    # caff [cmd...] — keep the Mac awake (lid OPEN only; caffeinate cannot
+    # override a closed lid — that's what `lid off` is for).
+    # No args: awake until Ctrl+C. With args: awake only while <cmd> runs.
+    caff() {
+        if [[ $# -eq 0 ]]; then
+            echo "Staying awake until Ctrl+C (lid must stay open)..."
+            caffeinate -is
+        else
+            caffeinate -is "$@"
+        fi
+    }
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Shell functions

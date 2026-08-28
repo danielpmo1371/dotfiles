@@ -32,6 +32,7 @@ echo "DEBUG: DOTFILES_DIR set to: $DOTFILES_DIR"
 #   Bash options
 # ─────────────────────────────────────────────────────────────────────────────
 set -o vi             # Vi mode
+IGNOREEOF=10          # ^D at the prompt won't close the shell by accident
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Meta (Alt/Option/Cmd-via-Ghostty) bindings — portable keybinding layer

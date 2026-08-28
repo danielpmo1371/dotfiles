@@ -2,7 +2,7 @@
 
 ## Example 1: Simple Task — Fix a typo in the README
 
-**Scenario:** User wants to fix a typo found in the README of td-api.
+**Scenario:** User wants to fix a typo found in the README of svc-api.
 
 ```
 User: "Start working on US#200100"
@@ -12,7 +12,7 @@ User: "Start working on US#200100"
 
 **Phase 1 — Bootstrap (5 min)**
 - Bootstrap Specialist fetches US#200100 from AZDO
-- Title: "Fix typo in td-api README contributing section"
+- Title: "Fix typo in svc-api README contributing section"
 - Creates `user_story-200100-fix-typo-readme/`
 - Writes story context with 1 acceptance criterion
 
@@ -37,7 +37,7 @@ User: "Start working on US#200100"
 
 ## Example 2: Medium Task — Add a new API endpoint
 
-**Scenario:** Add a new health check endpoint to the td-api travellerdeclaration function app.
+**Scenario:** Add a new health check endpoint to the svc-api widget function app.
 
 ```
 User: "/sdlc start US#195432"
@@ -50,10 +50,10 @@ User: "/sdlc start US#195432"
 - Creates folder scaffold
 
 **Phase 2 — Scope Discovery (15 min)**
-- Scope Analyst searches td-api for existing health endpoints
+- Scope Analyst searches svc-api for existing health endpoints
 - Finds pattern in `HealthMonitor/` function app
 - Maps: 2 files to create, 1 config to update, 3 test files needed
-- Dependencies: td-apim needs a new operation definition
+- Dependencies: svc-apim needs a new operation definition
 
 **Complexity: Medium** (2 repos, ~12 files, API changes but no architectural overhaul)
 **Selected phases: 1, 2, 6, 7, 8, 9**
@@ -63,9 +63,9 @@ User: "/sdlc start US#195432"
 - Plan: new function class, DI registration, unit tests, APIM operation
 
 **Phase 7 — Execution (60 min)**
-- Implementation Engineer creates the endpoint in td-api
+- Implementation Engineer creates the endpoint in svc-api
 - Adds unit tests following existing patterns (MSTest + Moq + FluentAssertions)
-- Updates APIM operation definition in td-apim
+- Updates APIM operation definition in svc-apim
 - Commits incrementally per component
 
 **Phase 8 — Verification (20 min)**
@@ -84,7 +84,7 @@ User: "/sdlc start US#195432"
 
 ## Example 3: Complex Task — Multi-repo dependency update
 
-**Scenario:** Update NuGet packages across td-api, app-app, and fch-api with breaking changes.
+**Scenario:** Update NuGet packages across svc-api, portal-app, and billing-api with breaking changes.
 
 ```
 User: "Set up SDLC for work item 170514"
@@ -98,7 +98,7 @@ User: "Set up SDLC for work item 170514"
 - **Team Lead continues** (requirements clear)
 
 **Phase 2 — Scope Discovery (20 min)**
-- Scope Analyst examines td-api, app-app, fch-api
+- Scope Analyst examines svc-api, portal-app, billing-api
 - Spawns 3 `feature-dev:code-explorer` agents in parallel (one per repo)
 - Maps 45+ files affected, identifies breaking API changes in Azure.Core
 - **[GUIDED STOP]** Presents: 3 repos, 45 files, HIGH complexity
@@ -124,11 +124,11 @@ User: "Set up SDLC for work item 170514"
 
 **Phase 6 — Planning (20 min)**
 - Planning Architect creates execution plan:
-  - Step 1: Update Azure.Core in td-api (most impacted)
-  - Step 2: Fix breaking changes in td-api
-  - Step 3: Run td-api tests
-  - Step 4: Update app-app (similar pattern)
-  - Step 5: Update fch-api (minimal impact)
+  - Step 1: Update Azure.Core in svc-api (most impacted)
+  - Step 2: Fix breaking changes in svc-api
+  - Step 3: Run svc-api tests
+  - Step 4: Update portal-app (similar pattern)
+  - Step 5: Update billing-api (minimal impact)
   - Step 6: Cross-repo integration verification
 - **[GUIDED STOP]** Plan presented with per-step risk assessment
 - User approves with one adjustment
@@ -137,7 +137,7 @@ User: "Set up SDLC for work item 170514"
 - Implementation Engineer works through the plan step by step
 - Creates git worktrees per repo for isolation
 - Commits after each step passes build
-- **[AUTO STOP]** Build failure in app-app after Azure.Core update
+- **[AUTO STOP]** Build failure in portal-app after Azure.Core update
 - User helps resolve an ambiguous API migration
 - Engineer continues after fix
 
@@ -155,7 +155,7 @@ User: "Set up SDLC for work item 170514"
 **Phase 10 — Retrospective (10 min)**
 - Retrospective Analyst notes:
   - Azure.Core migration pattern documented for future use
-  - Build failure in app-app was due to missed interface change — add to audit checklist
+  - Build failure in portal-app was due to missed interface change — add to audit checklist
   - Parallel scope analysis saved ~30 min
 
 **Result:** Full 10-phase workflow. 3 PRs created, lessons captured.
@@ -178,7 +178,7 @@ User: "Resume story 170514"
   ```
   Current Phase: 7 - Execution
   Status: IN_PROGRESS
-  Last Activity: Step 3 of 6 completed (td-api tests passing)
+  Last Activity: Step 3 of 6 completed (svc-api tests passing)
   ```
 - Queries Memory MCP for `sdlc:US#170514:*` — confirms same state
 
@@ -186,11 +186,11 @@ User: "Resume story 170514"
 ```
 Found in-progress workflow for US#170514:
   Phase: 7 - Execution (step 3 of 6 complete)
-  Last activity: td-api tests passing, app-app update pending
+  Last activity: svc-api tests passing, portal-app update pending
 
 Options:
-  1. Continue from step 4 (app-app update)
-  2. Re-run step 3 (verify td-api still passing)
+  1. Continue from step 4 (portal-app update)
+  2. Re-run step 3 (verify svc-api still passing)
   3. Restart from Phase 6 (re-plan)
 ```
 

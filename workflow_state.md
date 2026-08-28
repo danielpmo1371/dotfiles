@@ -143,6 +143,74 @@ defined once in repo-tracked shell/tmux config, portable to any emulator.
 
 ---
 
+## In Progress: Features & benefits documentation (2026-07-30)
+
+### State
+- **Status**: CONSTRUCT
+- **Branch**: main (docs-only, reversible)
+
+### Goal
+Document the features the dotfiles provide and the concrete workflow benefits
+of each — the "why it matters" companion to the README's "what it is".
+
+### Plan
+1. Explore agent inventories all user-facing features: tmux binds +
+   util-scripts, shell aliases/functions, git niceties, Claude Code
+   commands/skills/agents/hooks, machine lifecycle, nvim highlights, extras.
+2. Write docs/features-and-benefits.md organized by workflow benefit
+   (terminal workflow, AI-assisted dev, safety nets, portability,
+   reproducible setup) — each feature: trigger, what it does, benefit.
+3. Link it from README.md.
+
+### Log
+- 2026-07-30: Inventory agent dispatched.
+- 2026-07-30: Inventory returned (tmux binds+scripts, shell layer, git,
+  Claude hooks/commands/skills, lifecycle, nvim, ghostty/kitty extras).
+  Wrote docs/features-and-benefits.md (8 benefit-led sections). Fixed my own
+  README error: floax listed as active plugin but it's commented out in
+  tmux.conf — replaced with the real active set; linked the new doc from
+  README. Spot-verified rm()→~/bin, `*`→q ZLE widget, C-q popup bind.
+- **Status**: COMPLETED (staged with previous docs work)
+
+---
+
+## Completed: Documentation review & README overhaul (2026-07-29)
+
+### State
+- **Status**: CONSTRUCT
+- **Branch**: main (docs-only change, reversible)
+
+### Goal
+Review the repo, bring the main README.md in line with reality (install.sh
+flags, directory structure, features), and tighten supporting docs.
+
+### Plan
+1. Explore agent audits docs vs code (install.sh flags, installers/, config/,
+   docs/, tests/) — identify stale claims, missing coverage, duplication.
+2. Rewrite README.md: correct the flag list and directory tree, add missing
+   features (MCP sync, `q` quick-query, agent teams, pipeline guards, test
+   harness, fonts/casks/llm installers), keep it lean — deep detail stays in
+   CLAUDE.md / docs/.
+3. Fix any stale statements found in docs/*.md only if clearly wrong (no
+   scope creep).
+
+### Log
+- 2026-07-29: Audit dispatched; README read. Awaiting audit report.
+- 2026-07-29: Audit returned — README covered 11/23 flags, `--secrets`
+  description stale in 3 places, directory tree/features incomplete.
+  Spot-checked contested claims: secrets.sh confirmed keychain-migration;
+  claude.sh:151-163 confirmed it DOES auto-run pipeline hooks (audit's doubt
+  on CLAUDE.md was wrong, claim kept).
+- 2026-07-29: Fixed stale `--secrets` text in install.sh:16, install.sh:590,
+  CLAUDE.md:24. Rewrote README.md: two-phase model, all 23 flags grouped,
+  design-principle section, secrets/keychain, `q`, MCP sync, agent hooks,
+  test harness, corrected tree, post-install now uses secret_set. Verified
+  tmux keybind claims against tmux.conf and all relative links resolve.
+- **Status**: COMPLETED (uncommitted; note docs/terminal-agnostic-config.md
+  is untracked — README links dangle on GitHub until it's committed)
+
+---
+
 ## Completed: Interactive Claude pane picker (2026-07-12)
 
 ### State
@@ -431,8 +499,8 @@ After reviewing the previous agent's work, I recommend **OPTION 5: Combination S
 - docs/customization.md — how to personalize
 
 ## Private Data Patterns (for agents to scan/avoid)
-- `mbie-immigrationnz-prod` or `mbie` (employer)
-- `INZ_TDS_DEV`, `INZ_TDS_SIT` (Azure subscriptions)
+- `<azdo-org-slug>` (employer)
+- `<subscription-a>`, `<subscription-b>` (Azure subscriptions)
 - `10.0.0.102` (private IP)
 - `192.168.1.107` (private IP)
 - `memory-mcp:8000` (private hostname)
@@ -504,11 +572,11 @@ After reviewing the previous agent's work, I recommend **OPTION 5: Combination S
   - Identified critical verification error: 39 destroys in build 270486 (SIT/AE) marked as PASS
   - Created analysis: docs/learning/incident-2026-03-11-terraform-destroys-missed.md
   - Created summary: docs/learning/SUMMARY-2026-03-11-terraform-destroys.md
-  - Enhanced td-iac MEMORY.md with "Terraform Plan Verification Protocol -- HARD GATE" section
+  - Enhanced iac MEMORY.md with "Terraform Plan Verification Protocol -- HARD GATE" section
   - Updated docs/learning/README.md with incident entry
   - New protocol: Destroy count is FIRST check, >0 = automatic FAIL, no exceptions
   - MCP memory not available for storage (tools not loaded)
-  - Project: td-iac, Story 193236, Branch: feature/193236-Refactor-ServiceBus
+  - Project: iac, Story 193236, Branch: feature/193236-Refactor-ServiceBus
 
 ## LEARN-FROM-MISTAKE SESSION: Skill-Forge Not Used
 - [2026-03-11] Starting systematic learning analysis
@@ -560,7 +628,7 @@ After reviewing the previous agent's work, I recommend **OPTION 5: Combination S
 - Goal: Verify the registry-aware validation commit set (bd2dac7, 1fff831, f6f7bf0, 439804b) was aligned with harness purpose, not a shortcut/anti-pattern, no cross-repo breakage
 - Method: dispatched read-only review agent; empirically probed validator with adversarial registries; ran hermetic test suite
 - Verdict: directionally aligned (hardcoded PRE/PRD blocklist still supreme, registry default-deny, docs match code, tests real) BUT 4 confirmed issues:
-  1. HIGH: CD allow-authority now lives solely in workspace-writable .claude/pipeline-registry.json — agent (Edit/Write/Bash) can modify it, takes effect uncommitted, no independent code layer for non-pre/prd-substring prod stages (verified: INZ_PaaS_SHARED approved when listed)
+  1. HIGH: CD allow-authority now lives solely in workspace-writable .claude/pipeline-registry.json — agent (Edit/Write/Bash) can modify it, takes effect uncommitted, no independent code layer for non-pre/prd-substring prod stages (verified: PROD_SHARED_STAGE approved when listed)
   2. MED fail-open: stages.blocked ignored when allowed empty (validator :158 gate skips whole registry branch); papered over in REGISTRY.md prose instead of code fix (verified: blocked sitae approved via prefix fallback)
   3. MED: test suite HOME misbinding (run() :99 — HOME= binds to printf, not validator across pipe) pollutes real ~/.claude/logs/pipeline-validator.log with fake "approved" fixture entries
   4. LOW: validator matches registry by name-first, guard hook by ID-only — name/ID mismatch validates against wrong service
@@ -579,5 +647,99 @@ Commits: atomic per item, suite green before each; pathspec staging (zshrc is us
   - 8e83d05 validator: registry entry matched by cd.id first (guard-aligned); mismatch test pinned
   - ebc15fc structural protection: registry_committed_or_die in validator (CD+terraform) + mirrored check in pipeline-guard; new pipeline-registry-write-guard.sh hook (Edit/Write/NotebookEdit/Bash) registered in settings.json + installer; REGISTRY.md documents enforcement
   - 1e79b86 tests/test-pipeline-hooks.sh: 32 cases across all three hooks incl. dirty-registry fail-closed and no-registry permissive fallback (pinned as known weakness); CLAUDE.md updated
-- Verification: 33+32 tests green; live td workspace re-validated (sitae approved, INZ_PaaS_SHARED blocked); installer delivered write-guard symlink; only user-dirty zshrc + this file remain uncommitted
+- Verification: 33+32 tests green; live example workspace re-validated (sitae approved, PROD_SHARED_STAGE blocked); installer delivered write-guard symlink; only user-dirty zshrc + this file remain uncommitted
 - Remaining known gaps (not in approved scope, surfaced to user): guard skips checks 0-2 with no registry; guard terraform constants (802) still hardcoded; agent-doc diagram claims guard invokes validator; stagesToSkip derived from caller allStages not registry stages.all
+
+## SESSION: Terminal.app font config in dotfiles (2026-07-20)
+- Symptom: Nerd Font glyphs/emoji not rendering in macOS built-in Terminal.app
+- Diagnosis (empirical): fonts are present (~/Library/Fonts has MesloLGS NF x4 + Hack Nerd Font set); LANG=en_US.UTF-8 OK. Root cause is the profile font — Terminal.app default settings set is "Homebrew", font AndaleMono 12 (confirmed twice: NSKeyedArchiver plist decode AND `osascript ... get font name of settings set "Homebrew"`)
+- Constraint discovered: Terminal.app rewrites com.apple.Terminal.plist from memory on quit, so `defaults write` while it runs is silently clobbered. Symlinking prefs is impossible (whole-file rewrite).
+- Chosen mechanism: AppleScript against the RUNNING app (`tell application "Terminal" to set font name of settings set <default> to "MesloLGS-NF-Regular"`). Applies live, persists on quit, idempotent. Automation permission already granted on this machine (read-only probe returned rc=0).
+- PostScript name resolved via fc-scan: "MesloLGS-NF-Regular" (NSName in the plist is the PostScript name, not the display family "MesloLGS NF")
+- Policy check: docs/terminal-agnostic-config.md explicitly lists font/rendering as legitimate layer-4 emulator config. Compliant.
+
+## Plan (NEEDS_PLAN_APPROVAL)
+1. installers/terminals.sh: add `install_terminal_app()` — macOS-only guard; resolve the default profile name from `defaults read com.apple.Terminal "Default Window Settings"`; set ONLY the font family via osascript; leave size/colors untouched. No-op + warn (non-fatal) if the font is missing or osascript is denied.
+2. Wire it into `install_terminals()` alongside Ghostty/Kitty; no new install.sh flag (runs under --terminals).
+3. Font name constant shared with installers/fonts.sh conventions (MesloLGS NF); no new config dir — nothing to symlink, so a config file would be dead weight.
+4. Docs: one line in CLAUDE.md terminals section + README if it lists terminals.
+5. Verify: re-run osascript read-back to prove font changed; visually confirm glyphs; re-run installer to prove idempotency.
+- Explicitly OUT of scope: Terminal.app is 256-color only (no truecolor) — p10k/tmux colors will still be approximated. Not fixing that here.
+
+## Log — 2026-07-20 MCP secret-interpolation verification
+
+Verified `${VAR}` expansion after removing literal PAT from `~/.claude.json`.
+- `~/.claude.json` contains no literal credential; `AZURE_DEVOPS_PAT` / `ADO_MCP_AUTH_TOKEN` = `${AZDO_PAT}`.
+- Live MCP calls OK: core_list_projects, repo_list_repos_by_project, wit_my_work_items, search_code, pipelines_get_build_definitions.
+- `az account show` OK (INZ_TDS_SIT); `az devops project list` OK (AZURE_DEVOPS_EXT_PAT path); `az group list` OK.
+- Drift found: 4 `AZURE_DEVOPS_*` env keys exist in `~/.claude.json` but not in `config/mcp/servers.json` (not reproducible on a fresh machine).
+- Incident: PAT value echoed into session transcript during verification — rotation recommended.
+
+## Actions (approved 2026-07-20, implemented)
+- installers/terminals.sh: added install_terminal_app() (macOS-only guard, dynamic default-profile resolution via `defaults read ... "Default Window Settings"`, osascript sets font family only, non-fatal warn on missing font / denied Automation / unreadable profile); wired into install_terminals(); added summary line. Font constant TERMINAL_APP_FONT="MesloLGS-NF-Regular" (PostScript name).
+- CLAUDE.md: documented the font mechanism + 256-color caveat under Key Patterns.
+- Verify: bash -n OK; live run set Homebrew profile font; osascript read-back = MesloLGS-NF-Regular; second run idempotent (same OK output, no error). No new config dir, no install.sh flag.
+- Status: COMPLETE. Not committed (awaiting user per git-workflow rules).
+
+## Log — 2026-07-29 MCP server pruning (approved by user)
+
+Assessment: transcript analysis (window since 2026-06-07) showed real tool-call usage only for
+azure-devops (156 calls), claude-in-chrome extension (109), context7 plugin (14), browser-network (4).
+sequential-thinking / fetch / puppeteer had a `u/` package-name typo since first commit (never worked);
+browser-local had zero calls and drops connection (needs BrowserMCP extension, not in use).
+
+Actions:
+- config/mcp/servers.json: removed sequential-thinking, fetch, puppeteer, browser-local (kept memory, browser-network, azure-devops).
+- ~/.claude.json: removed same 4 via `claude mcp remove -s user` (installer only merges, never deletes).
+- ~/.claude.json: cleared now-dead disabledMcpServers entries in nuvemlabs.site and archer-pro-active projects.
+- config/mcp/README.md: updated server list, noted removals + the merge-doesn't-delete caveat.
+- config/claude/CLAUDE.md: dropped sequencial-thinking instruction; replaced "Browser-Tools MCP" /
+  "Prefer browse mcp to chrome-for-claude" with claude-in-chrome (local) + browser-network (remote) guidance.
+- memory server KEPT: hostname memory-mcp currently unresolvable; user fixing DNS + /etc/hosts separately.
+
+## Log — 2026-07-31 secrets-doctor util-script (approved by user)
+
+Motivation: diagnosing secret propagation kept requiring an ad-hoc three-command pipeline
+(env test + keychain grep + secrets.sh grep) whose no-value-leak property was implicit.
+
+Actions:
+- util-scripts/secrets-doctor: new single-purpose diagnostic — reports STORE (via secret_list,
+  names only) → EXPORTS (config/shell/secrets.sh line) → ENV per key; prefix expansion
+  (e.g. PIPELINE_GUARD); derived vars (aliases like AZURE_DEVOPS_PAT) marked n/a for store;
+  exit 0 intact / 1 broken / 2 setup error. Never reads secret values — structural guarantee.
+- CLAUDE.md: documented under shell features (uncommitted — file already had unrelated WIP hunk).
+- Verified: default run (7 keys, all green), prefix match, derived key, bogus key (exit 1),
+  env -u AZDO_PAT break detection (exit 1), --help.
+
+## Log — 2026-07-31 secrets-debugging skill (skill-forge)
+
+- config/claude/skills/secrets-debugging/SKILL.md: new skill making secrets-doctor the canonical
+  secret-propagation debugging method. Triggers on missing tokens / 401s / keychain questions.
+  Contains chain diagram, failure-pattern→fix table, worked example, names-only + no-bypass rules.
+- Validated with skill-forge validate-skill.sh: 17 pass, 0 warnings, 0 errors (EXCELLENT).
+- Live immediately via existing ~/.claude/skills symlink.
+- CLAUDE.md secrets-doctor line extended to reference the skill (still uncommitted with user WIP).
+
+## Log — 2026-07-31 secrets-doctor --probe / --match (approved by user)
+
+- util-scripts/secrets-doctor: opt-in value validation. --probe reads value in-process (bash
+  built-ins only: never stdout/argv/child-env) and flags EMPTY / ctrl-chars; --match REGEX adds
+  shape check on store+env values, reporting pass/fail only. Default mode unchanged (names-only).
+  xtrace defense (set +x) verified: probed value absent from bash -x trace.
+- Tested: real keys probe ok*, --match pass/fail (exit 0/1), unknown flag (exit 2), stub-lib
+  unit test covering EMPTY / ctrl-chars / ok* branches, default-mode regression.
+- skills/secrets-debugging: table gains EMPTY/ctrl-chars row + probe escalation guidance;
+  re-validated EXCELLENT.
+
+## Log — 2026-07-31 secrets-doctor moved to nuvemlabs/secrets repo (approved by user)
+
+- util-scripts/secrets-doctor removed: source of truth is now ~/repos/secrets/bin/secrets-doctor
+  (commit bf5914f there), installed to ~/.local/bin (already on PATH via path.sh) with chmod +x.
+- installers/secrets.sh: already-installed check now also requires ~/.local/bin/secrets-doctor,
+  so existing machines pick up the CLI on next ./install.sh --secrets.
+- config/shell/secrets.sh: exports SECRETS_EXPORTS_FILE (self-declaration) so the now-generic
+  doctor finds the exports mapping from any child process.
+- CLAUDE.md + secrets-debugging skill updated to new location + fix-at-source warning;
+  skill re-validated EXCELLENT.
+- Verified: installer run installs 755 copy; fresh login shell resolves ~/.local/bin/secrets-doctor
+  and full chain check passes (exit 0); secrets repo test suite 20/20.
