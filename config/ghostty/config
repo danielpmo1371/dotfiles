@@ -108,60 +108,66 @@ macos-option-as-alt = true
 
 # Decrease_font_size
 keybind = ctrl+-=decrease_font_size:1
-keybind = super+\=decrease_font_size:1
+keybind = alt+\=decrease_font_size:1
 
 # SSH TERM variable Option
 term = xterm-256color
 
 # ─────────────────────────────────────────────────────────────────────────────
-#   Cmd → Meta adapter
+#   Cmd ≡ Alt: one remap line instead of a per-key adapter (Ghostty >= 1.3.0)
 # ─────────────────────────────────────────────────────────────────────────────
-# Ghostty is a thin adapter only: Cmd+<key> emits the same ESC-prefix (meta)
-# bytes that Alt+<key> produces natively on Linux and Option+<key> already
-# produces here (macos-option-as-alt). All SEMANTICS live in repo-tracked
-# config — tmux.conf (prefix2 M-e, popups, vim-aware pane nav, M-u scrollback)
-# and the meta blocks in zshrc/bashrc. Cmd ≡ Option ≡ Alt everywhere.
-# Only keys with a bound consumer are mapped: an unbound meta key in a
-# vi-mode shell falls through to vi-command execution (destructive).
-keybind = super+e=text:\x1be
-keybind = super+a=text:\x1ba
-keybind = super+q=text:\x1bq
-keybind = super+w=text:\x1bw
-keybind = super+r=text:\x1br
-keybind = super+u=text:\x1bu
-keybind = super+d=text:\x1bd
-keybind = super+i=text:\x1bi
-keybind = super+n=text:\x1bn
-keybind = super+h=text:\x1bh
-keybind = super+j=text:\x1bj
-keybind = super+k=text:\x1bk
-keybind = super+l=text:\x1bl
+# Physical Cmd behaves as Alt for BOTH keybind matching and input encoding,
+# so Cmd+<key> emits the same ESC-prefix (meta) bytes Alt produces natively
+# on Linux and Option already produces here (macos-option-as-alt). All
+# SEMANTICS live in tmux.conf — the single brain — and every interactive
+# shell runs inside tmux (auto-attach in config/shell/tmux.sh).
+key-remap = super=alt
 
-# Kernel tty semantics — these MUST stay literal control bytes; no shell or
-# tmux binding can raise SIGINT/SIGTSTP. EOF stays on physical Ctrl+D.
-keybind = super+c=text:\x03
-keybind = super+z=text:\x1A
-# Cmd+V deliberately unmapped: native macOS paste.
+# macOS menu accelerators fire BEFORE the remap (documented key-remap
+# caveat), so every trained Cmd key that has a default Ghostty/menu binding
+# must be unbound to fall through to the remap and reach tmux as meta.
+keybind = super+e=unbind
+keybind = super+a=unbind
+keybind = super+q=unbind
+keybind = super+w=unbind
+keybind = super+d=unbind
+keybind = super+n=unbind
+keybind = super+j=unbind
+keybind = super+k=unbind
+
+# Kernel tty semantics — literal control bytes; no shell or tmux binding can
+# raise SIGINT/SIGTSTP. Bound on the POST-remap chord (alt+…), so they catch
+# physical Cmd+C/Z — and now Option+C/Z too, which is deliberate. Their menu
+# defaults (Copy / Undo) are unbound to release the pre-remap path.
+# EOF stays on physical Ctrl+D.
+keybind = super+c=unbind
+keybind = super+z=unbind
+keybind = alt+c=text:\x03
+keybind = alt+z=text:\x1A
+# Cmd+V deliberately left on its default: menu Paste fires before the remap,
+# so native macOS paste survives with zero config.
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Tmux Window/Session Navigation with Cmd+Shift+h/j/k/l
 # ─────────────────────────────────────────────────────────────────────────────
-# Map Cmd+Shift+hjkl to escape sequences for Shift+Arrow keys
+# Post-remap chords (alt+…): physical Cmd+Shift+<key> → Shift/Ctrl-Shift-Arrow
+# escape sequences whose semantics live in tmux (window/session nav). Default
+# goto_split/tab binds on these chords are shadowed by these rebinds.
 # NOTE: Ghostty does not support trailing comments — anything after `text:`
 # (including a `# comment`) is sent literally to the terminal.
 # Shift+Left (prev window)
-keybind = super+[=text:\x1b[1;2D
+keybind = alt+[=text:\x1b[1;2D
 # Shift+Right (next window)
-keybind = super+]=text:\x1b[1;2C
+keybind = alt+]=text:\x1b[1;2C
 # Ctrl+Shift+Left (move window left)
-keybind = super+shift+[=text:\x1b[1;6D
+keybind = alt+shift+[=text:\x1b[1;6D
 # Ctrl+Shift+Right (move window right)
-keybind = super+shift+]=text:\x1b[1;6C
+keybind = alt+shift+]=text:\x1b[1;6C
 # Shift+Left
-keybind = super+shift+h=text:\x1b[1;2D
+keybind = alt+shift+h=text:\x1b[1;2D
 # Shift+Right
-keybind = super+shift+l=text:\x1b[1;2C
+keybind = alt+shift+l=text:\x1b[1;2C
 # Shift+Down
-keybind = super+shift+j=text:\x1b[1;2B
+keybind = alt+shift+j=text:\x1b[1;2B
 # Shift+Up
-keybind = super+shift+k=text:\x1b[1;2A
+keybind = alt+shift+k=text:\x1b[1;2A

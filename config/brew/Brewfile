@@ -19,6 +19,9 @@ cask "brave-browser"
 cask "chromium"
 cask "microsoft-edge"
 
+# Terminals
+cask "ghostty"   # >=1.3.0 required for key-remap (keybinding meta layer)
+
 # Development
 cask "anaconda"
 cask "android-platform-tools"
