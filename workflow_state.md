@@ -1,6 +1,100 @@
 # Workflow State
 
-## Active: Portable Cmd/Alt meta-layer keybindings (2026-07-13)
+## Active: Lean keybinding refactor — tmux single brain (2026-08-28)
+
+### State
+- **Status**: CONSTRUCT (plan approved 2026-08-28)
+- **Phase**: CONSTRUCT
+- **Branch**: worktree-alt-meta-keybindings (on top of the 5-commit meta layer + merge of origin/main @46dfa71)
+- **Inputs**: 8-agent research run (5 researchers + 3 adversarial reviewers) from session UX-keybindings-refactor-challenge-ai; user decisions: Path 1 (tmux auto-attach), Ghostty ≥1.3.0 `key-remap`, PAT resolved via merge (file removed on main; PAT still needs ROTATION by user).
+
+### Goal
+Collapse the 4-layer meta keybinding design into "tmux is the single brain;
+every other layer is a one-line adapter or zero":
+- Ghostty: 13 per-key Cmd binds → one `key-remap = super=alt` line (1.3.1 via brew)
+- Shells: delete both 25/26-line meta blocks; replace with tmux auto-attach
+  (interactive, non-SSH, no $TMUX → exec tmux attach-or-new)
+- tmux: consume every trained meta key at root; zero-fork format guard replaces
+  ps-based is_vim; escape-time 0 → 25ms
+- nvim: unchanged
+
+### Plan (atomic commits, in order)
+1. **tmux single brain** (config/tmux/tmux.conf)
+   - `set -g escape-time 25` (0 verified to split ESC+key on laggy SSH)
+   - Replace is_vim ps-grep with zero-fork `#{m/r:...,#{pane_current_command}}`
+     format guard on all 8 nav binds (C-hjkl + M-hjkl); extend pattern to fzf and ssh
+   - Root consumers for the 4 fall-through keys:
+     - `M-r`: guarded translation — vim/fzf/ssh foreground → send M-r through; else `send-keys C-r` (history search)
+     - `M-d`: root bind pairing M-u (enter copy-mode + halfpage-down no-op → display hint), keep copy-mode-vi M-u/M-d paging
+     - `M-i` / `M-n`: observable no-ops — `display-message "M-i is prefix-only (C-e/M-e first)"`
+   - Hazard cap: root no-op/hint binds for the measured-destructive stray vi letters
+     not in the trained set (M-x, M-s, M-c) since key-remap widens the emit surface
+2. **shells: auto-attach + delete meta blocks** (config/zsh/zshrc, config/bash/bashrc)
+   - Delete the two mirrored meta blocks (51 lines)
+   - Add auto-attach guarded by: interactive shell, no $TMUX, no $SSH_TTY, tmux
+     on PATH, TERM not dumb; honor existing session workflow (reuse `start`/ta
+     alias semantics from config/shell/tmux.sh — attach-or-create, sane
+     multi-window behavior via grouped sessions if needed)
+   - Keep ignore_eof / IGNOREEOF
+3. **ghostty: key-remap adapter** (config/ghostty/config)
+   - `brew upgrade --cask ghostty` (1.1.3 → 1.3.1)
+   - Replace the 13 `super+X=text:\x1bX` binds with `key-remap = super=alt`
+   - EMPIRICAL GATE (user-assisted, documented test matrix): Cmd+E/A/Q/W/R/U/D/H/J/K/L/I/N
+     reach tmux as meta; Cmd+C still SIGINT; Cmd+Z still SIGTSTP; Cmd+V still pastes;
+     Cmd+` quick-terminal still works; macOS menu interception (known gap #10230)
+   - FALLBACK if gate fails: keep per-key adapter rewritten as `esc:X` binds
+     (verified valid on 1.1.3+, byte-identical, self-documenting)
+4. **tests: parity invariant** (tests/)
+   - Assert trained-key list ⊆ tmux root binds (parse tmux.conf), so a future
+     key #14 can't silently fall through; wire alongside validate-symlinks.sh
+5. **docs** — rewrite CLAUDE.md keybinding-architecture paragraph (single-brain
+   design, popups-never-host-bare-shells invariant, escape-time rationale,
+   auto-attach invariant), align docs/terminal-agnostic-config.md, log here
+
+### Verification
+- Isolated tmux server (-L) binding tables; zsh -n / bash -n + binding listings
+- ghostty +validate-config; hermetic suites (65/65 baseline)
+- User-assisted live matrix after Ghostty upgrade (step 3 gate)
+
+### Known risks / constraints
+- key-remap widens Cmd emit surface from 13 keys to all letters → stray unbound
+  meta keys reach pane shells; mitigated by auto-attach + hazard-cap binds;
+  destructive core (r/d/k/u) all consumed at tmux root
+- Popups bypass all tmux key tables (popup.c, verified): invariant — popups must
+  never host a bare interactive vi-mode shell
+- tmux <3.2 (old distros) lacks display-popup/format-match: documented floor
+- Ghostty auto_updates cask: key-remap config is inert on <1.3.0 (unknown key error
+  risk at config load — verify behavior on 1.3.1 only)
+
+### Log
+- 2026-08-28: Unstaged+discarded PAT working-copy edit; merged origin/main
+  (55 commits) — file util-scripts/copy-mbie-pat.sh removed on main (d27978d);
+  4 conflicts resolved (kept meta design over old Ctrl-block in ghostty config,
+  union in CLAUDE.md/bashrc/workflow_state.md); merge @46dfa71, gitleaks clean.
+- 2026-08-28: Blueprint written; approved by user.
+- 2026-08-28: CONSTRUCT complete — 5 commits:
+  1. tmux single brain: escape-time 25, zero-fork #{m/r:} guards (verified
+     on live panes: zsh/cat/nvim), M-r shell-only translation, M-d consume,
+     M-i/M-n hints, hazard caps M-x/M-s/M-c, popup invariant + C-s popup
+     now nested tmux.
+  2. shells: meta blocks deleted (-51), auto-attach in config/shell/tmux.sh
+     (one impl for both shells); pty-verified: positive path execs
+     `tmux new-session -A -s main` in zsh AND bash; NO_TMUX/SSH/no-tty skip.
+  3. ghostty: brew-adopted 1.3.1 (cask in Brewfile), key-remap = super=alt,
+     menu-conflicting defaults unbound (e a q w d n j k + c z), alt+c/alt+z
+     control bytes, nav group rewritten to post-remap alt+ chords, Cmd+V on
+     native menu paste. Config validates on 1.3.1.
+  4. tests/test-keybinding-parity.sh: 23/23 green; negative check exits 1.
+  5. docs: CLAUDE.md keybinding paragraph rewritten (single brain, three
+     invariants), parity test added to harness list.
+- **Status**: CONSTRUCT_COMPLETE — awaiting user live gate: RESTART Ghostty
+  (running instance is 1.1.3; reload would reject key-remap), then test
+  matrix: 13 trained Cmd keys, Cmd+C SIGINT, Cmd+Z, Cmd+V paste, Cmd+`
+  quick-terminal, new window auto-attaches, NO_TMUX=1 bare shell.
+
+---
+
+## Completed: Portable Cmd/Alt meta-layer keybindings (2026-07-13)
 
 ### State
 - **Status**: CONSTRUCT_COMPLETE — awaiting user smoke test + merge
