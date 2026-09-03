@@ -65,8 +65,9 @@ custom-shader-animation = always
 font-size = 19
 font-thicken = true
 # theme = light:Xcode Light hc,dark:Xcode Dark hc
-quick-terminal-animation-duration = 0
-keybind = global:super+grave_accent=toggle_quick_terminal
+# Cmd+` from anywhere: bring the (single) Ghostty window to front / hide it again.
+# Replaces the drop-down quick terminal (toggle_quick_terminal).
+keybind = global:super+grave_accent=toggle_visibility
 cursor-style = block
 shell-integration-features = no-cursor
 cursor-style-blink = false
