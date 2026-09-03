@@ -193,6 +193,12 @@ Append new lessons at the bottom of this section, dated. Each lesson follows the
   4. **Verify after every file-editing sub-agent**: `git status` AND `git log -n 3 --oneline` BEFORE assuming the agent stayed within bounds. The working tree being clean is also a tell — the agent may have already committed.
   5. Treat "DO NOT commit/push" prose as advisory, not a hard guard. Structural prevention beats verbal prohibition.
 
+### HTML pages: three theme variants (2026-09-01)
+
+- **Rule**: Any HTML page produced for Daniel (report, artifact, presentation, dashboard) must ship with THREE theme variants: light, dark, and medium (a mid-tone between the two).
+- **Why**: Daniel's explicit standing request — light/dark alone doesn't cover his preference.
+- **How to apply**: Define all three palettes as CSS token sets; add an in-page Light/Medium/Dark switcher; default from `prefers-color-scheme` (light↔dark) with medium selectable; persist the choice in localStorage (try/catch-wrapped).
+
 ### Claude-in-Chrome popup windows (2026-06-11)
 
 - **Rule**: Claude-in-Chrome's `screenshot` / `computer` (mouse) tools only act on tabs in the MCP tab group. Any `window.open` popup spawns a separate OS window OUTSIDE that group — you cannot screenshot it, click it, or enumerate it. Reach it only by capturing its same-origin JS `window` handle at the moment it opens, then drive it programmatically.
