@@ -12,6 +12,35 @@ DOTFILES_ROOT="$(dirname "$SCRIPT_DIR")"
 source "$DOTFILES_ROOT/lib/install-common.sh"
 source "$DOTFILES_ROOT/lib/install-packages.sh"
 
+# glint (terminal dashboard, github.com/ntrospect0/glint) has no package or
+# published release binaries — build from the source repo and install the
+# binary to ~/.local/bin via its Makefile.
+install_glint() {
+    if command -v glint &> /dev/null; then
+        log_info "glint already installed"
+        return 0
+    fi
+
+    log_info "Installing glint from source..."
+    if ! command -v cargo &> /dev/null; then
+        install_package "cargo" "rust" "cargo" "rust" || {
+            log_warn "cargo unavailable, skipping glint"
+            return 1
+        }
+    fi
+
+    local glint_repo="$HOME/repos/glint"
+    if [[ ! -d "$glint_repo" ]]; then
+        git clone https://github.com/ntrospect0/glint.git "$glint_repo" || {
+            log_warn "Failed to clone glint repo, skipping glint"
+            return 1
+        }
+    fi
+
+    make -C "$glint_repo" install PREFIX="$HOME/.local" \
+        || log_warn "glint build failed, continuing..."
+}
+
 install_tools() {
     log_header "Common Development Tools"
 
@@ -59,6 +88,8 @@ install_tools() {
         "gdu|gdu|gdu|"
         "fastfetch|fastfetch|fastfetch|"
         "az|azure-cli|azure-cli|"
+        # Terminal image/video viewer; aliased as `icat` in config/shell/aliases.sh
+        "timg|timg|timg|"
     )
     # Platform-specific desktop notifier
     if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -79,6 +110,8 @@ install_tools() {
         install_package "npm" "npm" "npm" || log_warn "Failed to install npm, continuing..."
     fi
 
+    install_glint
+
     echo ""
     log_info "Tools installation complete"
     echo ""
@@ -89,6 +122,7 @@ install_tools() {
     echo "  fzf, jq, htop, tree            - utilities"
     echo "  lazydocker                     - docker TUI"
     echo "  az                             - Azure CLI"
+    echo "  timg (icat), glint             - image viewer, terminal dashboard"
     echo ""
     echo "To reset package manager preference: rm ~/.dotfiles_pkg_manager"
 }
