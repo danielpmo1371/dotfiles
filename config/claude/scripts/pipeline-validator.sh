@@ -279,7 +279,10 @@ if [[ "$TYPE" == "cd" ]]; then
 fi
 
 # ============================================================================
-# Rule 4: Terraform pipelines — plan only, NEVER apply
+# Rule 4: Terraform pipelines — plan only by default. The apply stage runs
+# only for an env in the registry's terraform.applyAllowedEnvironments, and
+# a BLOCK always overrides an ALLOW: stages.blocked, alwaysSkipStages and
+# destroy* stages are skipped on every run, whatever the allowlist says.
 # ============================================================================
 ALLOWED_TF_ENVS=("dev" "sit" "uat" "npe" "dry")
 ALLOWED_TF_LOCATIONS=("ae" "ase")
@@ -349,12 +352,13 @@ if [[ "$TYPE" == "terraform" ]]; then
   # Look up the pipeline-registry.json by walking up from CWD. Match by
   # pipelineId (numeric) against services.*.terraform.id. The registry is the
   # single source of truth for:
-  #   - stagesToSkip (services.<svc>.stages.blocked  ∪  terraform.alwaysSkipStages)
+  #   - per-service environment policy (terraform.parameters.environment.{blocked,allowed})
+  #   - stagesToSkip (stages.blocked ∪ terraform.alwaysSkipStages ∪ destroy* stages,
+  #     plus apply* stages unless the env is in terraform.applyAllowedEnvironments)
   #   - templateParameters (terraform.defaultParameters merged with env/location)
   #
   # If the registry cannot be found or the pipelineId is not in it, we fail
-  # CLOSED: emit a conservative plan-only default that still skips any stage
-  # whose name contains "apply" — but we warn loudly in the reason.
+  # CLOSED (TERRAFORM_NOT_REGISTERED below) — stage names are never guessed.
   # ==========================================================================
   # (find_registry_from_cwd is defined at the top of this script)
   REGISTRY_FILE=""
@@ -373,18 +377,53 @@ if [[ "$TYPE" == "terraform" ]]; then
   fi
 
   if [[ "$SERVICE_ENTRY" != "null" && -n "$SERVICE_ENTRY" ]]; then
-    # Derive stagesToSkip: union of stages.blocked and terraform.alwaysSkipStages
-    STAGES_TO_SKIP=$(echo "$SERVICE_ENTRY" | jq -c '
-      ((.value.stages.blocked // []) + (.value.terraform.alwaysSkipStages // []))
-      | unique
-    ')
+    REG_SVC_NAME=$(echo "$SERVICE_ENTRY" | jq -r '.key')
+
+    # Registry per-service environment policy. Runs AFTER the hardcoded checks
+    # above and can only narrow them, never widen them: blocked list first,
+    # then the allowed list (default-deny when the list is present and non-empty).
+    REG_ENV_BLOCKED=$(echo "$SERVICE_ENTRY" | jq -r --arg env "$TF_ENV_LOWER" '
+      [.value.terraform.parameters.environment.blocked // [] | .[] | ascii_downcase] | index($env) != null')
+    if [[ "$REG_ENV_BLOCKED" == "true" ]]; then
+      log_validator "BLOCKED: env '$TF_ENV_LOWER' is in terraform.parameters.environment.blocked for '$REG_SVC_NAME'"
+      jq -n \
+        --arg reason "BLOCKED: Environment '$TF_ENVIRONMENT' is blocked by the registry for service '$REG_SVC_NAME' (terraform.parameters.environment.blocked)." \
+        '{"approved": false, "reason": $reason, "rule": "ENVIRONMENT_BLOCKLIST"}'
+      exit 1
+    fi
+    REG_ENV_ALLOWED=$(echo "$SERVICE_ENTRY" | jq -r --arg env "$TF_ENV_LOWER" '
+      (.value.terraform.parameters.environment.allowed // []) as $a
+      | ($a | length) == 0 or ([$a[] | ascii_downcase] | index($env) != null)')
+    if [[ "$REG_ENV_ALLOWED" != "true" ]]; then
+      log_validator "BLOCKED: env '$TF_ENV_LOWER' is not in terraform.parameters.environment.allowed for '$REG_SVC_NAME'"
+      jq -n \
+        --arg reason "BLOCKED: Environment '$TF_ENVIRONMENT' is not in the registry's allowed list for service '$REG_SVC_NAME' (terraform.parameters.environment.allowed)." \
+        '{"approved": false, "reason": $reason, "rule": "ENVIRONMENT_NOT_ALLOWED"}'
+      exit 1
+    fi
 
     ALL_STAGES_FROM_REG=$(echo "$SERVICE_ENTRY" | jq -c '.value.stages.all // []')
+
+    # Hard skip set — skipped on EVERY run; nothing below can remove an entry
+    # (block overrides allow):
+    #   stages.blocked ∪ terraform.alwaysSkipStages ∪ destroy* stages
+    # The registry lists are the authority. The "starts with destroy" match is
+    # belt-and-braces only: a destroy stage named differently must be listed.
+    HARD_SKIP=$(echo "$SERVICE_ENTRY" | jq -c '
+      ((.value.stages.blocked // [])
+       + (.value.terraform.alwaysSkipStages // [])
+       + [(.value.stages.all // [])[] | select(ascii_downcase | startswith("destroy"))])
+      | unique')
+
+    # Apply stages = every stages.all entry whose name starts with "apply".
+    # Same caveat: prefix match is belt-and-braces, the blocked list is the
+    # authority for anything named differently.
+    APPLY_STAGES=$(jq -nc --argjson all "$ALL_STAGES_FROM_REG" \
+      '[$all[] | select(ascii_downcase | startswith("apply"))]')
 
     # Apply-stage policy. Plan-only is the default. An environment listed in the
     # registry's terraform.applyAllowedEnvironments may run the apply stage —
     # same allowlist the pipeline-guard hook enforces, so both layers agree.
-    # Destroy stages are skipped unconditionally, allowlist or not.
     APPLY_ALLOWED_ENVS=$(echo "$SERVICE_ENTRY" | jq -r '
       .value.terraform.applyAllowedEnvironments // [] | map(ascii_downcase) | join(",")')
     APPLY_PERMITTED=false
@@ -401,13 +440,21 @@ if [[ "$TYPE" == "terraform" ]]; then
     DEFAULT_PARAMS=$(echo "$SERVICE_ENTRY" | jq -c '.value.terraform.defaultParameters // {}')
 
     if [[ "$APPLY_PERMITTED" == "true" ]]; then
-      # Drop apply stages from the skip list so the apply runs, but keep every
-      # destroy stage skipped.
-      STAGES_TO_SKIP=$(jq -nc \
-        --argjson skip "$STAGES_TO_SKIP" \
-        --argjson all "$ALL_STAGES_FROM_REG" \
-        '([$skip[] | select(ascii_downcase | startswith("apply") | not)]
-          + [$all[] | select(ascii_downcase | startswith("destroy"))]) | unique')
+      # Block overrides allow: the allowlist may un-skip an apply stage only if
+      # the registry does NOT also list it in stages.blocked/alwaysSkipStages.
+      # If it does, the registry contradicts itself — fail closed. A silent
+      # downgrade to plan-only would hide the mistake, so we refuse instead.
+      CONTRADICTED=$(jq -nc --argjson hard "$HARD_SKIP" --argjson apply "$APPLY_STAGES" \
+        '[$apply[] | select(. as $s | $hard | index($s) != null)]')
+      if [[ "$(echo "$CONTRADICTED" | jq 'length')" != "0" ]]; then
+        log_validator "BLOCKED: registry contradiction for '$REG_SVC_NAME': apply stage(s) $CONTRADICTED in stages.blocked/alwaysSkipStages while env '$TF_ENV_LOWER' is in applyAllowedEnvironments"
+        jq -n \
+          --arg reason "BLOCKED: Registry contradiction for service '$REG_SVC_NAME': apply stage(s) $CONTRADICTED are listed in stages.blocked/alwaysSkipStages AND environment '$TF_ENV_LOWER' is in applyAllowedEnvironments. Blocked lists always win. A human must remove the stage from stages.blocked/alwaysSkipStages and commit before apply can run." \
+          '{"approved": false, "reason": $reason, "rule": "REGISTRY_CONTRADICTION"}'
+        exit 1
+      fi
+
+      STAGES_TO_SKIP="$HARD_SKIP"
 
       # The apply is only ever reachable behind a human approval, and only as a
       # deploy — never a destroy — whatever the registry defaults happen to say.
@@ -418,25 +465,23 @@ if [[ "$TYPE" == "terraform" ]]; then
         '$defaults + {"environment": $env, "location": $loc,
                       "deployToggle": "deploy", "requireManualApproval": "True"}')
 
-      REG_SVC_NAME=$(echo "$SERVICE_ENTRY" | jq -r '.key')
-      REASON="Terraform PLAN+APPLY approved for service '$REG_SVC_NAME' env=$TF_ENV_LOWER loc=$TF_LOC_LOWER (env is in registry applyAllowedEnvironments; apply held at the manual approval gate, destroy stages still skipped)"
+      REASON="Terraform PLAN+APPLY approved for service '$REG_SVC_NAME' env=$TF_ENV_LOWER loc=$TF_LOC_LOWER (env is in registry applyAllowedEnvironments; apply held at the manual approval gate, blocked/alwaysSkip/destroy stages still skipped)"
     else
-      # Defensive: make sure every stage whose name contains "apply" is skipped,
-      # even if the registry has a mistake. This is a belt-and-braces guard.
+      # Plan-only: hard skip set plus every apply stage.
       STAGES_TO_SKIP=$(jq -nc \
-        --argjson skip "$STAGES_TO_SKIP" \
-        --argjson all "$ALL_STAGES_FROM_REG" \
-        '($skip + [$all[] | select(ascii_downcase | startswith("apply"))]) | unique')
+        --argjson hard "$HARD_SKIP" \
+        --argjson apply "$APPLY_STAGES" \
+        '($hard + $apply) | unique')
 
-      # Derive templateParameters from defaultParameters (registry) + env/location
+      # Plan-only means plan: pin deployToggle regardless of what the registry's
+      # defaultParameters say, so a registry typo can never turn into a destroy.
       TEMPLATE_PARAMS=$(jq -nc \
         --arg env "$TF_ENV_LOWER" \
         --arg loc "$TF_LOC_LOWER" \
         --argjson defaults "$DEFAULT_PARAMS" \
-        '$defaults + {"environment": $env, "location": $loc}')
+        '$defaults + {"environment": $env, "location": $loc, "deployToggle": "plan"}')
 
-      REG_SVC_NAME=$(echo "$SERVICE_ENTRY" | jq -r '.key')
-      REASON="Terraform PLAN-ONLY approved for service '$REG_SVC_NAME' env=$TF_ENV_LOWER loc=$TF_LOC_LOWER (registry-driven: blocked stages + alwaysSkipStages applied)"
+      REASON="Terraform PLAN-ONLY approved for service '$REG_SVC_NAME' env=$TF_ENV_LOWER loc=$TF_LOC_LOWER (registry-driven: blocked stages + alwaysSkipStages + destroy/apply stages skipped)"
     fi
   else
     # Fail closed: no registry entry for this pipelineId means we have no

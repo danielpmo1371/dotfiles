@@ -67,11 +67,13 @@ every service repo checked out under the workspace root.
         "id": 12345,
         "name": "My - Terraform",
         "defaultParameters": { "deployToggle": "plan", "TF_LOG": "NONE" },
-        "alwaysSkipStages": ["apply_mystack"],       // optional; skipped on every run
-                                                     // (apply* stages excepted for an
-                                                     // allowlisted env — see Terraform apply policy)
+        "alwaysSkipStages": ["apply_mystack"],       // optional; skipped on EVERY run, even for
+                                                     // an allowlisted env (block overrides allow —
+                                                     // see Terraform apply policy)
         "applyAllowedEnvironments": [],              // optional; lowercase env names whose
-                                                     // apply stage may run. Default none = plan-only
+                                                     // apply stage may run. Default none = plan-only.
+                                                     // Must NOT coexist with the apply stage in
+                                                     // alwaysSkipStages / stages.blocked
         "parameters": {
           "environment": {
             "values":  ["dev", "sit", "uat", "pre", "prd"],
@@ -131,19 +133,24 @@ Even for an allowlisted environment the run stays narrow, in both layers:
   hook rejects any other value (exact match — `Deploy`, `TRUE`, `destroy` are all
   blocked). AzDO therefore still holds the apply at its ManualValidation gate for a
   human; the agent never approves it.
-- Stages whose name starts with `destroy` are always in `stagesToSkip`.
+- Stages whose name starts with `destroy` are always in `stagesToSkip`, on plan-only and
+  apply runs alike. On plan-only runs `deployToggle` is pinned to `plan` regardless of
+  `defaultParameters`.
 - PRE/PRD are blocked by the hardcoded environment blocklist before the allowlist is
-  consulted, whatever the registry lists.
+  consulted, whatever the registry lists. The per-service
+  `terraform.parameters.environment.blocked` / `.allowed` lists are honoured next and can
+  only narrow the hardcoded lists, never widen them.
 - Absent key, absent registry, or an environment not listed = plan-only (fails closed).
 
-**Override semantics — read carefully.** When the environment is allowlisted, the
-validator removes `apply*` stages from `stagesToSkip` **even if they appear in
-`alwaysSkipStages` or `stages.blocked`**, and the hook's Check 2 (registry `blocked`
-stages must be skipped) applies to **CD pipelines only**, so it does not protect a
-terraform apply stage. To keep the file unambiguous, list the apply stage in
-`alwaysSkipStages` / `stages.blocked` **only when the service has no
-`applyAllowedEnvironments`**; a service that allowlists an environment should not also
-declare its apply stage as always-skipped or blocked.
+**Precedence — a block always overrides an allow.** `stages.blocked` and
+`alwaysSkipStages` are skipped on **every** run; `applyAllowedEnvironments` can un-skip an
+apply stage **only if that stage appears in neither list**. A registry that lists the
+apply stage in `stages.blocked` or `alwaysSkipStages` *and* allowlists an environment
+contradicts itself: the validator returns `REGISTRY_CONTRADICTION` and the hook blocks the
+trigger, and both stay blocked until a human removes the stage from those lists and
+commits. There is no silent downgrade to plan-only — that would hide the mistake. So: a
+service with `applyAllowedEnvironments` must not list its apply stage in
+`alwaysSkipStages` / `stages.blocked`; a service without it should.
 
 ## Caveats
 

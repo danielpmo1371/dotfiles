@@ -118,7 +118,7 @@ cat > "$WS/.claude/pipeline-registry.json" << 'EOF'
       "stages": {
         "all": ["plan_y", "apply_y", "destroy_y", "cleanup_y"],
         "allowed": ["plan_y"],
-        "blocked": ["apply_y", "destroy_y"]
+        "blocked": ["destroy_y"]
       }
     },
     "svc-tf-allow-alwaysskip": {
@@ -140,7 +140,48 @@ cat > "$WS/.claude/pipeline-registry.json" << 'EOF'
       "stages": {
         "all": ["plan_z", "apply_z", "destroy_z"],
         "allowed": ["plan_z"],
-        "blocked": ["apply_z", "destroy_z"]
+        "blocked": ["destroy_z"]
+      }
+    },
+    "svc-tf-allow-blocked": {
+      "project": "Test Project",
+      "ci": null,
+      "cd": null,
+      "terraform": {
+        "id": 953,
+        "name": "Test - Terraform (allowlisted, apply also in stages.blocked)",
+        "applyAllowedEnvironments": ["dev"],
+        "defaultParameters": { "deployToggle": "plan" },
+        "parameters": {
+          "environment": { "values": ["dev", "sit"], "allowed": ["dev", "sit"], "blocked": [] },
+          "location": { "values": ["ae"], "default": "ae" }
+        }
+      },
+      "folder": "svc-tf-allow-blocked",
+      "stages": {
+        "all": ["plan_v", "apply_v"],
+        "allowed": ["plan_v"],
+        "blocked": ["apply_v"]
+      }
+    },
+    "svc-tf-envpolicy": {
+      "project": "Test Project",
+      "ci": null,
+      "cd": null,
+      "terraform": {
+        "id": 954,
+        "name": "Test - Terraform (registry env policy, destroy unlisted, bad default toggle)",
+        "defaultParameters": { "deployToggle": "destroy", "TF_LOG": "NONE" },
+        "parameters": {
+          "environment": { "values": ["dev", "sit", "uat"], "allowed": ["dev"], "blocked": ["uat"] },
+          "location": { "values": ["ae"], "default": "ae" }
+        }
+      },
+      "folder": "svc-tf-envpolicy",
+      "stages": {
+        "all": ["plan_w", "apply_w", "destroy_w"],
+        "allowed": ["plan_w"],
+        "blocked": []
       }
     }
   }
@@ -371,20 +412,47 @@ check_tf_output "allowlisted env matched case-insensitively (DEV -> dev), apply 
      and (.stagesToSkip | index("apply_y") | not)
      and .templateParameters.environment == "dev"
      and .templateParameters.deployToggle == "deploy"'
-# Documents the override: when the env is allowlisted, apply-prefixed stages
-# are removed from stagesToSkip EVEN IF the registry lists them in
-# alwaysSkipStages / stages.blocked. Destroy stays skipped.
-run "$WS" '{"service":"svc-tf-allow-alwaysskip","type":"terraform","branch":"develop","pipelineId":"952","project":"P","environment":"dev","location":"ae"}'
-check_tf_output "allowlisted env overrides alwaysSkipStages for the apply stage (documented behavior), destroy still skipped" \
+# Block overrides allow: an apply stage the registry ALSO lists in
+# alwaysSkipStages / stages.blocked can never be un-skipped by the allowlist.
+# That registry contradicts itself, so the validator fails closed (no silent
+# downgrade to plan-only, which would hide the mistake).
+assert_blocked "allowlisted env but apply stage in alwaysSkipStages -> REGISTRY_CONTRADICTION (block wins)" "REGISTRY_CONTRADICTION" 1 "$WS" \
+    '{"service":"svc-tf-allow-alwaysskip","type":"terraform","branch":"develop","pipelineId":"952","project":"P","environment":"dev","location":"ae"}'
+assert_blocked "allowlisted env but apply stage in stages.blocked -> REGISTRY_CONTRADICTION (block wins)" "REGISTRY_CONTRADICTION" 1 "$WS" \
+    '{"service":"svc-tf-allow-blocked","type":"terraform","branch":"develop","pipelineId":"953","project":"P","environment":"dev","location":"ae"}'
+# Non-allowlisted env on the same services: plain plan-only, apply skipped.
+run "$WS" '{"service":"svc-tf-allow-blocked","type":"terraform","branch":"develop","pipelineId":"953","project":"P","environment":"sit","location":"ae"}'
+check_tf_output "apply-in-blocked service env=sit: plan-only approved, apply skipped" \
     '.approved == true
-     and (.stagesToSkip | index("apply_z") | not)
-     and (.stagesToSkip | index("destroy_z") != null)
-     and .templateParameters.deployToggle == "deploy"'
+     and (.stagesToSkip | index("apply_v") != null)
+     and .templateParameters.deployToggle == "plan"'
 run "$WS" '{"service":"svc-tf-allow-alwaysskip","type":"terraform","branch":"develop","pipelineId":"952","project":"P","environment":"sit","location":"ae"}'
 check_tf_output "same service env=sit: alwaysSkipStages apply stage skipped as usual" \
     '.approved == true
      and (.stagesToSkip | index("apply_z") != null)
      and .templateParameters.deployToggle == "plan"'
+
+echo -e "${BLUE}=== Terraform: registry env policy, destroy always skipped, plan-only pins deployToggle ===${NC}"
+# terraform.parameters.environment.blocked / .allowed are honoured after the
+# hardcoded checks; they can only narrow, never widen.
+assert_blocked "registry-blocked env 'uat' -> ENVIRONMENT_BLOCKLIST" "ENVIRONMENT_BLOCKLIST" 1 "$WS" \
+    '{"service":"svc-tf-envpolicy","type":"terraform","branch":"develop","pipelineId":"954","project":"P","environment":"uat","location":"ae"}'
+assert_blocked "env 'sit' not in registry allowed list -> ENVIRONMENT_NOT_ALLOWED" "ENVIRONMENT_NOT_ALLOWED" 1 "$WS" \
+    '{"service":"svc-tf-envpolicy","type":"terraform","branch":"develop","pipelineId":"954","project":"P","environment":"sit","location":"ae"}'
+assert_blocked "registry env lists are case-insensitive (UAT blocked)" "ENVIRONMENT_BLOCKLIST" 1 "$WS" \
+    '{"service":"svc-tf-envpolicy","type":"terraform","branch":"develop","pipelineId":"954","project":"P","environment":"UAT","location":"ae"}'
+# Plan-only run: destroy_w is NOT in stages.blocked yet must still be skipped,
+# and the registry's defaultParameters.deployToggle="destroy" must be
+# overridden to "plan".
+run "$WS" '{"service":"svc-tf-envpolicy","type":"terraform","branch":"develop","pipelineId":"954","project":"P","environment":"dev","location":"ae"}'
+check_tf_output "plan-only run skips unlisted destroy_w and apply_w, deployToggle pinned to plan despite registry default 'destroy'" \
+    '.approved == true
+     and (.stagesToSkip | index("destroy_w") != null)
+     and (.stagesToSkip | index("apply_w") != null)
+     and (.stagesToSkip | index("plan_w") | not)
+     and .templateParameters.deployToggle == "plan"
+     and .templateParameters.TF_LOG == "NONE"
+     and (.templateParameters | has("requireManualApproval") | not)'
 
 echo ""
 echo -e "${BLUE}=== Summary ===${NC}"
