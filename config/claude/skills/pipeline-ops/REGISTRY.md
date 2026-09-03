@@ -4,6 +4,7 @@
 - [Consumers](#consumers)
 - [Schema](#schema)
 - [How the validator uses `stages` (CD)](#how-the-validator-uses-stages-cd)
+- [Terraform apply policy](#terraform-apply-policy)
 - [Caveats](#caveats)
 - [Authoring checklist for a new workspace](#authoring-checklist-for-a-new-workspace)
 
@@ -36,8 +37,8 @@ every service repo checked out under the workspace root.
 | Consumer | What it reads |
 |---|---|
 | `~/.claude/scripts/pipeline-registry.sh` | `.organization`, `.services` keys (CWD-based service detection, ID resolution) |
-| `~/.claude/scripts/pipeline-validator.sh` | `.services.<name>.stages.allowed/blocked` (CD), `.terraform.*` (terraform); entry matched by `.cd.id` first, service name as fallback |
-| `~/.claude/hooks/pipeline-guard.sh` | `.services.<name>.{ci,cd,test,terraform}.id`, `.stages.blocked` |
+| `~/.claude/scripts/pipeline-validator.sh` | `.services.<name>.stages.allowed/blocked` (CD), `.terraform.*` incl. `applyAllowedEnvironments` (terraform); entry matched by `.cd.id` first, service name as fallback |
+| `~/.claude/hooks/pipeline-guard.sh` | `.services.<name>.{ci,cd,test,terraform}.id`, `.stages.blocked` (CD only), `.terraform.applyAllowedEnvironments` |
 
 ## Schema
 
@@ -67,6 +68,10 @@ every service repo checked out under the workspace root.
         "name": "My - Terraform",
         "defaultParameters": { "deployToggle": "plan", "TF_LOG": "NONE" },
         "alwaysSkipStages": ["apply_mystack"],       // optional; skipped on every run
+                                                     // (apply* stages excepted for an
+                                                     // allowlisted env — see Terraform apply policy)
+        "applyAllowedEnvironments": [],              // optional; lowercase env names whose
+                                                     // apply stage may run. Default none = plan-only
         "parameters": {
           "environment": {
             "values":  ["dev", "sit", "uat", "pre", "prd"],
@@ -108,6 +113,37 @@ Checks run in this order — earlier rules cannot be overridden by later ones:
 4. **Generic prefix fallback** (no registry, no service entry, or empty
    `stages.allowed`): the stage must start with one of the validator's generic allowed
    prefixes (`dry`, `sit`, `uat`, `npe`, ...). Everything else is blocked.
+
+## Terraform apply policy
+
+The apply stage is **blocked by default**: for `type: terraform` the validator adds every
+stage whose name starts with `apply` to `stagesToSkip`, and the `pipeline-guard.sh` hook
+(Check 4) rejects any trigger of the terraform pipeline that leaves the apply stage
+runnable. The **one exemption** is `terraform.applyAllowedEnvironments`: an environment
+listed there (lowercase; matching is case-insensitive) may run the apply stage. It lives
+in the registry — not in a keychain var — precisely because the registry is
+human-committed, integrity-checked and AI-write-blocked: widening the policy needs a
+human commit and takes effect immediately.
+
+Even for an allowlisted environment the run stays narrow, in both layers:
+
+- The validator forces `deployToggle=deploy` and `requireManualApproval=True`, and the
+  hook rejects any other value (exact match — `Deploy`, `TRUE`, `destroy` are all
+  blocked). AzDO therefore still holds the apply at its ManualValidation gate for a
+  human; the agent never approves it.
+- Stages whose name starts with `destroy` are always in `stagesToSkip`.
+- PRE/PRD are blocked by the hardcoded environment blocklist before the allowlist is
+  consulted, whatever the registry lists.
+- Absent key, absent registry, or an environment not listed = plan-only (fails closed).
+
+**Override semantics — read carefully.** When the environment is allowlisted, the
+validator removes `apply*` stages from `stagesToSkip` **even if they appear in
+`alwaysSkipStages` or `stages.blocked`**, and the hook's Check 2 (registry `blocked`
+stages must be skipped) applies to **CD pipelines only**, so it does not protect a
+terraform apply stage. To keep the file unambiguous, list the apply stage in
+`alwaysSkipStages` / `stages.blocked` **only when the service has no
+`applyAllowedEnvironments`**; a service that allowlists an environment should not also
+declare its apply stage as always-skipped or blocked.
 
 ## Caveats
 

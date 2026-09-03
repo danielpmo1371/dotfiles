@@ -69,7 +69,7 @@ Direct Bash path:
 
 ### Why MCP-Only for Triggers
 
-1. **Safety enforcement.** Only the MCP path runs `pipeline-validator.sh`, which enforces registry-driven `stagesToSkip` (e.g. terraform `apply_*` is always skipped) and hard-blocks PRE/PRD targets. Direct REST/CLI skips every check.
+1. **Safety enforcement.** Only the MCP path runs `pipeline-validator.sh`, which enforces registry-driven `stagesToSkip` (e.g. terraform `apply_*` is skipped unless the environment is in the registry's `applyAllowedEnvironments`) and hard-blocks PRE/PRD targets. Direct REST/CLI skips every check.
 2. **Audit trail.** Only the MCP path appends to `~/.claude/logs/pipeline-triggers.jsonl`. A bypass leaves no record of who/when/what — the failure mode that prompted the Bash hook.
 3. **Single chokepoint.** Registry and validator updates propagate to every trigger automatically. Multiple trigger paths means multiple places to keep in sync, and the bypass path is the one that drifts.
 
@@ -90,7 +90,7 @@ Direct Bash path:
 - **ALWAYS** validate through pipeline-validator.sh before triggering
 - **MAXIMUM ONE** auto-fix retry
 - **CD requires explicit stage selection** from allowed list
-- **Terraform pipelines are PLAN ONLY** — apply stage is always skipped
+- **Terraform pipelines are PLAN ONLY by default** — the apply stage runs only for an environment listed in the registry's `terraform.applyAllowedEnvironments` (see Terraform Pipeline Handling); destroy is never allowed
 
 ## MCP Tools Required
 
@@ -122,7 +122,7 @@ Terraform builds have a ManualValidation gate that keeps the build "inProgress" 
 3. Call `get_build_status` with the buildId — check the timeline/stages
 4. Look for the **plan job** (`plan infra`). Poll every 30s until this specific job completes.
 5. Once the plan job is `completed`: if result is `succeeded` → done, report success. If `failed` → trigger failure recovery.
-6. **Stop monitoring immediately** — do not wait for the review gate or apply stage.
+6. **Stop monitoring immediately** — do not wait for the review gate or apply stage. Never approve the gate yourself; a human does that.
 
 ## Failure Recovery
 
@@ -145,7 +145,7 @@ When the detected service has a `terraform` key in the registry (instead of ci/c
    ```
 4. **Trigger**: The validator returns `templateParameters` and `stagesToSkip`. Pass BOTH to the MCP call:
    - `templateParameters`: `{"environment":"sit","location":"ae","deployToggle":"deploy","requireManualApproval":"True","TF_LOG":"NONE"}`
-   - `stagesToSkip`: `["apply_infra"]` (ALWAYS — apply is never run)
+   - `stagesToSkip`: `["apply_infra"]` for plan-only runs; the validator omits the apply stage ONLY when the environment is in the registry's `applyAllowedEnvironments`. Never edit this list by hand
    - `resources.repositories.self.refName`: branch ref
 5. **Monitor**: Use `get_build_status` to poll, but with **terraform-specific completion logic**:
    - The build will have a `plan_infra` stage followed by a ManualValidation gate (review job) and an `apply_infra` stage.
@@ -154,9 +154,9 @@ When the detected service has a `terraform` key in the registry (instead of ci/c
      - If its result is `succeeded` → the plan is done, report success immediately
      - If its result is `failed` → the plan failed, trigger failure recovery
    - **Do NOT poll until the overall build status is "completed"** — it won't complete until the manual gate times out (5 hours) or is rejected.
-6. **Report**: Report plan results. The build logs contain the terraform plan output. Include a note that the ManualValidation gate is intentionally left unapproved.
+6. **Report**: Report plan results. The build logs contain the terraform plan output. Include a note that the ManualValidation gate is left for a human to approve or reject.
 
-**CRITICAL**: Terraform pipelines are PLAN ONLY. The `apply_infra` stage is ALWAYS skipped. This is enforced by the validator and the registry's `alwaysSkipStages` field. Never override this. The ManualValidation gate should be left to time out or manually rejected — never approved.
+**CRITICAL**: Terraform pipelines are PLAN ONLY by default — the apply stage is skipped. The ONE exemption is an environment listed in the registry's `.services.<svc>.terraform.applyAllowedEnvironments` (human-committed, integrity-checked, AI writes blocked). Even then the run MUST carry `deployToggle=deploy` and `requireManualApproval=True` (exact values — the validator sets them, the pipeline-guard hook rejects anything else), AzDO holds the apply at the ManualValidation gate for a human, `destroy*` stages are always skipped, and PRE/PRD stay blocked regardless of the allowlist. Non-allowlisted environments remain plan-only. Never override any of this. **NEVER approve the ManualValidation gate yourself** — only a human approves or rejects it.
 
 ## Files & Logs
 
@@ -172,7 +172,7 @@ The trigger system is implemented across these files (all under `~/.claude/`):
 | `logs/pipeline-guard-detail.log` | Step-by-step trace of every guard hook run |
 | `logs/pipeline-validator.log` | Validator input/output for debugging |
 
-The registry itself is `pipeline-registry.json` (alongside the validator) and contains per-service entries: pipeline IDs, allowed environments, `alwaysSkipStages`, and `templateParameters` defaults.
+The registry itself is `pipeline-registry.json` (alongside the validator) and contains per-service entries: pipeline IDs, allowed environments, `alwaysSkipStages`, `applyAllowedEnvironments`, and `templateParameters` defaults.
 
 ### Installation Dependencies
 
@@ -194,7 +194,7 @@ This agent does not function without the two PreToolUse guard hooks linked into 
 
 1. Read `~/.claude/logs/pipeline-guard-detail.log` and find the most recent entry
 2. Confirm it shows `ALLOWED: All safety checks passed`
-3. For terraform pipelines, confirm `PASS: apply stage is in stagesToSkip`
+3. For terraform pipelines, confirm `PASS: apply stage is in stagesToSkip` (plan-only) or `PASS: apply stage permitted — environment '<env>' is in applyAllowedEnvironments` (allowlisted env)
 4. Include a "Logs Verified" line in your output summary
 
 If the guard hook blocks a call, it appears in the detail log with the reason — report this to the user immediately.

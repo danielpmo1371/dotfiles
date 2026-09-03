@@ -600,3 +600,13 @@ Actions:
   skill re-validated EXCELLENT.
 - Verified: installer run installs 755 copy; fresh login shell resolves ~/.local/bin/secrets-doctor
   and full chain check passes (exit 0); secrets repo test suite 20/20.
+
+## 2026-09-03 — Terraform apply allowlist: finish uncommitted guard/validator change
+State.Status = CONSTRUCT (plan approved by user in session)
+### Plan
+1. Commit A: existing diff (pipeline-guard.sh Check 4 + pipeline-validator.sh apply policy) + docs (pipeline-runner.md, pipe-deploy.md, REGISTRY.md) + tests for the allowlist path in tests/test-pipeline-hooks.sh and tests/test-pipeline-validator.sh.
+2. Commit B: pipeline-guard.sh Check 4 keyed off registry terraform.id of the matched service (covers 810/811), env var kept as fallback; tests for a second terraform pipeline.
+3. Do NOT commit out.json (untracked AzDO dump).
+### Log
+- Dispatched docs agent + tests agent (forks, no git mutations). Git mutations done by lead.
+- Commit B design: terraform detection = registry `.terraform.id` of matched service OR env var (fallback); apply stages = `stages.all` names starting with "apply" ∪ env-var stage; destroy-prefixed stages ALWAYS required in stagesToSkip; apply allowed only via applyAllowedEnvironments + deployToggle=deploy + requireManualApproval=True; requireManualApproval also required on plan-only runs when registry defaultParameters declares it (keeps 802 behaviour, doesn't break 810/811 plan runs); terraform pipeline with no discoverable apply stage -> fail closed.

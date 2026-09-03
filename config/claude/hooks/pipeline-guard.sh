@@ -27,6 +27,18 @@ set -euo pipefail
 # config/shell/secrets.sh exports both. UNSET = FAIL CLOSED: every pipeline
 # trigger is blocked below, not silently allowed. This is what "the guard
 # breaks until configured" looks like on a fresh clone — that is intentional.
+#
+# The apply stage is blocked by default. The ONE exemption is declared per
+# project, in pipeline-registry.json, as
+#   .services[<svc>].terraform.applyAllowedEnvironments: ["dev"]
+# — deliberately in the registry rather than the keychain, because the registry
+# is integrity-checked above: widening this policy requires a HUMAN commit and
+# takes effect immediately, with no keychain write or shell restart. Absent
+# registry, absent key, or an environment not listed = apply stays blocked, so
+# the exemption fails closed. It also stays narrow — see Check 4: the run must
+# be deployToggle=deploy with requireManualApproval=True (AzDO still holds it
+# at the review gate for a human), and PRE/PRD remain blocked by Check 3
+# regardless of what the registry lists.
 # ============================================================================
 BLOCKED_STAGE_PATTERNS=("pre" "prd" "prod" "production")
 TERRAFORM_PIPELINE_ID="${PIPELINE_GUARD_TERRAFORM_ID:-}"
@@ -242,27 +254,22 @@ for pattern in "${BLOCKED_STAGE_PATTERNS[@]}"; do
 done
 
 # ============================================================================
-# Check 4: Terraform pipeline MUST skip apply stage
+# Check 4: Terraform pipeline apply-stage policy
+#
+# Default: the apply stage must be in stagesToSkip — plan-only runs.
+# Exemption: an environment listed in the registry's
+# terraform.applyAllowedEnvironments may run apply, and only alongside
+# deployToggle=deploy and requireManualApproval=True.
 # ============================================================================
 if [[ "$PIPELINE_ID" == "$TERRAFORM_PIPELINE_ID" ]]; then
-  log_detail "Terraform pipeline detected (ID=$TERRAFORM_PIPELINE_ID) — enforcing apply skip"
+  log_detail "Terraform pipeline detected (ID=$TERRAFORM_PIPELINE_ID) — enforcing apply policy"
 
-  # Check if stagesToSkip contains the apply stage
-  HAS_APPLY_SKIP=$(echo "$TOOL_INPUT" | jq -r --arg stage "$TERRAFORM_APPLY_STAGE" \
-    '[.stagesToSkip // [] | .[] | select(. == $stage)] | length' 2>/dev/null)
-
-  if [[ "$HAS_APPLY_SKIP" != "1" ]]; then
-    log_detail "BLOCKED: Terraform pipeline missing '$TERRAFORM_APPLY_STAGE' in stagesToSkip!"
-    log_detail "stagesToSkip was: $STAGES_TO_SKIP_JSON"
-    log_audit "blocked" "CRITICAL: Terraform pipeline $TERRAFORM_PIPELINE_ID triggered WITHOUT '$TERRAFORM_APPLY_STAGE' in stagesToSkip. stagesToSkip=$STAGES_TO_SKIP_JSON"
-    echo "BLOCKED by pipeline-guard hook: Terraform pipeline $TERRAFORM_PIPELINE_ID MUST include '$TERRAFORM_APPLY_STAGE' in stagesToSkip. The apply stage is NEVER allowed. Got stagesToSkip=$STAGES_TO_SKIP_JSON" >&2
-    exit 2
-  fi
-
-  log_detail "PASS: apply stage is in stagesToSkip"
-
-  # Also verify requireManualApproval is True
+  ENVIRONMENT=$(echo "$TOOL_INPUT" | jq -r '.templateParameters.environment // "unset"' 2>/dev/null)
+  DEPLOY_TOGGLE=$(echo "$TOOL_INPUT" | jq -r '.templateParameters.deployToggle // "unset"' 2>/dev/null)
   MANUAL_APPROVAL=$(echo "$TOOL_INPUT" | jq -r '.templateParameters.requireManualApproval // "unset"' 2>/dev/null)
+
+  # requireManualApproval gates BOTH paths — a plan-only run keeps it too, so an
+  # apply can never be reached by a later stage rerun without a human approval.
   if [[ "$MANUAL_APPROVAL" != "True" && "$MANUAL_APPROVAL" != "true" ]]; then
     log_detail "BLOCKED: requireManualApproval is '$MANUAL_APPROVAL' (must be True)"
     log_audit "blocked" "Terraform pipeline requireManualApproval='$MANUAL_APPROVAL' (must be True)"
@@ -271,6 +278,55 @@ if [[ "$PIPELINE_ID" == "$TERRAFORM_PIPELINE_ID" ]]; then
   fi
 
   log_detail "PASS: requireManualApproval=True"
+
+  # Check if stagesToSkip contains the apply stage
+  HAS_APPLY_SKIP=$(echo "$TOOL_INPUT" | jq -r --arg stage "$TERRAFORM_APPLY_STAGE" \
+    '[.stagesToSkip // [] | .[] | select(. == $stage)] | length' 2>/dev/null)
+
+  if [[ "$HAS_APPLY_SKIP" != "1" ]]; then
+    # The apply stage would run. Permitted only for an environment the matched
+    # service's registry entry lists in terraform.applyAllowedEnvironments.
+    APPLY_ALLOWED_ENVS=""
+    if [[ -n "$REGISTRY_FILE" && -n "${MATCHED_SERVICE:-}" ]]; then
+      APPLY_ALLOWED_ENVS=$(jq -r --arg svc "$MATCHED_SERVICE" \
+        '.services[$svc].terraform.applyAllowedEnvironments // [] | join(",")' \
+        "$REGISTRY_FILE" 2>/dev/null || true)
+    fi
+
+    ENVIRONMENT_LOWER=$(echo "$ENVIRONMENT" | tr '[:upper:]' '[:lower:]')
+    APPLY_ENV_ALLOWED=false
+    if [[ -n "$APPLY_ALLOWED_ENVS" ]]; then
+      IFS=',' read -ra ALLOWED_ENVS <<< "$APPLY_ALLOWED_ENVS"
+      for allowed_env in "${ALLOWED_ENVS[@]}"; do
+        allowed_env=$(echo "$allowed_env" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+        if [[ -n "$allowed_env" && "$allowed_env" == "$ENVIRONMENT_LOWER" ]]; then
+          APPLY_ENV_ALLOWED=true
+          break
+        fi
+      done
+    fi
+
+    if [[ "$APPLY_ENV_ALLOWED" != true ]]; then
+      log_detail "BLOCKED: Terraform pipeline missing '$TERRAFORM_APPLY_STAGE' in stagesToSkip and environment '$ENVIRONMENT' is not in applyAllowedEnvironments ('$APPLY_ALLOWED_ENVS')"
+      log_detail "stagesToSkip was: $STAGES_TO_SKIP_JSON"
+      log_audit "blocked" "CRITICAL: Terraform pipeline $TERRAFORM_PIPELINE_ID triggered WITHOUT '$TERRAFORM_APPLY_STAGE' in stagesToSkip for non-allowlisted environment '$ENVIRONMENT'. stagesToSkip=$STAGES_TO_SKIP_JSON"
+      echo "BLOCKED by pipeline-guard hook: Terraform pipeline $TERRAFORM_PIPELINE_ID MUST include '$TERRAFORM_APPLY_STAGE' in stagesToSkip for environment '$ENVIRONMENT'. The apply stage is allowed only for environments listed in the registry's terraform.applyAllowedEnvironments: '${APPLY_ALLOWED_ENVS:-<none>}'. Got stagesToSkip=$STAGES_TO_SKIP_JSON" >&2
+      exit 2
+    fi
+
+    # An allowlisted environment still never gets a destroy run.
+    if [[ "$DEPLOY_TOGGLE" != "deploy" ]]; then
+      log_detail "BLOCKED: apply stage requested for allowlisted environment '$ENVIRONMENT' but deployToggle is '$DEPLOY_TOGGLE' (must be deploy)"
+      log_audit "blocked" "CRITICAL: Terraform apply requested with deployToggle='$DEPLOY_TOGGLE' for environment '$ENVIRONMENT'. Only deployToggle=deploy is permitted."
+      echo "BLOCKED by pipeline-guard hook: Terraform pipeline $TERRAFORM_PIPELINE_ID apply is permitted for environment '$ENVIRONMENT' only with deployToggle=deploy. Got '$DEPLOY_TOGGLE'. Destroy runs are NEVER allowed via AI." >&2
+      exit 2
+    fi
+
+    log_detail "PASS: apply stage permitted — environment '$ENVIRONMENT' is in applyAllowedEnvironments ('$APPLY_ALLOWED_ENVS'), deployToggle=deploy, requireManualApproval=True"
+    log_audit "allowed" "Terraform apply stage permitted for allowlisted environment '$ENVIRONMENT' (deployToggle=deploy, requireManualApproval=True)"
+  else
+    log_detail "PASS: apply stage is in stagesToSkip"
+  fi
 fi
 
 # ============================================================================

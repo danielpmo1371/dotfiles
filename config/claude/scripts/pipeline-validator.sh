@@ -379,24 +379,65 @@ if [[ "$TYPE" == "terraform" ]]; then
       | unique
     ')
 
-    # Defensive: make sure every stage whose name contains "apply" is skipped,
-    # even if the registry has a mistake. This is a belt-and-braces guard.
     ALL_STAGES_FROM_REG=$(echo "$SERVICE_ENTRY" | jq -c '.value.stages.all // []')
-    STAGES_TO_SKIP=$(jq -nc \
-      --argjson skip "$STAGES_TO_SKIP" \
-      --argjson all "$ALL_STAGES_FROM_REG" \
-      '($skip + [$all[] | select(ascii_downcase | startswith("apply"))]) | unique')
 
-    # Derive templateParameters from defaultParameters (registry) + env/location
+    # Apply-stage policy. Plan-only is the default. An environment listed in the
+    # registry's terraform.applyAllowedEnvironments may run the apply stage —
+    # same allowlist the pipeline-guard hook enforces, so both layers agree.
+    # Destroy stages are skipped unconditionally, allowlist or not.
+    APPLY_ALLOWED_ENVS=$(echo "$SERVICE_ENTRY" | jq -r '
+      .value.terraform.applyAllowedEnvironments // [] | map(ascii_downcase) | join(",")')
+    APPLY_PERMITTED=false
+    if [[ -n "$APPLY_ALLOWED_ENVS" ]]; then
+      IFS=',' read -ra ALLOWED_APPLY_ENVS <<< "$APPLY_ALLOWED_ENVS"
+      for allowed_apply_env in "${ALLOWED_APPLY_ENVS[@]}"; do
+        if [[ "$allowed_apply_env" == "$TF_ENV_LOWER" ]]; then
+          APPLY_PERMITTED=true
+          break
+        fi
+      done
+    fi
+
     DEFAULT_PARAMS=$(echo "$SERVICE_ENTRY" | jq -c '.value.terraform.defaultParameters // {}')
-    TEMPLATE_PARAMS=$(jq -nc \
-      --arg env "$TF_ENV_LOWER" \
-      --arg loc "$TF_LOC_LOWER" \
-      --argjson defaults "$DEFAULT_PARAMS" \
-      '$defaults + {"environment": $env, "location": $loc}')
 
-    REG_SVC_NAME=$(echo "$SERVICE_ENTRY" | jq -r '.key')
-    REASON="Terraform PLAN-ONLY approved for service '$REG_SVC_NAME' env=$TF_ENV_LOWER loc=$TF_LOC_LOWER (registry-driven: blocked stages + alwaysSkipStages applied)"
+    if [[ "$APPLY_PERMITTED" == "true" ]]; then
+      # Drop apply stages from the skip list so the apply runs, but keep every
+      # destroy stage skipped.
+      STAGES_TO_SKIP=$(jq -nc \
+        --argjson skip "$STAGES_TO_SKIP" \
+        --argjson all "$ALL_STAGES_FROM_REG" \
+        '([$skip[] | select(ascii_downcase | startswith("apply") | not)]
+          + [$all[] | select(ascii_downcase | startswith("destroy"))]) | unique')
+
+      # The apply is only ever reachable behind a human approval, and only as a
+      # deploy — never a destroy — whatever the registry defaults happen to say.
+      TEMPLATE_PARAMS=$(jq -nc \
+        --arg env "$TF_ENV_LOWER" \
+        --arg loc "$TF_LOC_LOWER" \
+        --argjson defaults "$DEFAULT_PARAMS" \
+        '$defaults + {"environment": $env, "location": $loc,
+                      "deployToggle": "deploy", "requireManualApproval": "True"}')
+
+      REG_SVC_NAME=$(echo "$SERVICE_ENTRY" | jq -r '.key')
+      REASON="Terraform PLAN+APPLY approved for service '$REG_SVC_NAME' env=$TF_ENV_LOWER loc=$TF_LOC_LOWER (env is in registry applyAllowedEnvironments; apply held at the manual approval gate, destroy stages still skipped)"
+    else
+      # Defensive: make sure every stage whose name contains "apply" is skipped,
+      # even if the registry has a mistake. This is a belt-and-braces guard.
+      STAGES_TO_SKIP=$(jq -nc \
+        --argjson skip "$STAGES_TO_SKIP" \
+        --argjson all "$ALL_STAGES_FROM_REG" \
+        '($skip + [$all[] | select(ascii_downcase | startswith("apply"))]) | unique')
+
+      # Derive templateParameters from defaultParameters (registry) + env/location
+      TEMPLATE_PARAMS=$(jq -nc \
+        --arg env "$TF_ENV_LOWER" \
+        --arg loc "$TF_LOC_LOWER" \
+        --argjson defaults "$DEFAULT_PARAMS" \
+        '$defaults + {"environment": $env, "location": $loc}')
+
+      REG_SVC_NAME=$(echo "$SERVICE_ENTRY" | jq -r '.key')
+      REASON="Terraform PLAN-ONLY approved for service '$REG_SVC_NAME' env=$TF_ENV_LOWER loc=$TF_LOC_LOWER (registry-driven: blocked stages + alwaysSkipStages applied)"
+    fi
   else
     # Fail closed: no registry entry for this pipelineId means we have no
     # verified list of its stages, so we cannot safely compute stagesToSkip.

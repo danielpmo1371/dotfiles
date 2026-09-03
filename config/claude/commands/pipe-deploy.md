@@ -61,7 +61,7 @@ When the service has a `terraform` key (e.g., iac):
 5. On failure, use fetch-azdo-logs agent for diagnosis + one auto-fix attempt
 6. Report plan results — skip to Step 8
 
-**CRITICAL**: Terraform pipelines are always PLAN ONLY. The apply stage is always skipped. This is enforced by the validator.
+**CRITICAL**: Terraform pipelines are PLAN ONLY by default — the apply stage is skipped. The ONE exemption is an environment listed in the registry's `.services.<svc>.terraform.applyAllowedEnvironments` (human-committed, integrity-checked, AI writes blocked). Even then the run must carry `deployToggle=deploy` and `requireManualApproval=True` (exact values, set by the validator and enforced by the pipeline-guard hook), AzDO holds the apply at the ManualValidation gate for a human, `destroy*` stages are always skipped, and PRE/PRD stay blocked regardless. Non-allowlisted environments remain plan-only. Never approve the gate yourself.
 
 ### Step 3: Validate and Trigger CI
 
@@ -129,4 +129,4 @@ Report:
 - **ALWAYS** use the current branch unless explicitly overridden
 - **MAXIMUM ONE** auto-fix retry per pipeline run
 - **CD requires explicit stage selection** from the allowed list
-- **Terraform pipelines are PLAN ONLY** — apply stage is always skipped
+- **Terraform pipelines are PLAN ONLY by default** — apply runs only for a registry-allowlisted environment (`terraform.applyAllowedEnvironments`), never destroy

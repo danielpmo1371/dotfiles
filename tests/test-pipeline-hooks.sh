@@ -61,6 +61,21 @@ cat > "$WS/.claude/pipeline-registry.json" << 'EOF'
         "allowed": ["plan_infra"],
         "blocked": ["apply_infra"]
       }
+    },
+    "iac-allow": {
+      "project": "Test Project",
+      "ci": null,
+      "cd": null,
+      "terraform": {
+        "id": 803,
+        "name": "Test - Terraform (dev apply allowlisted)",
+        "applyAllowedEnvironments": ["dev"]
+      },
+      "stages": {
+        "all": ["plan_allow", "apply_allow", "destroy_allow"],
+        "allowed": ["plan_allow"],
+        "blocked": ["apply_allow", "destroy_allow"]
+      }
     }
   }
 }
@@ -90,12 +105,16 @@ mkdir -p "$WS_BARE"
 # harness supplies test-fixture values matching the "iac" service above so
 # the rest of the suite exercises the intended logic, not the unconfigured
 # fail-closed path. That path gets its own dedicated test below.
+#
+# TF_ID / TF_APPLY_STAGE may be set on a call (e.g. `TF_ID=803 expect ...`)
+# to point pipeline-guard's Check 4 at a different registered terraform
+# pipeline — used by the apply-allowlist cases against "iac-allow" below.
 run_hook() {
     local hook="$1" ws="$2" json="$3"
     set +e
     (cd "$ws" && HOME="$FAKE_HOME" \
-        PIPELINE_GUARD_TERRAFORM_ID="802" \
-        PIPELINE_GUARD_TERRAFORM_APPLY_STAGE="apply_infra" \
+        PIPELINE_GUARD_TERRAFORM_ID="${TF_ID:-802}" \
+        PIPELINE_GUARD_TERRAFORM_APPLY_STAGE="${TF_APPLY_STAGE:-apply_infra}" \
         "$hook" <<< "$json" >/dev/null 2>&1)
     RC=$?
     set -e
@@ -168,6 +187,33 @@ expect block "$PIPELINE_GUARD" "$WS" "terraform 802 without requireManualApprova
     "$(mcp_input '{"pipelineId":802,"project":"P","stagesToSkip":["apply_infra"]}')"
 expect allow "$PIPELINE_GUARD" "$WS" "terraform 802 plan-only with manual approval allowed" \
     "$(mcp_input '{"pipelineId":802,"project":"P","stagesToSkip":["apply_infra"],"templateParameters":{"requireManualApproval":"True"}}')"
+# Registry without terraform.applyAllowedEnvironments: apply is never
+# reachable, whatever the environment — the key's absence fails closed.
+expect block "$PIPELINE_GUARD" "$WS" "terraform 802 (no applyAllowedEnvironments key) apply for env=dev blocked" \
+    "$(mcp_input '{"pipelineId":802,"project":"P","stagesToSkip":[],"templateParameters":{"environment":"dev","deployToggle":"deploy","requireManualApproval":"True"}}')"
+
+echo -e "${BLUE}=== pipeline-guard.sh (terraform apply allowlist, registry terraform.applyAllowedEnvironments) ===${NC}"
+# Pipeline 803 / service "iac-allow" lists ["dev"]. Apply is reachable ONLY
+# for that environment AND only with deployToggle=deploy (exact) AND
+# requireManualApproval=True. Everything else stays plan-only or blocked.
+TF_ID=803 TF_APPLY_STAGE=apply_allow expect allow "$PIPELINE_GUARD" "$WS" "allowlisted env=dev: apply stage not skipped, deploy + manual approval -> allowed" \
+    "$(mcp_input '{"pipelineId":803,"project":"P","stagesToSkip":["destroy_allow"],"templateParameters":{"environment":"dev","deployToggle":"deploy","requireManualApproval":"True"}}')"
+TF_ID=803 TF_APPLY_STAGE=apply_allow expect allow "$PIPELINE_GUARD" "$WS" "allowlisted env matched case-insensitively (env=DEV)" \
+    "$(mcp_input '{"pipelineId":803,"project":"P","stagesToSkip":["destroy_allow"],"templateParameters":{"environment":"DEV","deployToggle":"deploy","requireManualApproval":"True"}}')"
+TF_ID=803 TF_APPLY_STAGE=apply_allow expect allow "$PIPELINE_GUARD" "$WS" "allowlisted env=dev with apply IN stagesToSkip (plan-only) still allowed" \
+    "$(mcp_input '{"pipelineId":803,"project":"P","stagesToSkip":["apply_allow","destroy_allow"],"templateParameters":{"environment":"dev","deployToggle":"deploy","requireManualApproval":"True"}}')"
+TF_ID=803 TF_APPLY_STAGE=apply_allow expect block "$PIPELINE_GUARD" "$WS" "non-allowlisted env=sit: apply stage not skipped -> blocked" \
+    "$(mcp_input '{"pipelineId":803,"project":"P","stagesToSkip":["destroy_allow"],"templateParameters":{"environment":"sit","deployToggle":"deploy","requireManualApproval":"True"}}')"
+TF_ID=803 TF_APPLY_STAGE=apply_allow expect block "$PIPELINE_GUARD" "$WS" "allowlisted env=dev but deployToggle=destroy -> blocked" \
+    "$(mcp_input '{"pipelineId":803,"project":"P","stagesToSkip":["destroy_allow"],"templateParameters":{"environment":"dev","deployToggle":"destroy","requireManualApproval":"True"}}')"
+TF_ID=803 TF_APPLY_STAGE=apply_allow expect block "$PIPELINE_GUARD" "$WS" "allowlisted env=dev but deployToggle=Deploy (exact match required) -> blocked" \
+    "$(mcp_input '{"pipelineId":803,"project":"P","stagesToSkip":["destroy_allow"],"templateParameters":{"environment":"dev","deployToggle":"Deploy","requireManualApproval":"True"}}')"
+TF_ID=803 TF_APPLY_STAGE=apply_allow expect block "$PIPELINE_GUARD" "$WS" "allowlisted env=dev but requireManualApproval=false -> blocked" \
+    "$(mcp_input '{"pipelineId":803,"project":"P","stagesToSkip":["destroy_allow"],"templateParameters":{"environment":"dev","deployToggle":"deploy","requireManualApproval":"false"}}')"
+TF_ID=803 TF_APPLY_STAGE=apply_allow expect block "$PIPELINE_GUARD" "$WS" "allowlisted pipeline but no templateParameters.environment -> blocked" \
+    "$(mcp_input '{"pipelineId":803,"project":"P","stagesToSkip":["destroy_allow"],"templateParameters":{"deployToggle":"deploy","requireManualApproval":"True"}}')"
+TF_ID=803 TF_APPLY_STAGE=apply_allow expect block "$PIPELINE_GUARD" "$WS" "allowlisted pipeline, env=prd apply -> still blocked by the hardcoded env blocklist" \
+    "$(mcp_input '{"pipelineId":803,"project":"P","stagesToSkip":["destroy_allow"],"templateParameters":{"environment":"prd","deployToggle":"deploy","requireManualApproval":"True"}}')"
 expect block "$PIPELINE_GUARD" "$WS_DIRTY" "registry with uncommitted changes fails closed" \
     "$(mcp_input '{"pipelineId":900,"project":"P","stagesToSkip":["Shared_Zone"]}')"
 # Pins CURRENT behavior: without a registry, checks 0-2 are skipped and only

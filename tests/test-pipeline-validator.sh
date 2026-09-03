@@ -98,6 +98,50 @@ cat > "$WS/.claude/pipeline-registry.json" << 'EOF'
         "allowed": ["plan_x"],
         "blocked": ["apply_x"]
       }
+    },
+    "svc-tf-allow": {
+      "project": "Test Project",
+      "ci": null,
+      "cd": null,
+      "terraform": {
+        "id": 951,
+        "name": "Test - Terraform (dev apply allowlisted)",
+        "applyAllowedEnvironments": ["dev"],
+        "defaultParameters": { "deployToggle": "plan", "TF_LOG": "NONE" },
+        "alwaysSkipStages": ["cleanup_y"],
+        "parameters": {
+          "environment": { "values": ["dev", "sit"], "allowed": ["dev", "sit"], "blocked": [] },
+          "location": { "values": ["ae", "ase"], "default": "ae" }
+        }
+      },
+      "folder": "svc-tf-allow",
+      "stages": {
+        "all": ["plan_y", "apply_y", "destroy_y", "cleanup_y"],
+        "allowed": ["plan_y"],
+        "blocked": ["apply_y", "destroy_y"]
+      }
+    },
+    "svc-tf-allow-alwaysskip": {
+      "project": "Test Project",
+      "ci": null,
+      "cd": null,
+      "terraform": {
+        "id": 952,
+        "name": "Test - Terraform (allowlisted, apply also in alwaysSkipStages)",
+        "applyAllowedEnvironments": ["dev"],
+        "defaultParameters": { "deployToggle": "plan" },
+        "alwaysSkipStages": ["apply_z"],
+        "parameters": {
+          "environment": { "values": ["dev", "sit"], "allowed": ["dev", "sit"], "blocked": [] },
+          "location": { "values": ["ae"], "default": "ae" }
+        }
+      },
+      "folder": "svc-tf-allow-alwaysskip",
+      "stages": {
+        "all": ["plan_z", "apply_z", "destroy_z"],
+        "allowed": ["plan_z"],
+        "blocked": ["apply_z", "destroy_z"]
+      }
     }
   }
 }
@@ -284,6 +328,63 @@ assert_blocked "terraform invalid location" "LOCATION_NOT_ALLOWED" 1 "$WS" \
 # than approve with a stage-name guess-list. See pipeline-validator.sh Rule 4.
 assert_blocked "terraform without a registry match: fails closed, does not guess stagesToSkip" "TERRAFORM_NOT_REGISTERED" 1 "$WS_BARE" \
     '{"service":"x","type":"terraform","branch":"develop","pipelineId":"999","project":"P","environment":"sit"}'
+
+echo -e "${BLUE}=== Terraform: apply allowlist (registry terraform.applyAllowedEnvironments) ===${NC}"
+# check_tf_output <label> <json-condition>   — runs jq -e on $OUT
+check_tf_output() {
+    local label="$1" cond="$2"
+    if [[ $RC -eq 0 ]] && jq -e "$cond" <<< "$OUT" > /dev/null 2>&1; then
+        echo -e "  ${GREEN}PASS${NC} $label"
+        PASS=$((PASS + 1))
+    else
+        echo -e "  ${RED}FAIL${NC} $label — got rc=$RC out=$OUT"
+        FAIL=$((FAIL + 1))
+    fi
+}
+# Allowlisted env: apply runs, destroy never does, and the request is pinned
+# to deployToggle=deploy + requireManualApproval=True regardless of the
+# registry's defaultParameters (which say "plan" here).
+run "$WS" '{"service":"svc-tf-allow","type":"terraform","branch":"develop","pipelineId":"951","project":"P","environment":"dev","location":"ae"}'
+check_tf_output "allowlisted env=dev: approved PLAN+APPLY, apply not skipped, destroy + alwaysSkipStages skipped, deploy + manual approval forced" \
+    '.approved == true
+     and (.stagesToSkip | index("apply_y") | not)
+     and (.stagesToSkip | index("destroy_y") != null)
+     and (.stagesToSkip | index("cleanup_y") != null)
+     and .templateParameters.deployToggle == "deploy"
+     and .templateParameters.requireManualApproval == "True"
+     and .templateParameters.environment == "dev"
+     and (.reason | test("PLAN\\+APPLY"))'
+# Same service, non-allowlisted env: plan-only, registry defaults untouched,
+# no requireManualApproval injected by the validator.
+run "$WS" '{"service":"svc-tf-allow","type":"terraform","branch":"develop","pipelineId":"951","project":"P","environment":"sit","location":"ae"}'
+check_tf_output "same service env=sit: plan-only, apply skipped, deployToggle stays registry default (plan), no approval injected" \
+    '.approved == true
+     and (.stagesToSkip | index("apply_y") != null)
+     and (.stagesToSkip | index("destroy_y") != null)
+     and .templateParameters.deployToggle == "plan"
+     and (.templateParameters | has("requireManualApproval") | not)
+     and (.reason | test("PLAN-ONLY"))'
+# Environment is normalized before the allowlist comparison.
+run "$WS" '{"service":"svc-tf-allow","type":"terraform","branch":"develop","pipelineId":"951","project":"P","environment":"DEV","location":"ae"}'
+check_tf_output "allowlisted env matched case-insensitively (DEV -> dev), apply not skipped" \
+    '.approved == true
+     and (.stagesToSkip | index("apply_y") | not)
+     and .templateParameters.environment == "dev"
+     and .templateParameters.deployToggle == "deploy"'
+# Documents the override: when the env is allowlisted, apply-prefixed stages
+# are removed from stagesToSkip EVEN IF the registry lists them in
+# alwaysSkipStages / stages.blocked. Destroy stays skipped.
+run "$WS" '{"service":"svc-tf-allow-alwaysskip","type":"terraform","branch":"develop","pipelineId":"952","project":"P","environment":"dev","location":"ae"}'
+check_tf_output "allowlisted env overrides alwaysSkipStages for the apply stage (documented behavior), destroy still skipped" \
+    '.approved == true
+     and (.stagesToSkip | index("apply_z") | not)
+     and (.stagesToSkip | index("destroy_z") != null)
+     and .templateParameters.deployToggle == "deploy"'
+run "$WS" '{"service":"svc-tf-allow-alwaysskip","type":"terraform","branch":"develop","pipelineId":"952","project":"P","environment":"sit","location":"ae"}'
+check_tf_output "same service env=sit: alwaysSkipStages apply stage skipped as usual" \
+    '.approved == true
+     and (.stagesToSkip | index("apply_z") != null)
+     and .templateParameters.deployToggle == "plan"'
 
 echo ""
 echo -e "${BLUE}=== Summary ===${NC}"
