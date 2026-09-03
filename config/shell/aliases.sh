@@ -93,21 +93,25 @@ alias update-claude='sudo npm i -g @anthropic-ai/claude-code'
 # flag — anything appended after it (e.g. a starter prompt) would be eaten as
 # the session name instead of reaching claude as the prompt.
 alias cdang='claude --rc --dangerously-skip-permissions'
-# Re-run the exact `claude --resume "<name>"` hint claude prints on quit, with
+# Re-run the exact `claude --resume <session>` hint claude prints on quit, with
 # cdang's flags. Scrapes THIS pane's scrollback for the last such line, so it
 # resumes this pane's session even if newer sessions were started in other tabs
-# (which would win with --continue). Tmux-only by design.
+# (which would win with --continue). Handles both hint formats: quoted names
+# (older CLIs) and bare UUIDs (current). Tmux-only by design.
 cres() {
     if [ -z "$TMUX" ]; then
         echo "cres: not inside tmux — can't read scrollback for the resume hint" >&2
         return 1
     fi
     local session
+    # Anchor to line start so prose/error messages that merely mention
+    # `claude --resume ...` mid-line don't shadow the real quit hint.
     session=$(tmux capture-pane -p -S - -t "$TMUX_PANE" \
-        | grep -Eo 'claude --resume "[^"]+"' | tail -1 \
-        | sed -E 's/^claude --resume "(.+)"$/\1/')
+        | grep -E '^[[:space:]]*claude --resume ' \
+        | grep -Eo 'claude --resume ("[^"]+"|[A-Za-z0-9_-]+)' | tail -1 \
+        | sed -E 's/^claude --resume "?([^"]+)"?$/\1/')
     if [ -z "$session" ]; then
-        echo "cres: no 'claude --resume \"...\"' hint found in this pane's scrollback" >&2
+        echo "cres: no 'claude --resume ...' hint found in this pane's scrollback" >&2
         return 1
     fi
     cdang --resume "$session"
