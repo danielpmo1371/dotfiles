@@ -55,7 +55,8 @@ alias setup-dns='nvim /etc/resolv.conf'
 alias setup-alias="nvim $DOTFILES_DIR/config/shell/aliases.sh"
 alias setup-tmux='nvim ~/.tmux.conf'
 alias setup-ghostty='nvim ~/.config/ghostty/config'
-alias setup-claude='nvim ~/.claude/CLAUDE.md'
+alias setup-claude='nvim ~/.claude/settings.json'
+alias setup-claude-prompt='nvim ~/.claude/CLAUDE.md'
 alias re-tmux='tmux source-file ~/.tmux.conf'
 alias dot='z dot'
 
