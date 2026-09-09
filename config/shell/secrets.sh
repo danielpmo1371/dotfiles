@@ -6,6 +6,7 @@
 #   secret_set KEY VALUE    - Store a secret
 #   secret_list             - List all stored keys
 #   secret_delete KEY       - Remove a secret
+#   secret_unlock           - Unlock the macOS login keychain when `secret` reports it locked
 
 # Source the secrets library (nuvemlabs/secrets)
 SECRETS_LIB="${HOME}/.local/lib/secrets/secrets.sh"
@@ -14,6 +15,13 @@ if [[ -f "$SECRETS_LIB" ]]; then
     # Self-declaration: tells secrets-doctor (nuvemlabs/secrets CLI) which file
     # maps store keys to env vars, so it works from any child process.
     [[ -n "$DOTFILES_DIR" ]] && export SECRETS_EXPORTS_FILE="$DOTFILES_DIR/config/shell/secrets.sh"
+    # A locked login keychain makes `security` exit 36 (interaction not allowed)
+    # when no GUI prompt can be shown — e.g. a tmux server running outside the
+    # Aqua session — so every export below would silently come back empty. The
+    # library prompts once on the TTY at shell start. Shells without a TTY
+    # (scripts, MCP spawns) are left alone: `secret` then returns 2 with a
+    # "run: secret_unlock" hint and secrets-doctor shows STORE=locked.
+    export SECRETS_AUTO_UNLOCK=1
     source "$SECRETS_LIB"
 
     # Source migration logic (dotfiles-specific, not part of nuvemlabs/secrets)
