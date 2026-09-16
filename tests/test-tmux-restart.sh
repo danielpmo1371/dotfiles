@@ -8,6 +8,11 @@
 # PATH that prints the resume hint on `/exit`, a stub tmux-resurrect save.sh
 # that records what would have been saved, and a temp claude settings file
 # (TMUX_RESTART_SETTINGS) so the user's real settings are never read.
+#
+# E2E: tests/e2e-tmux-restart.sh runs the same flows against the REAL claude
+# binary and the real tmux-resurrect save.sh on a throwaway server. It is
+# opt-in (E2E_TMUX_RESTART=1) because it costs API calls; run it after
+# changing the keystroke sequence, timings, or the resurrect hand-off.
 
 set -euo pipefail
 
@@ -274,6 +279,25 @@ check "vim mode: exit 0" [ "$RC" -eq 0 ]
 check "vim mode: announces Escape+i" grep -q "vim mode on" <<<"$OUT"
 check "vim mode: resume hint saved (fake claude accepted Escape,i prefix)" \
     grep -Eq "^[[:space:]]*$RESUME_HINT" "$SAVE_OUT"
+echo '{}' > "$SETTINGS"
+reset_fixture
+
+echo '{"editorMode": "vim"}' > "$SETTINGS"
+start_server "$BIN_OK"
+run_restart
+check "editorMode vim: exit 0" [ "$RC" -eq 0 ]
+check "editorMode vim: announces Escape+i" grep -q "vim mode on" <<<"$OUT"
+check "editorMode vim: resume hint saved" grep -Eq "^[[:space:]]*$RESUME_HINT" "$SAVE_OUT"
+echo '{}' > "$SETTINGS"
+reset_fixture
+
+echo '{"editorMode": "normal"}' > "$SETTINGS"
+start_server "$BIN_OK"
+run_restart --dry-run
+check "editorMode normal: dry-run exit 0" [ "$RC" -eq 0 ]
+run_restart
+check "editorMode normal: exit 0" [ "$RC" -eq 0 ]
+check "editorMode normal: does not announce vim mode" bash -c "! grep -q 'vim mode on' <<<\"\$1\"" _ "$OUT"
 echo '{}' > "$SETTINGS"
 reset_fixture
 

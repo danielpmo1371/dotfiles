@@ -86,8 +86,9 @@ Environment:
   TMUX_RESTART_SETTLE     Seconds to wait after the last exit
                           before saving, so prompts redraw     (default 1)
   TMUX_RESTART_KEY_PAUSE  Seconds between keystroke batches    (default 1)
-  TMUX_RESTART_SETTINGS   Claude settings.json used to detect
-                          "vimMode" (default ~/.claude/settings.json)
+  TMUX_RESTART_SETTINGS   Claude settings.json used to detect vim mode
+                          ("editorMode": "vim" or "vimMode": true)
+                          (default ~/.claude/settings.json)
   TMUX_PLUGIN_MANAGER_PATH
                           Where tmux-resurrect lives. Resolved like TPM does:
                           the tmux server's global environment first
@@ -219,13 +220,15 @@ find_claude_panes() {
     done < <(tmux_cmd list-panes -a -F $'#{pane_id}\t#{pane_pid}\t#{session_name}:#{window_index}\t#{window_name}')
 }
 
-# Claude's vim mode starts in NORMAL; `/exit` must be typed in INSERT mode.
+# Claude's vim mode may be in NORMAL; `/exit` must be typed in INSERT mode.
+# Current CLIs persist it as `"editorMode": "vim"`; `"vimMode": true` is the
+# older key. Either enables the Escape+i prefix.
 vim_mode_enabled() {
     [ -r "$SETTINGS_FILE" ] || return 1
     if command -v jq >/dev/null 2>&1; then
-        jq -e '.vimMode == true' "$SETTINGS_FILE" >/dev/null 2>&1
+        jq -e '(.vimMode == true) or (.editorMode == "vim")' "$SETTINGS_FILE" >/dev/null 2>&1
     else
-        grep -Eq '"vimMode"[[:space:]]*:[[:space:]]*true' "$SETTINGS_FILE"
+        grep -Eq '"vimMode"[[:space:]]*:[[:space:]]*true|"editorMode"[[:space:]]*:[[:space:]]*"vim"' "$SETTINGS_FILE"
     fi
 }
 
