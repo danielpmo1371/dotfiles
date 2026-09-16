@@ -164,18 +164,37 @@ export FZF_DEFAULT_OPTS="--height 40% --tmux center,75% \
     # (( ${+functions[p10k-instant-prompt-finalize]} )) && p10k-instant-prompt-finalize
     # show-start
 # fi
-# Cached system-info banner (regenerates once per day; uses fastfetch)
+# Cached system-info banner (regenerates once per day; uses fastfetch), shown
+# once per boot: the first interactive shell after boot prints it, later
+# shells/panes/tmux restores stay quiet until the boot id changes.
 # Temporarily disabled: set DOTFILES_FETCH_BANNER=1 (or flip the default) to re-enable
+# fetch-banner:begin (tests/test-tmux-restart.sh extracts this block; keep markers)
 : "${DOTFILES_FETCH_BANNER:=0}"
 if [[ "$DOTFILES_FETCH_BANNER" == 1 ]] && command -v fastfetch &>/dev/null; then
     _fetch_cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}"
     _fetch_cache="$_fetch_cache_dir/fastfetch-cache"
+    _fetch_boot_marker="$_fetch_cache_dir/fastfetch-boot-id"
     [[ -d "$_fetch_cache_dir" ]] || mkdir -p "$_fetch_cache_dir"
-    if [[ ! -f "$_fetch_cache" ]] || [[ -n $(find "$_fetch_cache" -mtime +1 2>/dev/null) ]]; then
-        fastfetch > "$_fetch_cache" 2>/dev/null
+    # Boot id: Linux exposes one directly; macOS gets the boot timestamp.
+    # Empty (unknown platform) falls back to printing on every shell.
+    _fetch_boot_id=""
+    if [[ -r /proc/sys/kernel/random/boot_id ]]; then
+        _fetch_boot_id="$(</proc/sys/kernel/random/boot_id)"
+    elif command -v sysctl &>/dev/null; then
+        _fetch_boot_id="$(sysctl -n kern.boottime 2>/dev/null)"
     fi
-    cat "$_fetch_cache" 2>/dev/null
+    _fetch_seen_boot_id=""
+    [[ -f "$_fetch_boot_marker" ]] && _fetch_seen_boot_id="$(<"$_fetch_boot_marker")"
+    if [[ -z "$_fetch_boot_id" || "$_fetch_boot_id" != "$_fetch_seen_boot_id" ]]; then
+        if [[ ! -f "$_fetch_cache" ]] || [[ -n $(find "$_fetch_cache" -mtime +1 2>/dev/null) ]]; then
+            fastfetch > "$_fetch_cache" 2>/dev/null
+        fi
+        cat "$_fetch_cache" 2>/dev/null
+        [[ -n "$_fetch_boot_id" ]] && print -r -- "$_fetch_boot_id" > "$_fetch_boot_marker"
+    fi
+    unset _fetch_boot_id _fetch_seen_boot_id _fetch_boot_marker
 fi
+# fetch-banner:end
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Profiling output
