@@ -58,12 +58,13 @@ server_gone() { ! server_alive; }
 BIN_OK="$TMP/bin-ok"
 BIN_STUCK="$TMP/bin-stuck"
 BIN_SECOND="$TMP/bin-second-exit"
+BIN_OK2="$TMP/bin-ok2"   # copy of the good fake, distinguishable in ps
 PLUGINS="$TMP/plugins"
 SAVE_STUB="$PLUGINS/tmux-resurrect/scripts/save.sh"
 SAVE_OUT="$TMP/saved-panes.txt"
 SAVE_RAN="$TMP/save-ran"
 SETTINGS="$TMP/settings.json"
-mkdir -p "$BIN_OK" "$BIN_STUCK" "$BIN_SECOND" "$(dirname "$SAVE_STUB")"
+mkdir -p "$BIN_OK" "$BIN_STUCK" "$BIN_SECOND" "$BIN_OK2" "$(dirname "$SAVE_STUB")"
 echo '{}' > "$SETTINGS"
 
 # Fake claude: ignores SIGINT like the real TUI, exits with the resume hint
@@ -101,7 +102,8 @@ while IFS= read -r line; do
     fi
 done
 EOF
-chmod +x "$BIN_OK/claude" "$BIN_STUCK/claude" "$BIN_SECOND/claude"
+cp "$BIN_OK/claude" "$BIN_OK2/claude"
+chmod +x "$BIN_OK/claude" "$BIN_STUCK/claude" "$BIN_SECOND/claude" "$BIN_OK2/claude"
 
 # Stub tmux-resurrect save.sh: resolves the server exactly like the real one
 # (socket path from $TMUX) and captures every pane's scrollback.
@@ -139,6 +141,8 @@ pane_shell() { # pane_shell <path>
 }
 pane_shows_prompt() { tmx capture-pane -p -t "$1" | grep -q 'fixture\$'; }
 fake_claude_process_up() { ps -Ao args= | grep -Eq "^/bin/bash $1/claude$"; }
+fake_claude_process_down() { ! fake_claude_process_up "$1"; }
+pane_never_received() { ! tmx capture-pane -p -S - -t "$1" | grep -qF "$2"; }
 
 # start_server <claude-bin-dir>: session "t" with pane 1 = shell running the
 # fake claude, pane 2 = plain shell. Waits until the fake claude is running.
@@ -159,6 +163,17 @@ start_server() {
     tmx send-keys -t "$CLAUDE_PANE" -l 'claude'
     tmx send-keys -t "$CLAUDE_PANE" Enter
     wait_for "fake claude did not start" fake_claude_process_up "$bin_dir"
+    OTHER_PANE="$(tmx list-panes -t t -F '#{pane_id}' | sed -n 2p)"
+}
+
+# start_claude_in_other_pane <bin-dir>: launches that dir's fake claude (by
+# full path) in the second pane and waits for it.
+start_claude_in_other_pane() {
+    local bin_dir="$1"
+    wait_for "shell prompt in other pane" pane_shows_prompt "$OTHER_PANE"
+    tmx send-keys -t "$OTHER_PANE" -l "$bin_dir/claude"
+    tmx send-keys -t "$OTHER_PANE" Enter
+    wait_for "fake claude did not start in other pane" fake_claude_process_up "$bin_dir"
 }
 
 # run_restart <args...>; sets RC, OUT. Knobs (set per call):
@@ -260,6 +275,55 @@ check "vim mode: announces Escape+i" grep -q "vim mode on" <<<"$OUT"
 check "vim mode: resume hint saved (fake claude accepted Escape,i prefix)" \
     grep -Eq "^[[:space:]]*$RESUME_HINT" "$SAVE_OUT"
 echo '{}' > "$SETTINGS"
+reset_fixture
+
+# ---------------------------------------------------------------------------
+echo -e "${BLUE}=== tmux-restart: --pane single-pane mode ===${NC}"
+start_server "$BIN_OK"
+start_claude_in_other_pane "$BIN_OK2"
+run_restart --pane "$CLAUDE_PANE"
+check "--pane: exit 0" [ "$RC" -eq 0 ]
+check "--pane: targeted pane's claude is gone" fake_claude_process_down "$BIN_OK"
+check "--pane: other pane's claude still running" fake_claude_process_up "$BIN_OK2"
+check "--pane: other pane never received /exit" pane_never_received "$OTHER_PANE" "/exit"
+check "--pane: success line points at prefix+R" grep -q "claude exited in $CLAUDE_PANE; prefix+R (cres) resumes it" <<<"$OUT"
+check "--pane: save stub NOT run" [ ! -e "$SAVE_RAN" ]
+check "--pane: server still alive" server_alive
+check "--pane: resume hint printed in the targeted pane" \
+    bash -c "tmux -L '$SOCKET' capture-pane -p -S - -t '$CLAUDE_PANE' | grep -Eq '^[[:space:]]*$RESUME_HINT'"
+
+run_restart --dry-run --pane "$OTHER_PANE"
+check "--dry-run --pane: exit 0" [ "$RC" -eq 0 ]
+check "--dry-run --pane: lists the given pane" grep -q "$OTHER_PANE" <<<"$OUT"
+check "--dry-run --pane: does not list the other pane" bash -c "! grep -q '$CLAUDE_PANE' <<<\"\$1\"" _ "$OUT"
+check "--dry-run --pane: says it would neither save nor kill" grep -q "would neither save the layout nor kill the server" <<<"$OUT"
+check "--dry-run --pane: other pane's claude untouched" fake_claude_process_up "$BIN_OK2"
+
+run_restart --force --pane "$OTHER_PANE"
+check "--force with --pane is rejected" [ "$RC" -eq 1 ]
+check "--force with --pane: error explains why" grep -q "cannot be combined with --pane" <<<"$OUT"
+check "--force with --pane: other pane's claude untouched" fake_claude_process_up "$BIN_OK2"
+
+run_restart --pane "%9999"
+check "--pane unknown id: exit 1" [ "$RC" -eq 1 ]
+check "--pane unknown id: error names it" grep -q "unknown pane id: %9999" <<<"$OUT"
+reset_fixture
+
+start_server "$BIN_OK"
+run_restart --pane "$OTHER_PANE"
+check "--pane on a plain shell: exit 0" [ "$RC" -eq 0 ]
+check "--pane on a plain shell: warns nothing to do" grep -q "warning: no claude running in pane(s) $OTHER_PANE" <<<"$OUT"
+check "--pane on a plain shell: nothing sent to it" pane_never_received "$OTHER_PANE" "/exit"
+check "--pane on a plain shell: the claude pane untouched" fake_claude_process_up "$BIN_OK"
+check "--pane on a plain shell: server alive" server_alive
+reset_fixture
+
+start_server "$BIN_STUCK"
+RESTART_TIMEOUT=$STUCK_TIMEOUT run_restart --pane "$CLAUDE_PANE"
+check "--pane stuck: exit 1" [ "$RC" -eq 1 ]
+check "--pane stuck: error says server left running" grep -q "server left running" <<<"$OUT"
+check "--pane stuck: server alive" server_alive
+check "--pane stuck: save stub NOT run" [ ! -e "$SAVE_RAN" ]
 reset_fixture
 
 # ---------------------------------------------------------------------------

@@ -17,10 +17,16 @@
 # Note: a claude with no turns yet exits on `/exit` without printing a resume
 # hint; there is nothing to resume, so `cres` has nothing to find there.
 #
+# Single-pane mode (--pane <pane_id>, repeatable): run the same exit sequence
+# on just those panes and stop there: no resurrect save, no kill-server. Used
+# by prefix + X to test the clean-exit + `cres` round-trip on one pane.
+#
 # Usage:
 #   tmux-restart.sh [--force] [--dry-run] [-L <socket-name>] [-h|--help]
+#   tmux-restart.sh --pane <pane_id> [--pane <pane_id> ...] [--dry-run] [-L <socket-name>]
 #
-# Keybinding: prefix + C-q / prefix + M-q (see config/tmux/tmux.conf)
+# Keybinding: prefix + C-q / prefix + M-q (all panes), prefix + X (this pane)
+#             (see config/tmux/tmux.conf)
 # Alias:      trs (see config/shell/tmux.sh)
 
 set -euo pipefail
@@ -47,15 +53,23 @@ CLAUDE_ARGS_RE='(^|/)claude( |$)'
 FORCE=0
 DRY_RUN=0
 SOCKET=""
+PANE_FILTER=""   # newline-separated pane ids from --pane; empty = every pane
 
 usage() {
     cat <<EOF
 Usage: $SCRIPT_NAME [--force] [--dry-run] [-L <socket-name>] [-h|--help]
+       $SCRIPT_NAME --pane <pane_id> [--pane <pane_id> ...] [--dry-run] [-L <socket-name>]
 
 Exit every Claude Code instance running in a tmux pane (so each prints its
 \`claude --resume <id>\` hint), run tmux-resurrect save, then kill the server.
+With --pane, only exit claude in the given pane(s) and stop: the layout is not
+saved and the server keeps running (prefix + R / \`cres\` then resumes it).
 
 Options:
+  --pane <pane_id>   Only target this pane (repeatable, e.g. %3). Skips the
+                     resurrect save and kill-server. A pane without claude is
+                     a no-op (warning, exit 0). Cannot be combined with
+                     --force: there is nothing to force in this mode.
   --force            Kill the server even if some claude processes are still
                      running after the timeout (they get SIGHUP from tmux) or
                      the tmux-resurrect save script cannot be found (layout
@@ -83,6 +97,8 @@ Environment:
 
 Exit status: 0 on success; 1 when no server is reachable, claude did not exit
 in time, or save.sh is missing (the last two proceed with --force).
+With --pane: 0 when claude is gone from every given pane (or was not running
+there), 1 on timeout or an unknown pane id.
 EOF
 }
 
@@ -94,6 +110,12 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --force) FORCE=1 ;;
         --dry-run) DRY_RUN=1 ;;
+        --pane)
+            [ $# -ge 2 ] || die "--pane requires a pane id (e.g. %3)"
+            PANE_FILTER="${PANE_FILTER:+$PANE_FILTER
+}$2"
+            shift
+            ;;
         -L)
             [ $# -ge 2 ] || die "-L requires a socket name"
             SOCKET="$2"
@@ -114,8 +136,22 @@ tmux_cmd() {
     fi
 }
 
+PANE_MODE=0
+[ -n "$PANE_FILTER" ] && PANE_MODE=1
+if [ "$PANE_MODE" -eq 1 ] && [ "$FORCE" -eq 1 ]; then
+    die "--force cannot be combined with --pane (single-pane mode never saves or kills the server)"
+fi
+
 tmux_cmd list-sessions >/dev/null 2>&1 \
     || die "no tmux server reachable${SOCKET:+ on socket '$SOCKET'} - nothing to restart"
+
+if [ "$PANE_MODE" -eq 1 ]; then
+    ALL_PANES="$(tmux_cmd list-panes -a -F '#{pane_id}')"
+    while IFS= read -r wanted; do
+        [ -n "$wanted" ] || continue
+        grep -qxF "$wanted" <<<"$ALL_PANES" || die "unknown pane id: $wanted"
+    done <<<"$PANE_FILTER"
+fi
 
 # tmux.conf sets TMUX_PLUGIN_MANAGER_PATH via `set-environment -g` with a
 # literal `~/.tmux/plugins/`: tmux never expands the tilde, so the value that
@@ -169,11 +205,14 @@ pane_has_claude() {
 }
 
 # Prints "pane_id<TAB>pane_pid<TAB>session:window<TAB>window_name" for every
-# pane whose process tree contains claude.
+# pane whose process tree contains claude (restricted to --pane ids if given).
 find_claude_panes() {
     local snapshot pane_id pane_pid location window_name
     snapshot="$(ps_snapshot)"
     while IFS=$'\t' read -r pane_id pane_pid location window_name; do
+        if [ "$PANE_MODE" -eq 1 ] && ! grep -qxF "$pane_id" <<<"$PANE_FILTER"; then
+            continue
+        fi
         if pane_has_claude "$pane_pid" "$snapshot"; then
             printf '%s\t%s\t%s\t%s\n' "$pane_id" "$pane_pid" "$location" "$window_name"
         fi
@@ -240,18 +279,33 @@ TARGETS="$(find_claude_panes)"
 TARGET_COUNT=0
 [ -n "$TARGETS" ] && TARGET_COUNT="$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')"
 
+PANE_LIST="$(printf '%s' "$PANE_FILTER" | tr '\n' ' ')"
+
 if [ "$DRY_RUN" -eq 1 ]; then
     if [ "$TARGET_COUNT" -eq 0 ]; then
-        log "dry-run: no panes running claude"
+        if [ "$PANE_MODE" -eq 1 ]; then
+            log "dry-run: no claude running in pane(s) $PANE_LIST- nothing to do"
+        else
+            log "dry-run: no panes running claude"
+        fi
     else
         log "dry-run: would send /exit to $TARGET_COUNT pane(s):"
         print_targets "$TARGETS"
+    fi
+    if [ "$PANE_MODE" -eq 1 ]; then
+        log "dry-run: --pane mode: would neither save the layout nor kill the server"
+        exit 0
     fi
     if [ -x "$RESURRECT_SAVE" ]; then
         log "dry-run: would then run $RESURRECT_SAVE and kill the tmux server"
     else
         log "dry-run: tmux-resurrect save.sh NOT found at $RESURRECT_SAVE (real run would abort without --force)"
     fi
+    exit 0
+fi
+
+if [ "$PANE_MODE" -eq 1 ] && [ "$TARGET_COUNT" -eq 0 ]; then
+    warn "no claude running in pane(s) $PANE_LIST- nothing to do"
     exit 0
 fi
 
@@ -293,7 +347,9 @@ if [ "$TARGET_COUNT" -gt 0 ]; then
     if [ -n "$REMAINING" ]; then
         printf '%s: claude still running after %ss in:\n' "$SCRIPT_NAME" "$TIMEOUT" >&2
         print_targets "$REMAINING" >&2
-        if [ "$FORCE" -eq 1 ]; then
+        if [ "$PANE_MODE" -eq 1 ]; then
+            die "aborting; exit it manually (server left running)"
+        elif [ "$FORCE" -eq 1 ]; then
             warn "--force given: continuing anyway (these panes lose their resume hint)"
         else
             die "aborting; exit them manually or re-run with --force"
@@ -301,6 +357,12 @@ if [ "$TARGET_COUNT" -gt 0 ]; then
     else
         log "all claude instances exited"
     fi
+fi
+
+if [ "$PANE_MODE" -eq 1 ]; then
+    EXITED_PANES="$(printf '%s\n' "$TARGETS" | cut -f1 | tr '\n' ' ')"
+    log "claude exited in ${EXITED_PANES% }; prefix+R (cres) resumes it"
+    exit 0
 fi
 
 sleep "$SETTLE"

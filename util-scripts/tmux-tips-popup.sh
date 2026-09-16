@@ -30,6 +30,7 @@ TIPS=(
   "Prefix + S opens the Ghostty shader picker — try different visual effects!"
   "Prefix + i opens the Claude pane picker — j/k to move, Enter jumps to that session."
   "Prefix + Ctrl+q (or Cmd+q) exits every Claude cleanly, saves the layout and kills tmux — after 'start', Prefix + R resumes each pane."
+  "Prefix + X exits only this pane's Claude cleanly (no save, no kill) — then Prefix + R to resume it with cres."
 
   # ── Tmux Modes ──
   "Prefix + Z enters Zen mode — distraction-free, no status bar, pure focus."

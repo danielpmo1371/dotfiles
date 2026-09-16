@@ -105,6 +105,8 @@ HELP_TEXT="
   Cmd+e  R        Resume this pane's Claude session (runs cres)
   Cmd+e  Cmd+q    Restart tmux: /exit all Claudes, resurrect-save,
   Cmd+e  Opt+q    kill server (confirm first). Then: start, Cmd+e R
+  Cmd+e  X        Exit only this pane's Claude cleanly (no save/kill);
+                  then Cmd+e R to check cres resumes it
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   HELP & ASK CLAUDE
