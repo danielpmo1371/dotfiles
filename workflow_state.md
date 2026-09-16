@@ -1,5 +1,36 @@
 # Workflow State
 
+## In Progress: Clean claude exit on tmux restart + fastfetch once per boot (2026-09-08)
+
+### State
+- **Status**: CONSTRUCT (approved 2026-09-16)
+- **Branch**: main
+
+### Decisions (2026-09-16)
+- Phase 1 = plan below as written. `/rename` before `/exit` is BACKBURNER (phase 2).
+- Trigger: `prefix` + `C-q` (Ghostty forwards cmd+q as \x11) and `prefix` + `M-q`; `prefix+q` stays the claude popup. Must resurrect-save AFTER claude exits, BEFORE kill-server.
+- fastfetch: once per boot (fastfetch is being phased out anyway).
+- Issue-15 WIP (tmux.conf plugins, `ff` alias) stashed as `issue-15 wip`; `git stash apply` after commit.
+
+### Goal
+1. `tmux-restart`: exit every running interactive `claude` cleanly (so it prints its `claude --resume <id>` hint into the pane), resurrect-save, then `kill-server`, so `cres` / `prefix+R` works after `start` restores the layout.
+2. fastfetch banner prints only on the first interactive shell after boot, not on every pane/restore.
+
+### Plan
+1. `util-scripts/tmux-restart.sh`: enumerate panes whose process tree contains `claude`; per pane `send-keys C-c`, then `/exit` Enter; poll until claude gone (timeout, configurable); run resurrect `save.sh`; `kill-server`. Refuse/abort list on timeout unless `--force`.
+2. `config/tmux/tmux.conf`: `bind C-q` and `bind M-q` → `confirm-before` → `run-shell -b '~/repos/dotfiles/util-scripts/tmux-restart.sh'`.
+3. `config/shell/tmux.sh`: `alias trs='~/repos/dotfiles/util-scripts/tmux-restart.sh'` for use from an outer shell.
+4. `config/zsh/zshrc` fastfetch block: keep daily cache; print only when a boot-id marker in `$XDG_CACHE_HOME` differs from current boot id (`sysctl -n kern.boottime` / `/proc/sys/kernel/random/boot_id`), then update marker.
+5. Tests: `tests/test-tmux-restart.sh` against a throwaway tmux socket (`-L`) with a fake `claude` script that prints the resume hint on `/exit`.
+
+### Log
+- 2026-09-08: explored `cres` (aliases.sh:102), fastfetch block (zshrc:167), tmux.conf (no kill-server binding, resurrect capture-pane-contents on), docs on Claude Code exit semantics (transcripts written incrementally; no external graceful-exit IPC; SessionEnd fires on SIGTERM).
+- 2026-09-16: Phase 1 implemented (uncommitted). New `util-scripts/tmux-restart.sh` (pane discovery via `ps -Ao pid=,ppid=,args=` tree walk in awk, `(^|/)claude( |$)`; C-c → [Escape i if vimMode] → `/exit` Enter; poll to `TMUX_RESTART_TIMEOUT`; `--force`/`--dry-run`/`-L`; resurrect save.sh run with `TMUX=<socket_path>,<pid>,0` so -L/out-of-tmux invocations save the right server; kill-server last). `tmux.conf`: `bind C-q` + `bind M-q` → confirm-before → run-shell -b (M-q verified unused in prefix table). `tmux.sh`: `trs` alias. `zshrc`: fastfetch gated on boot id (`/proc/sys/kernel/random/boot_id` | `sysctl -n kern.boottime`) vs `$XDG_CACHE_HOME/fastfetch-boot-id`, block wrapped in `# fetch-banner:begin/end` markers for the test; bashrc has no fastfetch block (uses show-start) → untouched. Help popup + tips updated. `tests/test-tmux-restart.sh`: 29 PASS / 0 FAIL (no-server, dry-run, happy path incl. resume hint in saved contents, timeout, --force, vimMode, fastfetch gate ×3). `bash -n`/`zsh -n` clean; tmux.conf loads on a throwaway socket.
+- 2026-09-16 (fix after real-claude smoke test): resurrect save was skipped in production because tmux.conf's `set-environment -g TMUX_PLUGIN_MANAGER_PATH '~/.tmux/plugins/'` reaches run-shell as a literal tilde. `tmux-restart.sh` now resolves the plugin path like TPM (server `show-environment -g` → process env → `$HOME/.tmux/plugins`), expands a leading `~`, strips a trailing `/`; a missing save.sh is now fatal (exit 1, server left running) unless `--force`; `--dry-run` reports the resolved save.sh path. Tests: 3 new groups (tilde+slash env, path read from server set-environment with process env unset, server env precedence, missing save.sh with and without --force); test server now starts with `-f /dev/null` + scrubbed client env so the user's tmux.conf/TPM never leak into the suite. Suite: 44 PASS / 0 FAIL. Real-server `--dry-run` resolves `/Users/daniel/.tmux/plugins/tmux-resurrect/scripts/save.sh`.
+- 2026-09-16 (retry loop after real-claude probe): a `/exit` typed ~0.3s after C-c is swallowed while claude re-renders the interrupt. `tmux-restart.sh` now re-sends only `/exit`+Enter (never a second C-c: that is the double-Ctrl-C hard exit, which skips the hint) every `TMUX_RESTART_RETRY` s (default 5) to panes still running claude, logging `attempt N`; defaults raised to `TMUX_RESTART_KEY_PAUSE=1`, `TMUX_RESTART_TIMEOUT=30`. Header notes: empty session exits without a hint (expected); regex also matches `claude --chrome-native-host` but only pane descendants count. Test: fake claude that swallows the first `/exit` → exit 0, exactly one retry logged, hint saved; stuck/--force cases keep `TIMEOUT=2` and assert no retry fires. Suite: PASS: 50  FAIL: 0; `bash -n` clean.
+
+---
+
 ## In Progress: Features & benefits documentation (2026-07-30)
 
 ### State
@@ -619,3 +650,33 @@ State.Status = CONSTRUCT (plan approved by user in session)
 - Adversarial read-only review of the hook diff dispatched before committing B.
 - Hook review found 3 fail-OPEN bugs (jq crash -> exit 5 -> hook non-blocking; empty pipelineId -> all checks skipped; duplicate terraform.id -> ambiguous match -> treated as non-terraform) + 2 lenient risks (CSV allowlist round-trip; malformed defaultParameters relaxes approval). Fixing before committing B.
 - Confirmed from official hooks docs (code.claude.com/docs/en/hooks-guide): only exit 2 blocks a PreToolUse; any other non-zero exit with empty/plain stdout = non-blocking error, tool call proceeds. jq crash in pipeline-guard.sh (exit 5) was therefore fail-open. ERR trap -> exit 2 is the fix.
+- Committed: 8e27a10 (hook: registry-keyed Check 4, block>allow, fail-closed) and f4481c7 (validator: block>allow terraform path, REGISTRY.md precedence). Live via symlink/identical copy.
+- OPEN: (1) td registry human edit — remove apply_travellerdirectives from alwaysSkipStages + stages.blocked to re-enable dev apply; (2) CD-path V6–V9 fail-closed changes await user go (Commit D); (3) hook: missing tool_name passes through (matcher guarantees it) and no-registry-in-CWD + non-keychain pipeline gets zero checks (V8) — untouched; (4) out.json untracked AzDO dump in repo root, do not commit.
+State.Status = DONE (pending user decisions above)
+
+## Log — 2026-09-09 keychain secrets "gone"
+- secrets-doctor: STORE ok / EXPORTS ok / ENV MISSING for all 7 keys (user shell, SECRETS_SERVICE=dotfiles).
+- Keychain inventory (names only): 18 items under service `dotfiles` in login.keychain-db — nothing lost.
+- Root cause: `security find-generic-password -w` exits 36 (errSecInteractionNotAllowed); `show-keychain-info` also "User interaction is not allowed". Library maps that to "not found" → empty exports.
+- tmux server (pid 3357, started 10:21 via `tmux new-session -A -s main`) runs in launchd `Background` manager, not `Aqua` → cannot reach SecurityAgent to unlock/confirm keychain access. Terminal restart doesn't recreate the tmux server, hence no change.
+- Fix (user): unlock login keychain from an Aqua-context window; if still failing inside tmux, restart tmux server from a GUI terminal. Verify with `secrets-doctor` (exit 0).
+- Follow-up candidate: secrets lib should distinguish rc 36/locked keychain from "not found" (fix in ~/repos/secrets, not installed copy).
+
+## Plan — keychain-locked handling (approved by user 2026-09-09)
+1. nuvemlabs/secrets (source ~/repos/secrets): keychain backend returns real `security` rc (36 locked / 44 not found), `__secret_keychain_locked`, `secret_unlock` (TTY prompt via `security unlock-keychain`, never -p), `secret()` reports locked (rc 2) instead of "not found", opt-in `SECRETS_AUTO_UNLOCK=1` prompts once at source time when a TTY exists.
+2. secrets-doctor: STORE=`locked` + footer + exit 1 when keychain locked.
+3. dotfiles config/shell/secrets.sh: `export SECRETS_AUTO_UNLOCK=1` before sourcing lib.
+4. Hermetic tests (stubbed `security`) in secrets repo; all suites green.
+5. Install (`~/repos/secrets/install.sh` → ~/.local), then validate on the REAL locked state inside this tmux server: (a) non-TTY zsh → hint only, no hang; (b) pty via `script` → prompt shown, Ctrl-C → graceful skip; (c) user runs `exec zsh` in their pane, enters password → `secrets-doctor` exit 0.
+6. Git: I commit (agent edits only). secrets repo first, then dotfiles.
+State.Status = CONSTRUCT
+- CONSTRUCT done by agent (file-only); reviewed diff; added INT trap around unlock prompt (zsh aborts rest of sourced rc on untrapped Ctrl-C — proven via pty: SECRETS_MIGRATED_FLAG missing after Ctrl-C).
+- Tests: keychain 21/21, api 37/37, doctor 30/30, file 9/9 (live tests ran after keychain unlocked). Installed to ~/.local.
+- Real-env: non-TTY `secret` → rc 2 + locked hint; doctor STORE=locked, exit 1. TTY (pty) → prompt shown, unlock → doctor all `set`, exit 0 from Background shell → root cause = lock, not ACL.
+- FINDING: on this macOS 27 beta `security unlock-keychain -p <wrong>` and `-p ''` both return 0 and unlock a locked login keychain from a Background non-TTY process. Skip paths (Ctrl-C/empty) untestable here — covered by hermetic tests only. Security concern surfaced to user.
+- Committed: secrets 233f005, dotfiles bbc5345. Keychain left UNLOCKED. User must `exec zsh` / open new panes for env to populate.
+- OPEN: why the keychain locked this morning (log shows only Df noise); whether keychain password is empty / beta bug.
+State.Status = DONE
+
+## 2026-09-09 fastfetch banner
+- Disabled startup fastfetch banner in `config/zsh/zshrc` via `DOTFILES_FETCH_BANNER` toggle (default 0). Verified: off by default, on with `=1`. Not committed.

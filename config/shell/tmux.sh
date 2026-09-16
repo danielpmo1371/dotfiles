@@ -42,3 +42,5 @@ alias tl='tmux list-sessions'
 alias tn='tmux new-session -s'
 alias tk='tmux kill-session -t'
 alias start='tmux new-session -A -s main'
+# Exit all claude panes cleanly, resurrect-save, kill server (prefix + C-q equivalent)
+alias trs='~/repos/dotfiles/util-scripts/tmux-restart.sh'

@@ -102,6 +102,9 @@ HELP_TEXT="
   Esc             Close popup (session persists)
   Cmd+e  i        Claude pane picker: list running Claudes w/ live
                   preview; vi keys (j/k move, i filter), Enter jumps
+  Cmd+e  R        Resume this pane's Claude session (runs cres)
+  Cmd+e  Cmd+q    Restart tmux: /exit all Claudes, resurrect-save,
+  Cmd+e  Opt+q    kill server (confirm first). Then: start, Cmd+e R
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   HELP & ASK CLAUDE
