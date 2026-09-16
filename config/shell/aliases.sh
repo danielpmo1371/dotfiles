@@ -59,6 +59,7 @@ alias setup-claude='nvim ~/.claude/settings.json'
 alias setup-claude-prompt='nvim ~/.claude/CLAUDE.md'
 alias re-tmux='tmux source-file ~/.tmux.conf'
 alias dot='z dot'
+alias ff='fastfetch'
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Git
@@ -198,7 +199,7 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 alias cls='clear'
 alias myip='curl -s ifconfig.me'
-alias todo='nvim ~/todo/todo.list'
+alias todo='nvim ~/todo.md'
 alias start='tmux new-session -A -n dan'
 alias awake='caffeinate -d'  # Keep Mac awake (display on, system won't sleep)
 #alias node="/home/linuxbrew/.linuxbrew/Cellar/node/25.2.1/bin/node"
