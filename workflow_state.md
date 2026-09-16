@@ -3,7 +3,7 @@
 ## In Progress: Clean claude exit on tmux restart + fastfetch once per boot (2026-09-08)
 
 ### State
-- **Status**: CONSTRUCT (approved 2026-09-16)
+- **Status**: DONE (phase 1 committed 2026-09-16: 1e3cbde, e2b4d63; phase 2 = /rename before /exit, backburner)
 - **Branch**: main
 
 ### Decisions (2026-09-16)
