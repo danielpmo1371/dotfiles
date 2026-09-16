@@ -682,3 +682,17 @@ State.Status = DONE
 
 ## 2026-09-09 fastfetch banner
 - Disabled startup fastfetch banner in `config/zsh/zshrc` via `DOTFILES_FETCH_BANNER` toggle (default 0). Verified: off by default, on with `=1`. Not committed.
+
+## Done: tmux undersized-pane after resurrect restore (2026-09-17)
+
+### Root cause
+- WORK:3 layout saved as `125x32,0,0` (since 2026-09-16 17:13) inside a 169x38 window -> dotted fill, zoom/pane-switch no-ops (single pane).
+- tmux (3.7b and 3.7c) applies `select-layout <string>` verbatim; a layout smaller than the window is never rescaled. resurrect restore replays it every restart. Only `resize-window -A` snaps it back.
+- Origin of the 125x32 shrink not in the server log: continuum option polling floods the 1000-line message-limit within a minute.
+
+### Actions (config/tmux/tmux.conf)
+1. `set -g message-limit 10000`.
+2. `bind F resize-window -A` (prefix+F) — manual fix for the current window.
+3. `set -g @resurrect-hook-post-restore-all` -> `resize-window -A` on every window after restore.
+- Verified on isolated sockets and a scratch session on the live server (hook run via bash eval like resurrect's execute_hook). Live config reloaded.
+- Not committed with this change: issue-15 "New packages" plugin hunk in the same file (left unstaged).
