@@ -15,6 +15,7 @@
 #   2b. casks.sh     - macOS GUI apps via Brewfile - requires: brew (macOS only)
 #   3. secrets.sh    - Keychain-backed secrets library (migrates ~/.accessTokens) - requires: ~/repos/secrets clone
 #   4. terminals.sh  - Terminal emulators (Ghostty, etc.) - no dependencies
+#   4b. hypr.sh      - Hyprland compositor config (Linux only) - no dependencies
 #   5. fonts.sh      - Nerd Fonts for Powerlevel10k - requires: curl
 #   6. tmux.sh       - Tmux + TPM + plugins - requires: git, terminal config
 #   7. bash.sh       - Bash configuration - no dependencies
@@ -166,6 +167,7 @@ CLI MODE
   ./install.sh --bash       Configure Bash
   ./install.sh --tmux       Install Tmux + plugins
   ./install.sh --terminals  Configure terminal emulators
+  ./install.sh --hypr       Configure Hyprland compositor (Linux only)
   ./install.sh --fonts      Install Nerd Fonts
   ./install.sh --claude     Install Claude Code CLI
   ./install.sh --mcp        Configure MCP servers
@@ -222,6 +224,7 @@ select_components() {
         "bash:Bash configuration:off" \
         "tmux:Tmux + TPM plugins:off" \
         "terminals:Terminal emulators (Ghostty):off" \
+        "hypr:Hyprland compositor config (Linux):off" \
         "fonts:Nerd Fonts for Powerlevel10k:off" \
         "claude:Claude Code CLI + config:off" \
         "mcp:MCP server configuration:off" \
@@ -334,6 +337,9 @@ get_component_targets() {
             ;;
         terminals)
             echo "symlink:$root/config/ghostty:$HOME/.config/ghostty"
+            ;;
+        hypr)
+            echo "symlink:$root/config/hypr:$HOME/.config/hypr"
             ;;
         config-dirs)
             echo "symlink:$root/config/nvim:$HOME/.config/nvim"
@@ -513,6 +519,7 @@ run_dialog_installation() {
             bash)      run_installer "bash.sh" "install_bash_config" ;;
             tmux)      run_installer "tmux.sh" "install_tmux" ;;
             terminals) run_installer "terminals.sh" "install_terminals" ;;
+            hypr)      run_installer "hypr.sh" "install_hypr" ;;
             fonts)     run_installer "fonts.sh" "install_fonts" ;;
             claude)
                 run_installer "claude.sh" "install_claude_code"
@@ -592,6 +599,7 @@ show_help() {
     echo "  --bash         Install bash configuration"
     echo "  --zsh          Install zsh configuration"
     echo "  --terminals    Install terminal emulators config"
+    echo "  --hypr         Install Hyprland compositor config (Linux only)"
     echo "  --fonts        Install Nerd Fonts for Powerlevel10k"
     echo "  --config-dirs  Symlink config directories"
     echo "  --claude       Install Claude Code settings"
@@ -685,6 +693,8 @@ install_dotfiles_core() {
     # and starship duplicates Powerlevel10k). Left commented on purpose.
     # _run_step "nushell"     "nushell.sh"      "install_nushell_config"
     _run_step "terminals"     "terminals.sh"    "install_terminals"
+    # Hyprland compositor config (self-guards: no-op on macOS)
+    _run_step "hypr"          "hypr.sh"         "install_hypr"
     _run_step "config-dirs"   "config-dirs.sh"  "install_config_dirs"
     # Claude config scaffolding that ships with these dotfiles (the Claude Code
     # program itself is installed in the Phase 2 handover).
@@ -816,6 +826,14 @@ main() {
                     log_warn "Terminals installation failed, continuing..."
                     ((failures++))
                     failed_components+="  - terminals\n"
+                }
+                ;;
+            --hypr)
+                # Hyprland compositor config (Linux only, self-guards on macOS)
+                run_installer "hypr.sh" "install_hypr" || {
+                    log_warn "Hyprland installation failed, continuing..."
+                    ((failures++))
+                    failed_components+="  - hypr\n"
                 }
                 ;;
             --config-dirs)
