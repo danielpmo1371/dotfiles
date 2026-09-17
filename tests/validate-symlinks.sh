@@ -77,6 +77,10 @@ check_symlink "$HOME/.tmux.conf" "$DOTFILES_ROOT/config/tmux/tmux.conf" "tmux.co
 echo -e "\n${BLUE}=== Config Directories (~/.config/) ===${NC}"
 check_symlink "$HOME/.config/nvim" "$DOTFILES_ROOT/config/nvim" "nvim"
 check_symlink "$HOME/.config/ghostty" "$DOTFILES_ROOT/config/ghostty" "ghostty"
+check_symlink "$HOME/.config/kitty" "$DOTFILES_ROOT/config/kitty" "kitty"
+if [[ "$OSTYPE" != darwin* ]]; then
+    check_symlink "$HOME/.config/hypr" "$DOTFILES_ROOT/config/hypr" "hypr"
+fi
 
 # Claude
 echo -e "\n${BLUE}=== Claude Code (~/.claude/) ===${NC}"
@@ -98,6 +102,8 @@ check_source_exists "$DOTFILES_ROOT/config/zsh/zshrc" "zsh/zshrc"
 check_source_exists "$DOTFILES_ROOT/config/zsh/p10k.zsh" "zsh/p10k.zsh"
 check_source_exists "$DOTFILES_ROOT/config/tmux/tmux.conf" "tmux/tmux.conf"
 check_source_exists "$DOTFILES_ROOT/config/nvim/init.lua" "nvim/init.lua"
+check_source_exists "$DOTFILES_ROOT/config/kitty/kitty.conf" "kitty/kitty.conf"
+check_source_exists "$DOTFILES_ROOT/config/hypr/hyprland.lua" "hypr/hyprland.lua"
 check_source_exists "$DOTFILES_ROOT/config/claude/settings.json" "claude/settings.json"
 check_source_exists "$DOTFILES_ROOT/config/claude/CLAUDE.md" "claude/CLAUDE.md"
 
