@@ -1,5 +1,317 @@
 # Workflow State
 
+## DONE: memory hooks dead for 2 days — vendored module drift (2026-09-21)
+
+### State
+- **Status**: COMPLETE (verified)
+- **Branch**: main
+- **Commits**: `11e7cf5`, `35f50e8`, `e0fc8a0`
+
+### Origin
+Came out of a request to "intercept terminal/tmux close to exit Claude sessions
+gracefully". That premise did not survive measurement (see next block); the real
+data loss was here.
+
+### Root cause
+`installers/memory-hooks.sh` vendors hooks by curl-ing a hardcoded filename list
+from `doobidoo/mcp-memory-service@main`. Upstream refactored two shared modules
+out (`config-loader.js`, `tls-options.js`); the list never named them. The
+2026-09-19 13:08 install pulled newer hooks requiring files it never fetched.
+curl errors were `2>/dev/null` + log_warn, so it failed silently and reported
+success. Four of five hooks then died at module load (MODULE_NOT_FOUND):
+SessionStart, SessionEnd, UserPromptSubmit (transitively via memory-client ->
+tls-options), PostToolUse. Only permission-request.js survived. Every automatic
+memory read/write lost 2026-09-19 13:08 → 2026-09-21.
+
+Not graceful: the hooks' own fail-open logic never runs, because the process
+dies before it is reached.
+
+### Fix (all 5 approved steps)
+1. `11e7cf5` — committed the working-tree jq merge fix + `tests/test-memory-hooks-merge.sh`.
+   HEAD still carried the destructive `.hooks * $new_hooks` form, which replaces
+   arrays wholesale; that was a live landmine for any clean checkout.
+2. `35f50e8` — pinned `MEMORY_SERVICE_TAG=v11.13.0` (byte-identical to what was
+   on disk → zero-diff pin), added the two missing filenames.
+3. `35f50e8` — downloads now fail the install (temp file + mv, no `2>/dev/null`);
+   new `verify_hook_requires()` walks the require() graph from HOOK_FILES and
+   refuses to touch settings.json if anything is unresolved.
+4. Ran `./installers/memory-hooks.sh`; verified.
+5. `e0fc8a0` — committed the vendored sync incl. the two restored modules.
+
+### Verification
+- `tests/test-memory-hooks-merge.sh`: 29/29 PASS (hermetic; copies real settings.json read-only).
+- All 5 entry points load; require() graph fully resolves.
+- Live session: 0 × MODULE_NOT_FOUND (was ~1.1 KB of stack trace per session).
+- Memory service `http://memory-mcp:8000/api/health` → HTTP 200 in 0.045 s.
+  (Earlier claim that the service was down was WRONG — 127.0.0.1:8000 is only
+  the hooks' hardcoded fallback, a symptom of the config load crashing.)
+- settings.json: installer was a no-op vs its own pre-run backup; 15 hook
+  commands before and after, none dropped.
+
+### Open / for user
+- A PostToolUse `Write|Edit` MacDown hook present at HEAD was already gone before
+  this run — almost certainly eaten by the original destructive merge on
+  2026-09-19. macOS-only, inert on this Linux box. NOT restored; user decides.
+- `config/claude/settings.json` is symlinked into this repo and Claude Code writes
+  its own UI settings (model, theme, autoUpdatesChannel) straight into the tracked
+  file. Left unstaged as unrelated drift; worth a decision on whether to keep
+  tracking a file the app mutates.
+- Deferred: replace the filename list with a pinned whole-tree tarball fetch, so a
+  new upstream module can never be missed. Needs a keep/drop call on extra
+  upstream files (memory-retrieval.js, session-end-harvest.js, topic-change.js,
+  auto-capture-hook.ps1, session-cache.json).
+- Known-inert: `dynamic-context-updater.js:265` requires `../core/topic-change`,
+  unresolvable because the installer flattens upstream `core/` into `memory/`.
+  Dead code, unreferenced by settings.json.
+
+## MEASURED: Claude exit is already graceful on signals (2026-09-21)
+
+Probe on an isolated tmux socket, throwaway sessions, secret-word resume test:
+
+| Teardown | Exits in | `claude --resume` returns secret | SessionEnd | reason |
+|---|---|---|---|---|
+| `/exit` | 1.7 s | yes | fired | `prompt_input_exit` |
+| SIGTERM | 1.2 s | yes | fired | `other` |
+| SIGHUP | 1.0 s | yes | fired | `other` |
+
+Claude Code 2.1.278 catches HUP/INT/TERM and flushes; transcripts stayed
+well-formed (every line parses). tmux kill-* sends SIGHUP; at shutdown each
+`tmux-spawn-*.scope` gets SIGTERM with a 90 s TimeoutStopUSec. So every close
+path already delivers a graceful signal with ~75× the grace needed — the
+requested interception layer guards a failure that does not occur.
+
+Not yet closed (agent running): does the pane PRINT `claude --resume <id>` on a
+signal exit? `tmux-restart.sh` saves pane CONTENTS via tmux-resurrect so `cres` /
+prefix+R can scrape that hint. If signals exit silently, the `/exit` dance is
+still load-bearing for workspace restore even though session resumability is fine.
+
+Systemd trap worth remembering: `kitty-*.scope` and every `tmux-spawn-*.scope`
+already declare `Before=shutdown.target` + `Conflicts=shutdown.target`, so a
+drain unit declaring only those is stopped CONCURRENTLY with them, not before.
+
+## Blocked on user: `q` broken — Groq key not on this machine (2026-09-18)
+
+### Diagnosis (root cause traced, no fixes guessed)
+- Error: `q hello` → `Unknown model: groq/openai/gpt-oss-20b`.
+- llm-groq 0.9 registers Groq models dynamically: cached `~/.config/io.datasette.llm/groq_models.json` OR live API fetch using the key. No cache + no key → zero groq models → "Unknown model".
+- Chain break: nuvemlabs/secrets library was NOT installed on this Arch machine → `secret` fn undefined → `secrets.sh` exports of GROQ_API_KEY/LLM_GROQ_KEY silently empty.
+
+### Log
+- Ran `./install.sh --secrets` → library installed at `~/.local/lib/secrets/secrets.sh`; `secret` fn verified working; libsecret (`secret-tool`) present.
+- STORE check (names-only): `GROQ_API_KEY` MISSING from libsecret store on this machine.
+- Note: `~/repos/secrets` clone has no `bin/secrets-doctor` (older repo state); installer's doctor check can never pass → `secrets-doctor` still unavailable. Fix belongs in nuvemlabs/secrets repo, not here.
+
+### Log (2026-09-19)
+- Second root cause found: NO Secret Service provider on this Arch/Hyprland machine — `org.freedesktop.secrets` not activatable (kwallet present only as dependency, ksecretd not claiming the name via D-Bus activation, gnome-keyring absent). `secret_set` therefore had nowhere to write (file backend refuses writes by design).
+- User chose gnome-keyring (over persisting ksecretd via Hyprland exec-once) and installed it (1:50.0-1). Verified: D-Bus activation file present, gnome-keyring-daemon auto-activates and owns `org.freedesktop.secrets`, `secret-tool` lookup returns clean not-found. Stopgap ksecretd stopped.
+- Optional polish (not done): PAM auto-unlock of the login keyring (`pam_gnome_keyring.so`) to avoid unlock prompts per login.
+
+### Waiting on user
+1. Fresh shell, then `secret_set GROQ_API_KEY <value>` (user only — value never handled by agent). First store may prompt to create/set a password for the default keyring.
+2. `q hello` (first llm call fetches + caches Groq model list)
+
+## BLUEPRINT: shell-init "file not found" + dead Claude hooks (2026-09-19)
+
+### State
+- **Status**: NEEDS_PLAN_APPROVAL
+- **Branch**: main
+
+### Issue A — shell init: "no such file or directory: backends\nsecrets.sh\n..."
+
+**Root cause (confirmed, byte-for-byte reproduced):**
+- `config/shell/aliases.sh:13` defines `cd() { builtin cd "$@" && lsd; }` — it writes a
+  directory listing to **stdout** on every `cd`.
+- `~/.local/lib/secrets/secrets.sh:32` (source: `~/repos/secrets/secrets.sh:32`) computes
+  `SECRETS_DIR="$(cd "$(dirname ...)" && pwd)"`. Inside command substitution the `lsd`
+  output is captured as data, so `SECRETS_DIR` becomes
+  `backends\nsecrets.sh\n/home/dan/.local/lib/secrets`, and lines 64/70 then source a
+  non-existent path.
+- Sourcing order makes it inevitable: `aliases.sh` (zshrc:106 / bashrc line before) is
+  sourced BEFORE `secrets.sh` (zshrc:110 / bashrc:100).
+- Proof: `bash -c 'cd(){ builtin cd "$@" && ls; }; echo "$(cd /home/dan/.local/lib/secrets && pwd)"'`
+  reproduces the exact string. A clean shell resolves `SECRETS_DIR` correctly in both bash and zsh.
+- Blast radius: this corrupts **any** `$(cd ... && pwd)` in any script sourced into an
+  interactive shell — a latent landmine well beyond secrets.sh.
+
+**Ruled out (evidence, not assumption):**
+- zsh `can't change option: monitor/zle` and `gitstatus failed to initialize` appear only
+  under `zsh -i -c` with no tty. Re-run under a real PTY (`script -qec`): both gone.
+  NOT real bugs — no action.
+
+### Issue B — Claude Code hooks
+
+**Root cause:** `~/.claude/hooks/` **does not exist**. All 13 hook commands referenced by
+`config/claude/settings.json` resolve to missing files. Verified MISS for every one:
+logging/{session-goal-tracker,user-request-logger,response-summarizer}.sh,
+memory/{session-start,session-end,permission-request,auto-capture-hook,mid-conversation}.js,
+pipeline-{guard,trigger-guard,registry-write-guard}.sh, destructive-ops-guard.sh,
+.config/.claude/notification.sh.
+
+All sources DO exist in `config/claude/hooks/`. The three installers that populate
+`~/.claude/hooks/` (`memory-hooks`, `logging-hooks`, `claude-azdo-pipeline-hooks`) are
+`off` by default in the interactive menu (install.sh:231-233) and were never run on this
+machine. `~/.claude/*` symlinks date to Sep 17 17:47 (i.e. `--claude` ran), but its
+auto-invoke of the pipeline-hooks installer left no directory. Dry-runs of all three
+installers pass cleanly today.
+
+**Two defects found while tracing (NOT installer-fixable):**
+1. **SAFETY GAP** — `config/claude/hooks/destructive-ops-guard.sh` exists in the repo and
+   global CLAUDE.md states it enforces the No-Delete Rule as a PreToolUse Bash hook. It is
+   **neither installed nor registered in settings.json** (`grep destructive` → no match).
+   The No-Delete guard has been inert on this machine.
+2. **Stale/dead hook entries in settings.json:**
+   - Notification → `$HOME/.config/.claude/notification.sh` — exists nowhere, not even in
+     the repo. Path shape (`.config/.claude`) looks like a typo for `$HOME/.claude/`.
+   - PostToolUse → `open -a 'MacDown 3000'` — macOS-only; `open` is absent on Arch, so it
+     fails on every Write/Edit. Cross-platform violation per repo standards.
+
+### Plan
+
+**A1 — dotfiles: make the `cd` wrapper safe in command substitution** (`config/shell/aliases.sh:13`)
+```bash
+# Auto-ls after cd. Guarded on stdout being a terminal: inside command
+# substitution ($(cd x && pwd)) the listing is captured as data and silently
+# corrupts the caller's variable.
+cd() {
+    builtin cd "$@" || return
+    if [ -t 1 ]; then lsd; fi
+}
+```
+Also preserves `cd`'s exit status on failure (current `&&` form already did, but the
+explicit `|| return` keeps it true once the body grows).
+
+**A2 — nuvemlabs/secrets source repo: harden the path detection** (`~/repos/secrets/secrets.sh:32`)
+Per the External Dependency rule, fix at SOURCE, then re-install — never edit
+`~/.local/lib/secrets/`.
+```bash
+SECRETS_DIR="$(builtin cd -- "$(dirname -- "${BASH_SOURCE[0]:-${(%):-%x}}")" >/dev/null 2>&1 && pwd -P)"
+```
+`builtin` bypasses any user `cd` function (works in bash and zsh); `>/dev/null` on the
+`cd` alone still lets `pwd` write to stdout. Defense in depth with A1.
+Then: `./install.sh --secrets` to redeploy, and verify `diff -r` source vs installed.
+
+**B1 — install the missing hooks**
+`./install.sh --memory-hooks --logging-hooks --claude-azdo-pipeline-hooks`
+(all three dry-run clean). Then re-run the 13-path existence check; expect 0 MISS
+except the two dead entries in B2.
+
+**B2 — repair settings.json** (needs decisions, see Open Questions)
+- Register + install `destructive-ops-guard.sh` as a PreToolUse Bash hook so CLAUDE.md's
+  No-Delete Rule is actually enforced.
+- Resolve the `notification.sh` entry (remove, or point at a real script).
+- Resolve the MacDown PostToolUse entry (remove, or make it platform-guarded).
+
+**B3 — close the gap that caused this**
+`installers/claude.sh` already auto-invokes the pipeline-hooks installer. Extend the same
+dependency pattern to `logging-hooks.sh` and `memory-hooks.sh`, OR flip them `on` in the
+`--all` path, so `~/.claude/hooks/` can never again be empty while settings.json
+references it. (Scope decision required.)
+
+**Verification**
+- `script -qec "zsh -i -c 'echo OK'" /dev/null` and the bash equivalent → zero stderr.
+- `secrets-doctor` if present; otherwise assert `SECRETS_DIR` is a single clean path.
+- Re-run the 13-hook existence + executability check.
+- `tests/test-pipeline-hooks.sh`, `tests/test-pipeline-validator.sh`, `tests/validate-symlinks.sh`.
+- `./install.sh --secrets` idempotency: run twice, second run no-ops.
+
+### Decisions (user, 2026-09-19) — PLAN APPROVED
+1. **A2**: do BOTH A1 + A2, commit in both repos.
+2. **notification.sh**: repoint to `$HOME/.claude/hooks/notification.sh` and supply the script
+   (cross-platform notify-send → osascript → no-op; best-effort, always exit 0).
+3. **MacDown PostToolUse**: remove the entry.
+4. **B3**: extend `installers/claude.sh` to auto-invoke logging-hooks and memory-hooks too,
+   reusing the existing pipeline-hooks dependency pattern.
+
+### Log
+- 2026-09-19: Root causes traced and reproduced (see above). Plan approved.
+- 2026-09-19: Dispatched two parallel agents. Track A = aliases.sh cd guard + secrets.sh:32
+  hardening. Track B = settings.json repair (destructive-ops-guard registration,
+  notification.sh, MacDown removal) + claude.sh dependency wiring + repo CLAUDE.md update.
+  Both dispatched with hard no-git-mutation constraints; lead performs all git ops and
+  runs all installers (per 2026-05-01 sub-agent dispatch hygiene lesson).
+- 2026-09-19: **Issue A RESOLVED + VERIFIED.** aliases.sh cd() tty-gated; secrets.sh:32
+  hardened with `builtin cd ... >/dev/null && pwd -P`, committed at source as
+  `d189c16` in ~/repos/secrets (not pushed), redeployed via `./install.sh --secrets`,
+  installed copy diff-identical to source. Real `zsh -i` and `bash -i` under a PTY now
+  emit zero stderr. Hardened library resolves correctly even with a hostile cd wrapper
+  in scope (proven in both shells). `--secrets` re-run is idempotent.
+
+- 2026-09-19: **CRITICAL defect found in `installers/memory-hooks.sh` (blocks B1).**
+  `update_settings_json` merges with `.hooks = (.hooks // {}) * $new_hooks`. jq's `*`
+  recurses into objects but REPLACES arrays wholesale, and every hook event is an array.
+  Reproduced by replaying the installer's own dry-run `$new_hooks` against the current
+  settings.json: PreToolUse collapses 5 hooks -> 1 and these 8 registrations vanish:
+  destructive-ops-guard.sh, pipeline-guard.sh, pipeline-trigger-guard.sh,
+  pipeline-registry-write-guard.sh, logging/user-request-logger.sh, and
+  logging/session-goal-tracker.sh (x3: SessionStart, SessionEnd, UserPromptSubmit).
+  Because `~/.claude/settings.json` is a symlink, this lands in the TRACKED repo file.
+  `./install.sh --memory-hooks` MUST NOT be run until fixed — explicit invocation is
+  exactly as destructive as auto-invocation. `installers/logging-hooks.sh` is by
+  contrast safe: `if == null` guards plus `unique_by(.command)`.
+  Dispatched to track-b as tasks 6 (order-preserving append/dedupe merge + wire into
+  claude.sh) and 7 (hermetic regression test).
+
+- 2026-09-19: Runtime gap — `notify-send` ABSENT on this machine (no libnotify), so the
+  new Notification hook would silently no-op. dunst IS installed and running as the
+  daemon. No code change needed: `installers/tools.sh` already declares
+  `notify-send|libnotify|libnotify-bin|libnotify` for non-Darwin. Operational fix only:
+  install libnotify. Needs user action (sudo).
+
+## In Progress: Investigation-traceable installation logging (2026-09-18)
+
+### State
+- **Status**: NEEDS_PLAN_APPROVAL
+- **Branch**: main
+
+### Goal
+Installation runs currently leave zero persistent record (audit confirmed: no tee/redirect/log-file anywhere; only artifacts are `~/.dotfiles_pkg_manager` and orphaned backup dirs). Make installs verbose and investigation-traceable: a persistent per-run log with timestamps, run context, per-component framing, real exit codes, and truthful success/failure reporting.
+
+### Audit findings (agent sweep + spot-checked by lead)
+1. **No file logging exists.** All `log_*` helpers (lib/install-common.sh:22-54) print to terminal only; `log_error` is the sole stderr writer. No timestamps anywhere — only elapsed durations (install.sh:641).
+2. **CRITICAL — failure accounting is dead.** `run_installer` (install.sh:627-646) runs `$func`, then `SCRIPT_DIR=…`, then the timing `log_info` — so it always returns 0. Every `|| { ((failures++)) }` branch and `_run_step`'s counter never fire on real installer failures. The exit code of `./install.sh` is a lie.
+3. **Logs would lie today — success asserted without verification:** `ln -s` unchecked then `[OK] Linked` (install-common.sh:128-129); secrets external installer rc unchecked then `[OK] Installed` (secrets.sh:51-52); `claude --version` failure prints `installed` (claude.sh:69); four `$(jq …)`-merge sites can truncate settings.json to 0 bytes and still print `[OK] Updated` (logging-hooks.sh:172, memory-hooks.sh:250, claude.sh:135, mcp.sh:142); dialog mode prints `Installation complete!` unconditionally (install.sh:537).
+4. **No run context recorded:** command line, mode, OS/distro, package manager (silent when cached), repo git SHA/dirty state, user/host, tool versions — none captured.
+5. **Attribution impossible:** package-manager output raw and unframed; `install_packages_fast` discards batch rc via `|| true` (install-packages.sh:507-515); only one exit code is ever printed in the whole tree.
+6. **~30 suppression sites** discard error causes (memory-hooks curl ×21 files, tmux source-file, hyprctl reload, jq probes, …). Full inventory in audit report.
+7. **Structural:** everything dispatches via `source` into one process → a single capture point is feasible; but dialog-ui writes to /dev/tty and returns selections on stdout → global fd redirect is hostile to dialog mode. 17/20 installers have standalone self-run guards (bypass install.sh entirely). Three installers double-run via unguarded `main "$@"` (mcp.sh:284, memory-hooks.sh:408, logging-hooks.sh:249). `claude-azdo-pipeline-hooks.sh:30` leaks `set -euo pipefail` into the whole run when sourced.
+
+### Plan
+
+**Phase A — persistent capture (new `lib/install-log.sh`, sourced by install-common.sh)**
+- A1. `install_log_init`: create `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/logs/install-<YYYYmmdd-HHMMSS>-<pid>.log`; export `DOTFILES_LOG_FILE`; re-init guard so sourced installers reuse the run's log; works for standalone `bash installers/x.sh` runs via their self-run guards. Print log path at run start and end. Retention: prune to last 20 logs.
+- A2. Dual-write `log_*` helpers: terminal output unchanged (colored); file gets `<ISO-8601 ts> [LEVEL] [component] msg`, color-free. Component tracked via a `_LOG_COMPONENT` var set by run_installer. Honor `NO_COLOR`.
+- A3. Run-context header (once per run): argv, mode (cli/dialog/non-interactive), user@host, `uname -srm`, os-release ID/VERSION, package manager + source (cache/prompt), repo `git rev-parse HEAD` + branch + dirty flag, versions of git/curl/jq/node/tmux/zsh when present, HOME/CWD.
+- A4. `run_logged <label> <cmd…>` wrapper: frames external commands (`BEGIN <label>` / `END <label> rc=N dur=…`), tees their raw output into the log while showing it live. Applied to package-manager calls in install-packages.sh and heavy externals (git clone, curl|bash, npm -g, brew bundle, make, TPM). No global `exec` fd redirect → dialog mode unaffected.
+- A5. Per-component framing in `run_installer`: `=== BEGIN <component> (<installer>::<func>) ===` / `=== END <component> rc=N (<dur>) ===` — covers _run_step, CLI single-flag, and dialog paths uniformly.
+- A6. End-of-run summary to terminal AND log: per-component status + rc + duration; failed list with reasons; log file path.
+
+**Phase B — exit-code integrity (a verbose log must not lie)**
+- B1. Fix `run_installer` to capture `$func`'s rc immediately and return it (resurrects all failure accounting; finding 2).
+- B2. `create_symlink_with_backup`: check `rm`/`backup_item`/`ln -s`, log cause on failure, return nonzero; callers count failures.
+- B3. Fix the four `$(jq)`-merge truncation sites: verify jq rc before writing settings.json.
+- B4. secrets.sh:51 — check external installer rc; claude.sh:69 — report failed version probe honestly.
+- B5. `install_packages_fast`: log batch rc instead of `|| true` silence; per-package fallback logged as such.
+- B6. Capture (not suppress) error causes at high-value sites: memory-hooks curl downloads (log URL + error), tmux.sh:50/54 source-file errors → log, hyprctl reload errors → log.
+- B7. Dialog mode: wire run_installer results into failure accounting; make `Installation complete!` conditional.
+
+**Phase C — flagged for separate work (NOT in this change; user to scope)**
+- Double-run `main "$@"` in mcp/memory-hooks/logging-hooks (corrupts settings.json.bak).
+- `set -euo pipefail` leak from claude-azdo-pipeline-hooks.sh when sourced.
+- Backup manifest lifecycle broken → `--restore` cannot restore most backups; `tail -r` BSD-only breaks cleanup on Linux.
+- `--brew` failure mislabeled `tools` (install.sh:763-767); mcp.sh `exit 1` kills whole run when sourced; browsh.sh dead/broken.
+
+**Verification**
+- V1. New hermetic `tests/test-install-logging.sh` (sandbox HOME): log created; header fields present; BEGIN/END rc framing; injected failure → rc≠0 in log AND process exit code; NO_COLOR/pipe → clean file.
+- V2. Fix test-docker.sh:55 (currently discards the entire second install's stdout and its exit code via `2>&1 >/dev/null;`).
+- V3. Docker e2e on Arch (`tests/test-docker.sh arch`) asserting a complete, parseable log from `--all`.
+- V4. `tests/validate-symlinks.sh` still green; atomic commits per phase step.
+
+### Log
+- 2026-09-18: Explore agent full logging audit (install.sh, lib/, installers/, tests/) — no file logging confirmed; suppression inventory ~30 sites; structural map of entry points. Lead spot-checked: install-common.sh:105-131, install.sh:530-540/627-646, secrets.sh:48-53, pipeline-hooks set line — all confirmed. Lead found finding 2 (run_installer always returns 0) during spot-check.
+- 2026-09-18: Blueprint written. Status → NEEDS_PLAN_APPROVAL.
+
+---
+
 ## In Progress: Keybinding sweep on Arch/Hyprland/kitty (2026-09-18)
 
 ### State
@@ -733,3 +1045,78 @@ State.Status = DONE
 3. `set -g @resurrect-hook-post-restore-all` -> `resize-window -A` on every window after restore.
 - Verified on isolated sockets and a scratch session on the live server (hook run via bash eval like resurrect's execute_hook). Live config reloaded.
 - Not committed with this change: issue-15 "New packages" plugin hunk in the same file (left unstaged).
+
+## Plan — `q` markdown rendering (literal `*` in Groq answers) — 2026-09-18
+
+### Problem (evidence, not assumption)
+- `q` pipes the answer through `bat --style=plain --language=md`. `bat` is a *syntax highlighter*,
+  not a renderer: `**bold**` is printed with the asterisks intact (verified via pty capture —
+  `**` emitted as literal text, coloured magenta). Same for `* ` bullets.
+- Measured streaming on the current path (pty, 3s-gap generator): line 1 displayed at T+1.0s,
+  line 2 at T+3.0s -> `bat | less -RFX` DOES stream per line. A true markdown renderer cannot
+  (block rendering needs the whole document), so this is a real trade-off, not a free win.
+
+### Blocking side-finding (separate from this fix)
+- Groq is non-functional on this machine: no `GROQ_API_KEY` (empty export), `secret`/`secrets-doctor`
+  not installed (`--secrets` never ran here), no `groq_models.json` -> `llm-groq` registers ZERO
+  models -> `llm -m groq/openai/gpt-oss-20b` => `Error: 'Unknown model'`.
+- Consequence: the render fix can be verified against fixture markdown, but NOT end-to-end through
+  a live Groq answer until a key is stored. Will be reported as such, never claimed as passing.
+
+### Decision
+Render properly with `glow` (charmbracelet, `extra/glow` 3.0.0 on Arch, `glow` on brew; other
+distros reach it through `install_package`'s existing brew fallback). Keep the streaming path
+reachable via an explicit toggle rather than deleting it.
+
+### Steps
+1. `config/shell/env.sh` — add `export Q_RENDER="pretty"` beside `AI_PROVIDER`, documented
+   `pretty | raw` (no magic literals at the call site).
+2. `config/shell/aliases.sh` — split `q`'s output stage:
+   - `pretty` + stdout is a tty + `glow` present -> `llm ... > "$tmp"`, then
+     `glow -s auto -w "$(tput cols)" "$tmp" | less -RFX` (explicit `-w`: glow falls back to 80
+     cols when its stdout is a pipe).
+   - otherwise -> today's `llm ... | tee "$tmp" | bat ...` streaming path (unchanged).
+   - non-tty (`q` piped into something) -> raw markdown, no ANSI. Unchanged guard.
+   - Renderer fallback chain: glow -> bat -> cat. A machine without glow keeps working.
+   - `$tmp` stays RAW markdown: clipboard copy and the `~/.q_history.md` append are display-agnostic
+     and must not gain ANSI escapes. `.q_history.md` is a markdown file by design.
+   - Update the function's header comment (it currently claims markdown "rendered" through bat).
+3. `installers/llm.sh` — source `lib/install-packages.sh`, `install_package "glow" ...` as a
+   non-fatal step (warn + continue if unavailable; `q` degrades to the bat path).
+4. `CLAUDE.md` (repo) — extend the "Quick AI query (`q`)" paragraph with the renderer + `Q_RENDER`.
+5. Verify: fixture markdown (bold/bullets/code fence/table) through both paths in a pty; assert no
+   literal `**` survives the pretty path and that the raw path is byte-identical to today's.
+   Re-measure streaming on the raw path. Report the Groq end-to-end gap honestly.
+
+### Out of scope (flagged, not touched)
+- `pbcopy` in `q` is macOS-only; on this Wayland/Hyprland box the clipboard copy silently no-ops.
+  `wl-copy` would be the fix. Unrelated to `*` — raising it, not changing it.
+- Storing the Groq API key (needs the user's secret).
+
+State.Status = NEEDS_PLAN_APPROVAL
+
+### Log — CONSTRUCT (2026-09-18)
+- User approved `pretty` as default with a `raw` escape hatch.
+- `config/shell/env.sh`: `Q_RENDER=pretty` (pretty|raw), `Q_PAGER="less -RFX"`, `Q_FALLBACK_WIDTH=80`.
+- `config/shell/aliases.sh`: `q` output stage split into `_q_show_pretty` (glow -> bat -> cat) and
+  `_q_show_raw` (bat -> cat, streaming filter); `_q_render_width` feeds glow an explicit `--width`
+  (glow falls back to 80 cols when its stdout is a pipe). Non-tty stays raw markdown. `$tmp` stays
+  raw so clipboard + `~/.q_history.md` never get ANSI. Unknown `$Q_RENDER` -> rc 2.
+  Pager passed via `PAGER=... glow --pager` (no `eval`, single source of truth).
+  glow flags confirmed against official docs (Context7 /charmbracelet/glow): `-s/--style`,
+  `-w/--width`, `-p/--pager`, honours `$PAGER`.
+- `installers/llm.sh`: sources `lib/install-packages.sh`, installs glow non-fatally.
+- `CLAUDE.md`: `q` paragraph documents the renderer + `Q_RENDER`.
+- `tests/test-installer.sh`: new opt-in `llm` component (llm, glow, llm-groq plugin); deliberately
+  NOT in `all`, mirroring `--llm` not being in `--all`.
+- `tests/test-q-render.sh`: new hermetic regression test (stubbed `llm`, pty via `script`).
+
+### Verification (evidence)
+- `bash -n` + `zsh -n` clean on aliases.sh / env.sh; `bash -n` clean on llm.sh + both test files.
+- `./tests/test-q-render.sh` -> 6 passed, 0 failed, 1 SKIPPED.
+- Measured raw-path streaming with a 2s-gap stub: line 1 at T+1.05s, remainder at T+2.05s ->
+  streaming contract intact.
+- GAP (not a pass): glow is NOT installed (pacman needs a password I cannot supply), so the
+  decisive assertion "pretty path shows no literal `**`" has NOT run. Reported as skipped, not green.
+- GAP: no Groq key on this machine, so nothing was verified against a live Groq answer.
+State.Status = VERIFIED_EXCEPT_GLOW
