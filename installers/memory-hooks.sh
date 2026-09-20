@@ -13,7 +13,15 @@ DOTFILES_ROOT="$(dirname "$SCRIPT_DIR")"
 source "$DOTFILES_ROOT/lib/install-common.sh"
 
 # Configuration
-MEMORY_SERVICE_REPO="https://raw.githubusercontent.com/doobidoo/mcp-memory-service/main"
+#
+# Pinned to a tag, never `main`. These hooks are vendored file by file from the
+# lists below, so an upstream refactor that adds a shared module leaves us with
+# newer hooks requiring a file we never fetched -- which is exactly how
+# config-loader.js and tls-options.js went missing and killed four hooks at
+# module load. A tag makes every sync a deliberate, reviewable bump: change
+# this ref, re-run, and diff what lands.
+MEMORY_SERVICE_TAG="v11.13.0"
+MEMORY_SERVICE_REPO="https://raw.githubusercontent.com/doobidoo/mcp-memory-service/$MEMORY_SERVICE_TAG"
 HOOKS_DIR="$DOTFILES_ROOT/config/claude/hooks/memory"
 SETTINGS_FILE="$DOTFILES_ROOT/config/claude/settings.json"
 TARGET_HOOKS_DIR="$HOME/.claude/hooks/memory"
@@ -31,6 +39,7 @@ HOOK_FILES=(
 UTILITY_FILES=(
   "adaptive-pattern-detector.js"
   "auto-capture-patterns.js"
+  "config-loader.js"
   "context-formatter.js"
   "context-shift-detector.js"
   "conversation-analyzer.js"
@@ -43,6 +52,7 @@ UTILITY_FILES=(
   "project-detector.js"
   "session-tracker.js"
   "tiered-conversation-monitor.js"
+  "tls-options.js"
   "user-override-detector.js"
   "version-checker.js"
 )
@@ -53,45 +63,128 @@ if [[ "${1:-}" == "--dry-run" ]]; then
   log_info "Running in dry-run mode"
 fi
 
+# Fetch one file, and treat a failure as a failure.
+#
+# The old form was `curl ... 2>/dev/null || log_warn`, which turned a 404 into a
+# line of scrollback nobody reads and let the install report success with files
+# missing. Downloads land in a temp file and only replace the real one on
+# success, so a failed fetch can never truncate a good file already on disk.
+download_file() {
+  local url="$1" dest="$2" label="$3"
+
+  if $DRY_RUN; then
+    log_info "[DRY-RUN] Would download: $url -> $dest"
+    return 0
+  fi
+
+  local tmp
+  tmp="$(mktemp)"
+  local curl_err
+  if curl_err=$(curl -fsSL "$url" -o "$tmp" 2>&1); then
+    mv "$tmp" "$dest"
+    log_success "Downloaded $label"
+    return 0
+  fi
+
+  log_error "Failed to download $label from $url"
+  [[ -n "$curl_err" ]] && log_error "  curl: $curl_err"
+  return 1
+}
+
 download_hooks() {
-  log_info "Downloading memory hooks from mcp-memory-service..."
+  log_info "Downloading memory hooks from mcp-memory-service $MEMORY_SERVICE_TAG..."
 
   mkdir -p "$HOOKS_DIR"
   mkdir -p "$HOOKS_DIR/../utilities"
 
+  local failures=0
+
   # Download core hook files
   for hook in "${HOOK_FILES[@]}"; do
-    local url="$MEMORY_SERVICE_REPO/claude-hooks/core/$hook"
-    local dest="$HOOKS_DIR/$hook"
-
-    if $DRY_RUN; then
-      log_info "[DRY-RUN] Would download: $url -> $dest"
-    else
-      log_info "Downloading $hook..."
-      if curl -fsSL "$url" -o "$dest" 2>/dev/null; then
-        log_success "Downloaded $hook"
-      else
-        log_warn "Failed to download $hook (may not exist upstream)"
-      fi
-    fi
+    download_file "$MEMORY_SERVICE_REPO/claude-hooks/core/$hook" \
+      "$HOOKS_DIR/$hook" "$hook" || failures=$((failures + 1))
   done
 
   # Download utility files
   log_info "Downloading utility modules..."
   for util in "${UTILITY_FILES[@]}"; do
-    local url="$MEMORY_SERVICE_REPO/claude-hooks/utilities/$util"
-    local dest="$HOOKS_DIR/../utilities/$util"
-
-    if $DRY_RUN; then
-      log_info "[DRY-RUN] Would download: $url -> $dest"
-    else
-      if curl -fsSL "$url" -o "$dest" 2>/dev/null; then
-        log_success "Downloaded $util"
-      else
-        log_warn "Failed to download $util"
-      fi
-    fi
+    download_file "$MEMORY_SERVICE_REPO/claude-hooks/utilities/$util" \
+      "$HOOKS_DIR/../utilities/$util" "$util" || failures=$((failures + 1))
   done
+
+  if (( failures > 0 )); then
+    log_error "$failures file(s) failed to download — hooks would be incomplete"
+    return 1
+  fi
+}
+
+# Walk the require() graph from each registered hook and fail if anything is
+# unresolved.
+#
+# Downloading every file on the list successfully does not mean the hooks run:
+# upstream can add a shared module, and a list that does not name it still
+# fetches cleanly while the hooks die at module load with MODULE_NOT_FOUND.
+# That failure is loud in the TUI but invisible here, so check it here.
+#
+# Entry points are HOOK_FILES only -- what settings.json actually registers.
+# Walking every file instead would flag upstream modules we vendor but never
+# reach (dynamic-context-updater.js requires ../core/topic-change, unresolvable
+# because this installer flattens upstream's core/ into memory/).
+verify_hook_requires() {
+  if $DRY_RUN; then
+    log_info "[DRY-RUN] Would verify hook require() graph"
+    return 0
+  fi
+
+  log_info "Verifying hook dependencies resolve..."
+
+  if ! HOOKS_MEMORY_DIR="$HOOKS_DIR" HOOK_ENTRY_FILES="${HOOK_FILES[*]}" node <<'NODE'
+const fs = require('fs');
+const path = require('path');
+
+const memoryDir = process.env.HOOKS_MEMORY_DIR;
+const entries = process.env.HOOK_ENTRY_FILES.split(' ').filter(Boolean);
+const requireRe = /require\(\s*(['"])(\.[^'"]+)\1\s*\)/g;
+
+const missing = [];
+const seen = new Set();
+
+function walk(file) {
+  if (seen.has(file)) return;
+  seen.add(file);
+
+  let src;
+  try {
+    src = fs.readFileSync(file, 'utf8');
+  } catch {
+    return;
+  }
+
+  for (const match of src.matchAll(requireRe)) {
+    const spec = match[2];
+    try {
+      walk(require.resolve(path.resolve(path.dirname(file), spec)));
+    } catch {
+      missing.push(`${path.basename(path.dirname(file))}/${path.basename(file)} -> ${spec}`);
+    }
+  }
+}
+
+for (const entry of entries) walk(path.join(memoryDir, entry));
+
+if (missing.length > 0) {
+  console.error('Unresolved require() in downloaded hooks:');
+  for (const m of [...new Set(missing)].sort()) console.error(`  ${m}`);
+  process.exit(1);
+}
+NODE
+  then
+    log_error "Hook dependencies are incomplete — add the missing module(s) to"
+    log_error "UTILITY_FILES, or bump MEMORY_SERVICE_TAG if upstream moved them"
+    return 1
+  fi
+
+  log_success "All hook dependencies resolve"
 }
 
 create_config() {
@@ -432,10 +525,15 @@ main() {
   log_info "=== Memory Hooks Installer ==="
   log_info ""
 
-  download_hooks
+  # Stop before touching settings.json if the hooks are incomplete: a partial
+  # download that still gets registered is the failure mode that killed four
+  # hooks for two days.
+  download_hooks || return 1
+  verify_hook_requires || return 1
+
   create_config
   link_hooks_to_home
-  update_settings_json
+  update_settings_json || return 1
   verify_installation
 
   log_info ""
