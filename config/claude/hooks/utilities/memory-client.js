@@ -6,6 +6,11 @@
 const https = require('https');
 const http = require('http');
 const { MCPClient } = require('./mcp-client');
+const { applySelfSignedCertsOption } = require('./tls-options');
+
+// TODO: Follow-up — extract shared HTTP helper. _attemptHealthCheck, _performApiPost,
+// storeMemoryHTTP, and queryMemoriesHTTP duplicate request construction. See Gemini
+// review on PR #735.
 
 class MemoryClient {
     constructor(config) {
@@ -15,6 +20,7 @@ class MemoryClient {
         this.fallbackEnabled = config.fallbackEnabled !== false;
         this.httpConfig = config.http || {};
         this.mcpConfig = config.mcp || {};
+        this.allowSelfSignedCerts = config.allowSelfSignedCerts === true;
 
         // Connection state
         this.activeProtocol = null;
@@ -24,6 +30,14 @@ class MemoryClient {
 
         // Cache successful connections
         this.connectionCache = new Map();
+    }
+
+    /**
+     * Gate TLS verification bypass behind explicit opt-in, warning every time.
+     * @private
+     */
+    _applySelfSignedCertsOption(requestOptions, isHttps) {
+        applySelfSignedCertsOption(requestOptions, isHttps, this.allowSelfSignedCerts);
     }
 
     /**
@@ -163,16 +177,18 @@ class MemoryClient {
 
                 const requestOptions = {
                     hostname: url.hostname,
-                    port: url.port || (url.protocol === 'https:' ? 8443 : 8889),
+                    port: url.port ? Number(url.port) : (url.protocol === 'https:' ? 443 : 80),
                     path: url.pathname,
                     method: 'GET',
                     headers: {
                         'X-API-Key': this.httpConfig.apiKey,
-                        'Accept': 'application/json'
+                        'Accept': 'application/json',
+                        'Connection': 'close'
                     },
                     timeout: this.httpConfig.healthCheckTimeout || 3000,
-                    rejectUnauthorized: false  // Allow self-signed certificates
+                    agent: false  // Disable keepAlive — hook is one-shot, reused sockets race uvicorn close (ECONNRESET / socket hang up)
                 };
+                this._applySelfSignedCertsOption(requestOptions, url.protocol === 'https:');
 
                 const protocol = url.protocol === 'https:' ? https : http;
                 const req = protocol.request(requestOptions, (res) => {
@@ -241,6 +257,109 @@ class MemoryClient {
     }
 
     /**
+     * Store a memory using the active protocol.
+     * @param {string} content - Memory content
+     * @param {object} opts - { tags, memoryType, metadata }
+     * @returns {Promise<{success: boolean, contentHash?: string, error?: string}>}
+     */
+    async storeMemory(content, opts = {}) {
+        const { tags = [], memoryType = null, metadata = {} } = opts;
+        if (this.activeProtocol === 'mcp' && this.mcpClient) {
+            return this.storeMemoryMCP(content, { tags, memoryType, metadata });
+        } else if (this.activeProtocol === 'http') {
+            return this.storeMemoryHTTP(content, { tags, memoryType, metadata });
+        } else {
+            throw new Error('No active connection available');
+        }
+    }
+
+    /**
+     * Store memory via HTTP REST API.
+     * @private
+     */
+    storeMemoryHTTP(content, { tags, memoryType, metadata }) {
+        return new Promise((resolve) => {
+            const url = new URL('/api/memories', this.httpConfig.endpoint);
+            const isHttps = url.protocol === 'https:';
+            const payload = JSON.stringify({
+                content,
+                tags,
+                memory_type: memoryType,
+                metadata,
+            });
+
+            const options = {
+                hostname: url.hostname,
+                port: url.port ? Number(url.port) : (isHttps ? 443 : 80),
+                path: url.pathname,
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(payload),
+                    'X-API-Key': this.httpConfig.apiKey,
+                    'Connection': 'close',
+                },
+                timeout: 5000,
+                agent: false,  // Disable keepAlive — one-shot CLI, avoids ECONNRESET from reused sockets
+            };
+            this._applySelfSignedCertsOption(options, isHttps);
+
+            const requestModule = isHttps ? https : http;
+            const req = requestModule.request(options, (res) => {
+                let data = '';
+                res.on('data', (chunk) => (data += chunk));
+                res.on('end', () => {
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                        try {
+                            const parsed = JSON.parse(data);
+                            resolve({
+                                success: parsed.success !== false,
+                                contentHash: parsed.content_hash || parsed.contentHash,
+                            });
+                        } catch (err) {
+                            resolve({ success: false, error: `Parse error: ${err.message}` });
+                        }
+                    } else {
+                        resolve({ success: false, error: `HTTP ${res.statusCode}: ${data}` });
+                    }
+                });
+            });
+
+            req.on('error', (error) => {
+                resolve({ success: false, error: error.message });
+            });
+
+            req.on('timeout', () => {
+                req.destroy();
+                resolve({ success: false, error: 'Request timeout' });
+            });
+
+            req.write(payload);
+            req.end();
+        });
+    }
+
+    /**
+     * Store memory via MCP protocol.
+     * @private
+     */
+    async storeMemoryMCP(content, { tags, memoryType, metadata }) {
+        try {
+            const result = await this.mcpClient.storeMemory(content, {
+                tags,
+                memoryType,
+                metadata,
+            });
+            return {
+                success: result?.success !== false,
+                contentHash: result?.content_hash || result?.contentHash,
+            };
+        } catch (err) {
+            return { success: false, error: err.message };
+        }
+    }
+
+    /**
      * Private helper: Perform HTTP POST request to API
      * @private
      */
@@ -251,16 +370,22 @@ class MemoryClient {
 
             const options = {
                 hostname: url.hostname,
-                port: url.port || (url.protocol === 'https:' ? 8443 : 8889),
+                port: url.port ? Number(url.port) : (url.protocol === 'https:' ? 443 : 80),
                 path: url.pathname,
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Content-Length': Buffer.byteLength(postData),
-                    'X-API-Key': this.httpConfig.apiKey
+                    'X-API-Key': this.httpConfig.apiKey,
+                    'Connection': 'close'
                 },
-                rejectUnauthorized: false  // Allow self-signed certificates
+                // 10s covers cold-cache semantic search on /api/search, /api/search/by-time,
+                // /api/search/by-tag. Larger than storeMemoryHTTP (5s) and _attemptHealthCheck (3s)
+                // because search queries run embedding + vector scan, not a simple write/ping.
+                timeout: 10000,
+                agent: false  // Disable keepAlive — hook is one-shot, reused sockets race uvicorn close (ECONNRESET / socket hang up)
             };
+            this._applySelfSignedCertsOption(options, url.protocol === 'https:');
 
             const protocol = url.protocol === 'https:' ? https : http;
             const req = protocol.request(options, (res) => {
@@ -309,6 +434,12 @@ class MemoryClient {
 
             req.on('error', (error) => {
                 console.warn('[Memory Client] HTTP network error:', error.message);
+                resolve([]);
+            });
+
+            req.on('timeout', () => {
+                req.destroy();
+                console.warn('[Memory Client] HTTP request timeout');
                 resolve([]);
             });
 
