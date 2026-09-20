@@ -240,12 +240,49 @@ update_settings_json() {
   cp "$SETTINGS_FILE" "$SETTINGS_FILE.bak"
   log_info "Backed up settings.json to settings.json.bak"
 
-  # Merge hooks into existing settings
-  # This preserves existing hooks and adds new ones
+  # Merge hooks into existing settings, per event and per matcher.
+  #
+  # NOT `.hooks * $new_hooks`: jq's `*` recurses into objects but replaces
+  # arrays wholesale, so that form silently dropped every other hook already
+  # registered against an event (all four PreToolUse guards, both logging
+  # UserPromptSubmit hooks). This merge only ever appends:
+  #   - event absent            -> created with the new entry
+  #   - matcher already present -> the new entry's hooks are appended to it
+  #   - matcher not present     -> the new entry is appended to the event
+  #
+  # Dedupe is by .command and keeps the FIRST occurrence. `unique_by` is
+  # deliberately avoided because it sorts, and these hooks include safety
+  # guards whose execution order must stay stable. Keeping the first
+  # occurrence is also what makes repeat runs idempotent.
   local merged
   merged=$(jq --argjson new_hooks "$new_hooks" '
-    .hooks = (.hooks // {}) * $new_hooks
+    def dedupe_by_command:
+      reduce .[] as $h ([];
+        if any(.[]; .command == $h.command) then . else . + [$h] end
+      );
+
+    def merge_entry($entry):
+      (map(.matcher // "") | index($entry.matcher // "")) as $i
+      | if $i == null then
+          . + [$entry]
+        else
+          .[$i].hooks = (((.[$i].hooks // []) + ($entry.hooks // [])) | dedupe_by_command)
+        end;
+
+    reduce ($new_hooks | to_entries[]) as $event (.;
+      reduce ($event.value[]) as $entry (.;
+        .hooks[$event.key] = ((.hooks[$event.key] // []) | merge_entry($entry))
+      )
+    )
   ' "$SETTINGS_FILE")
+
+  # Never write a truncated or invalid settings.json: a failed jq would
+  # otherwise blank the file the backup was just taken from.
+  if [[ -z "$merged" ]] || ! jq empty <<< "$merged" 2>/dev/null; then
+    log_error "Hook merge produced invalid JSON — settings.json left unchanged"
+    log_error "Backup of the current file is at $SETTINGS_FILE.bak"
+    return 1
+  fi
 
   echo "$merged" > "$SETTINGS_FILE"
   log_success "Updated settings.json with memory hooks"
@@ -405,4 +442,10 @@ main() {
   log_success "Memory hooks installation complete!"
 }
 
-main "$@"
+# Only auto-run when executed directly. install.sh's run_installer() sources the
+# installer and then calls main itself, so a bare `main "$@"` here ran the whole
+# thing twice. Guarding it also lets the test harness source this file to
+# exercise update_settings_json against a fixture.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
+fi
