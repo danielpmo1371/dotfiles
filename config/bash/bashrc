@@ -25,9 +25,6 @@ else
     export DOTFILES_DIR="${DOTFILES_DIR:-$HOME/repos/dotfiles}"
 fi
 
-# Debug output (remove after testing)
-echo "DEBUG: DOTFILES_DIR set to: $DOTFILES_DIR"
-
 # ─────────────────────────────────────────────────────────────────────────────
 #   Bash options
 # ─────────────────────────────────────────────────────────────────────────────
@@ -93,7 +90,7 @@ fi
 #   Source shared configurations
 # ─────────────────────────────────────────────────────────────────────────────
 [[ -f "$DOTFILES_DIR/config/shell/env.sh" ]] && source "$DOTFILES_DIR/config/shell/env.sh"
-[[ -f "$DOTFILES_DIR/config/shell/path.sh" ]] && echo 'sourcing path' && source "$DOTFILES_DIR/config/shell/path.sh"
+[[ -f "$DOTFILES_DIR/config/shell/path.sh" ]] && source "$DOTFILES_DIR/config/shell/path.sh"
 [[ -f "$DOTFILES_DIR/config/shell/aliases.sh" ]] && source "$DOTFILES_DIR/config/shell/aliases.sh"
 [[ -f "$DOTFILES_DIR/config/shell/git.sh" ]] && source "$DOTFILES_DIR/config/shell/git.sh"
 [[ -f "$DOTFILES_DIR/config/shell/tmux.sh" ]] && source "$DOTFILES_DIR/config/shell/tmux.sh"
