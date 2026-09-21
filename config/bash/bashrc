@@ -37,6 +37,7 @@ shopt -s histappend   # Append to history file
 shopt -s checkwinsize # Update LINES and COLUMNS after each command
 shopt -s cdspell      # Correct minor cd spelling errors
 shopt -s dirspell     # Correct directory spelling during completion
+shopt -s autocd       # cd by typing a directory path (parity with zsh autocd)
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   History
