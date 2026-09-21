@@ -1360,3 +1360,52 @@ left unstaged again, as in the previous session. Nothing pushed.
 
 ### Status
 VERIFIED
+
+---
+
+## Session 2026-09-21 — `C-e C-e` scrollback empty in Claude panes
+
+### Report
+`C-e C-e` (tmux prefix `C-e` + `bind C-e copy-mode`, tmux.conf:12/67) used to
+scroll Claude's output; on this Linux box the pane shows only the visible screen.
+User's hypothesis: bash instead of zsh.
+
+### Root cause (bash is NOT a factor)
+Claude Code 2.1.278 defaults to the **fullscreen renderer**, which runs in the
+terminal alternate screen. tmux keeps no scrollback for alt-screen panes, so
+`copy-mode` has zero history to show.
+
+Evidence:
+- `tmux list-panes -a`: every `claude` pane `alt=1 hist=0..244`; every shell pane
+  `alt=0 hist=1023..3747`. Same `history_limit=50000` on all.
+- `~/.claude.json`: `firstStartVersion = 2.1.274` (fullscreen-default builds).
+- No `tui` key in `config/claude/settings.json` -> default is fullscreen.
+- `grep -rn 'CLAUDE_CODE_\|NO_FLICKER\|ALTERNATE' config/shell config/zsh config/bash`
+  -> only an unrelated `CLAUDE_CODE_OAUTH_TOKEN` alias. Shell layer is irrelevant.
+- Binary 2.1.278 strings: `/tui <default|fullscreen>`, saved as `userSettings.tui`;
+  `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN` / `CLAUDE_CODE_NO_FLICKER` are the env
+  overrides; fullscreen scrolls via wheel/trackpad/PageUp/PageDown and `Ctrl+E`
+  (`transcript:toggleShowAll`).
+
+### Change (user chose `/tui default`)
+`config/claude/settings.json` + `"tui": "default"` (top-level). Symlink verified:
+`~/.claude/settings.json -> config/claude/settings.json`, git-tracked. Takes
+effect on newly started sessions only.
+
+### Found, NOT changed (separate latent bug, not in scope of the chosen fix)
+`config/tmux/tmux.conf:12` `bind C-e send-prefix` is dead — overridden by
+`:67` `bind C-e copy-mode` (last bind wins). Consequence: a literal `Ctrl+E`
+cannot be sent to any app in a pane, including readline's end-of-line and
+Claude's own `Ctrl+E` transcript toggle.
+
+### Verification (evidence)
+Fresh detached session `tui-verify` running `claude` with the new setting:
+- `alternate_on=0` (was `1` on every pre-existing claude pane)
+- after shrinking the window so output scrolled off: `history_size=2` and rising
+  (it was pinned at `0` under the fullscreen renderer regardless of output volume)
+=> tmux scrollback now accumulates for claude panes, so `C-e C-e` has content.
+
+Leftover for the user to close (No-Delete Rule): `tmux kill-session -t tui-verify`.
+
+### Status
+VERIFIED
