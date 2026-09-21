@@ -127,6 +127,29 @@ fi
 [[ -f ~/.fzf.bash ]] && source ~/.fzf.bash
 eval "$(fzf --bash)"
 
+# fzf widget keys, matching config/zsh/zshrc: Ctrl-F jumps to a directory,
+# Ctrl-G pastes file paths. Alt-C is left unbound (Esc-c is the vi-mode change
+# operator) and Ctrl-T is released to "new tab" muscle memory.
+if declare -F fzf-file-widget >/dev/null 2>&1; then
+  for _fzf_keymap in emacs-standard vi-command vi-insert; do
+    bind -m "$_fzf_keymap" -x '"\C-g": fzf-file-widget'
+    bind -m "$_fzf_keymap" -r '\C-t'
+  done
+  unset _fzf_keymap
+  # Restore the readline defaults fzf had overwritten on Ctrl-T.
+  bind -m emacs-standard '"\C-t": transpose-chars'
+  bind -m vi-insert '"\C-t": transpose-chars'
+fi
+if declare -F __fzf_cd__ >/dev/null 2>&1; then
+  # Macro taken verbatim from the ALT-C section of `fzf --bash`, which fzf only
+  # emits when FZF_ALT_C_COMMAND is non-empty. It puts the `cd` on the command
+  # line and accepts it, so the jump is recorded in history. The vi keymaps use
+  # upstream's trampoline: \C-z toggles to emacs mode, runs the macro, toggles back.
+  bind -m emacs-standard '"\C-f": " \C-b\C-k \C-u`__fzf_cd__`\e\C-e\C-\e(\C-m\C-y\C-h\e \C-y\ey\C-x\C-x\C-d\C-y\ey\C-_"'
+  bind -m vi-command '"\C-f": "\C-z\C-f\C-z"'
+  bind -m vi-insert '"\C-f": "\C-z\C-f\C-z"'
+fi
+
 # ─────────────────────────────────────────────────────────────────────────────
 #   Startup display
 # ─────────────────────────────────────────────────────────────────────────────
@@ -136,7 +159,7 @@ if type show-start &>/dev/null; then
 fi
 
 # pnpm
-export PNPM_HOME="/home/dan/.local/share/pnpm"
+export PNPM_HOME="$HOME/.local/share/pnpm"
 case ":$PATH:" in
   *":$PNPM_HOME:"*) ;;
   *) export PATH="$PNPM_HOME:$PATH" ;;

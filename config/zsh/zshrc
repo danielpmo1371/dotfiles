@@ -137,13 +137,35 @@ if command -v zoxide &> /dev/null; then
 fi
 
 # FZF
-# Empty FZF_ALT_C_COMMAND disables the Alt-C / Esc-c "fuzzy cd" binding
+# Empty FZF_ALT_C_COMMAND disables the Alt-C / Esc-c "fuzzy cd" binding.
+# The widget itself is re-bound to Ctrl-F further down.
 export FZF_ALT_C_COMMAND=""
 command -v fzf &>/dev/null && source <(fzf --zsh)
 # Open in tmux popup if on tmux, otherwise use --height mode
 export FZF_DEFAULT_OPTS="--height 40% --tmux center,75% \
     --preview 'fzf-preview.sh {}' --bind 'focus:transform-header:file --brief {}'"
 # TODO: download and extend fzf-preview
+
+# fzf widget keys: Ctrl-F jumps to a directory, Ctrl-G pastes file paths.
+# They sit side by side on the keyboard. Upstream ships them on Alt-C and
+# Ctrl-T: Alt-C stays unbound (see FZF_ALT_C_COMMAND above) because Esc-c is
+# the vi-mode change operator, and Ctrl-T is released to "new tab" muscle
+# memory. Must come after `source <(fzf --zsh)`.
+if (( $+functions[fzf-cd-widget] )); then
+    # The empty FZF_ALT_C_COMMAND also suppressed fzf's own `zle -N`, so the
+    # widget has to be registered here before it can be bound.
+    zle -N fzf-cd-widget
+    bindkey -M viins '^F' fzf-cd-widget
+    bindkey -M vicmd '^F' fzf-cd-widget
+fi
+if (( $+widgets[fzf-file-widget] )); then
+    bindkey -M viins '^G' fzf-file-widget
+    bindkey -M vicmd '^G' fzf-file-widget
+    bindkey -M emacs '^G' fzf-file-widget
+    bindkey -M viins -r '^T'
+    bindkey -M vicmd -r '^T'
+    bindkey -M emacs '^T' transpose-chars  # restore the default fzf overwrote
+fi
 
 # Google Cloud SDK
 [[ -f "$HOME/google-cloud-sdk/path.zsh.inc" ]] && source "$HOME/google-cloud-sdk/path.zsh.inc"
