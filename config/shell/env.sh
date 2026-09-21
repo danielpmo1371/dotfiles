@@ -35,6 +35,17 @@ export GEMINI_MODEL="gemini-2.5-flash"
 # time-to-first-token (LPU inference). Provider -> model map lives in aliases.sh.
 export AI_PROVIDER="groq"   # groq | gemini | openai | claude
 # export AI_MODEL=...        # optional: pin a specific `llm` model id, overrides the provider default
+# Output stage for `q`. `pretty` renders the finished answer as markdown (glow),
+# so bold/bullets/code display as formatting instead of literal `*` markers.
+# `raw` streams it line by line through bat instead — lowest time-to-first-token,
+# markers stay visible. Per-call override: `Q_RENDER=raw q "..."`.
+export Q_RENDER="pretty"    # pretty | raw
+# Pager for `q` output: -R keeps colour, -F skips paging when it fits one screen,
+# -X leaves the text in the scrollback instead of clearing on exit.
+export Q_PAGER="less -RFX"
+# Word-wrap column used only when neither $COLUMNS nor tput can report a width
+# (non-interactive shell with no terminal), matching glow's own default.
+export Q_FALLBACK_WIDTH=80
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Azure DevOps
