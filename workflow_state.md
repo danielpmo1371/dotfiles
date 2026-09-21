@@ -1196,3 +1196,105 @@ Hyprland 0.56.2. API confirmed against the official wiki via Context7 (`/hyprwm/
 - GAP (not a pass): the keypress path itself was not simulated -- no wtype/ydotool on this box.
   Verified bind registration + dispatcher behaviour, not a synthetic ALT+Tab keystroke.
 State.Status = VERIFIED_EXCEPT_KEYSTROKE_SIM
+
+## SUPER+I — show current workspace number (2026-09-21)
+
+### Goal
+User asked how to identify the current workspace number. No status bar runs on this box
+(waybar is installed but the autostart block in `hyprland.lua` is commented out and
+`~/.config/waybar/` does not exist). User explicitly declined a bar, asked for the keybind.
+
+### Change
+`config/hypr/hyprland.lua`, inserted after the mainMod+[0-9] workspace loop:
+`SUPER + I` -> `hl.dsp.exec_cmd` running
+`sh -c 'hyprctl notify -1 2000 0 "workspace $(hyprctl activeworkspace -j | jq -r .id)"'`.
+Notify args are named via locals (`notifyNoIcon`, `notifyDurationMs`, `notifyDefaultColor`)
+rather than bare numbers. Wrapped in an explicit `sh -c` to match the screenshot binds' style.
+
+### Dependency
+Adds a runtime dependency on `jq` (present: /usr/bin/jq). Parsing `hyprctl activeworkspace -j`
+was chosen over cutting the human-readable output, which is not a stable interface.
+`hyprctl notify` is rendered by Hyprland itself, so no notification daemon is required.
+
+### Verification (evidence)
+- `luac -p config/hypr/hyprland.lua` -> LUA SYNTAX OK.
+- Command run standalone via `/bin/sh -c` BEFORE binding -> `ok`, notification rendered.
+- `hyprctl reload` -> ok; `hyprctl configerrors` -> empty.
+- `hyprctl binds -j` -> `modmask=64 (SUPER) key=I -> __lua`, i.e. registered.
+- `~/.config/hypr` is a symlink to `config/hypr/` (`readlink -f` confirmed), so the repo edit
+  is the live config; no re-install needed.
+- GAP (not a pass): the keypress itself was not simulated (no wtype/ydotool here). Bind
+  registration + the underlying command were verified; the SUPER+I keystroke was not.
+State.Status = VERIFIED_EXCEPT_KEYSTROKE_SIM
+
+### Open (not done, not asked for)
+`SUPER+SHIFT+right` uses workspace `"+1"` while `SUPER+SHIFT+left` uses `"e-1"` — asymmetric.
+No relative "move window to next/prev workspace" bind exists. Both left untouched.
+
+## DONE: SUPER+Tab toggles to the last-focused workspace (2026-09-21)
+
+### State
+- **Status**: COMPLETE (verified live)
+- **Branch**: main
+
+### Origin
+User asked whether SUPER+Tab could cycle workspaces. SUPER+Tab was free — Tab was only
+bound with CTRL (window cycling, `hyprland.lua:327-328`), and SUPER is unaffected by the
+`ctrl:swap_lalt_lctl` kb_option. Offered cycle-all (`e+1`/`e-1`), per-monitor (`m+1`/`m-1`)
+and last-used toggle; user chose the last-used toggle (cmd-tab feel), so SUPER+SHIFT+Tab
+is deliberately left unbound.
+
+### Change
+`config/hypr/hyprland.lua`, inserted after the mainMod+[0-9] workspace loop:
+`SUPER + Tab` -> `hl.dsp.focus({ workspace = "previous" })`.
+Used `previous` (global last-focused) rather than `previous_per_monitor`; both are documented
+workspace selectors (wiki `configuring/naming-conventions.md`, confirmed via Context7 against
+hyprwm/hyprland-wiki, not from memory).
+
+### Verification (evidence)
+- `hyprctl reload` -> ok; `hyprctl configerrors` -> empty.
+- `hyprctl binds -j` -> `modmask=64 (SUPER) key=Tab -> __lua`, i.e. registered (the pre-existing
+  modmask 4 / 5 Tab binds are the CTRL window-cycling ones, unchanged).
+- Behavioural round-trip via `hyprctl dispatch`: active workspace 2 -> `previous` -> 1 ->
+  `previous` -> 2. Toggle confirmed and state restored.
+- `~/.config/hypr` is a symlink to `config/hypr/`, so the repo edit is the live config.
+- GAP (not a pass): the SUPER+Tab keystroke itself was not simulated (no wtype/ydotool here).
+  Bind registration + the dispatcher were verified; the physical keypress was not.
+
+### Open (not done, not asked for)
+Still open from the SUPER+I block: `SUPER+SHIFT+right` uses workspace `"+1"` (creates empty
+workspaces, clamps at 1) while `SUPER+SHIFT+left` uses `"e-1"` (existing only, wraps) —
+asymmetric. Left untouched.
+
+---
+
+## 2026-09-21 — bash: `~` doesn't go home + startup stdout pollution
+
+### Diagnosis
+Not a broken HOME. `HOME=/home/dan`, passwd entry and `cd ~` all correct. `~` is an
+*expansion*, not a command: bash rewrites the bare word to `/home/dan` and tries to
+execute it -> `bash: /home/dan: Is a directory`. It "worked" in zsh only because
+`config/zsh/zshrc:33` sets `setopt autocd`; bash had no equivalent (`shopt autocd` -> off).
+Login shell is bash, hence the mismatch.
+
+### Changes (two isolated commits, main)
+- `4c3df96` — `shopt -s autocd` added to the Bash options block, matching zsh.
+- `791615c` — removed two startup debug echoes in `config/bash/bashrc`
+  (`DEBUG: DOTFILES_DIR set to: ...` at old line 29, and `echo 'sourcing path'` spliced
+  into the path.sh source line). Both traced to `ade7eb1` (2025-12-22); one was labelled
+  "remove after testing".
+
+### Verification (evidence)
+- `bash -n config/bash/bashrc` -> clean, both times.
+- Before: interactive bash startup wrote 67 bytes to stdout. After: 0 bytes.
+- No regression: `DOTFILES_DIR=/home/dan/repos/dotfiles`, `$HOME/.local/bin` still on PATH
+  (proves path.sh is still sourced after the `&&`-chain edit), `shopt autocd` -> on.
+- Functional: from `/tmp`, bare `~` -> `cd -- /home/dan`, `PWD=/home/dan`.
+- Startup-chain sweep: `config/shell/mcp.sh` echoes are gated behind `$SHOW_MCP_STATUS`
+  (opt-in) and `config/shell/tmux.sh` printf is a deliberate `$TMUX`-gated prompt marker.
+  Neither is pollution; left untouched.
+
+### Open (not done, not asked for)
+`config/bash/bashrc` still carries an uncommitted, pre-existing change:
+`PNPM_HOME` hardcoded `/home/dan` -> `$HOME`. Deliberately kept out of both commits and
+left unstaged — not mine to commit. Nothing pushed.
