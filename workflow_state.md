@@ -1298,3 +1298,65 @@ Login shell is bash, hence the mismatch.
 `config/bash/bashrc` still carries an uncommitted, pre-existing change:
 `PNPM_HOME` hardcoded `/home/dan` -> `$HOME`. Deliberately kept out of both commits and
 left unstaged — not mine to commit. Nothing pushed.
+
+---
+
+## 2026-09-21 — bash: no keybinding to edit the command line in $EDITOR
+
+### Diagnosis (evidence, before any change)
+User expected `alt/ctrl/super+x` to drop the current command line into vim. Nothing is
+bound to it in the shell actually running. Five independent layers, all confirmed:
+
+1. Login shell is bash (`$SHELL=/usr/bin/bash`). The working binding exists ONLY in
+   `config/zsh/zshrc:60-63` (`autoload edit-command-line`, `bindkey '^x^x'`,
+   `bindkey -M vicmd 'v'`). That file never loads. `config/bash/bashrc` has no
+   equivalent and there is no `~/.inputrc`.
+2. Readline's `edit-and-execute-command` default is `\C-x\C-e` in the **emacs keymap
+   only**. `config/bash/bashrc:31` sets `set -o vi`, so it is unreachable. Verified via
+   `bind -m <keymap> -q`: vi-insert `"\C-x": self-insert`, vi-command "not bound",
+   emacs `can be invoked via "\C-x\C-e"`.
+3. It was never one keypress in either shell — `C-x C-e` / `^x^x` are two-key sequences.
+   `Ctrl-X` alone is a prefix.
+4. `super+x` is not a distinct key: `config/ghostty/config:146` → `super+x=text:\x18`,
+   i.e. it forwards the Ctrl-X control code. Same prefix, same dead end.
+5. `alt+x` is also Ctrl-X: `config/hypr/hyprland.lua:225` sets
+   `kb_options = "ctrl:swap_lalt_lctl"`, so physical left Alt emits Ctrl.
+
+Already working and unchanged: `Esc` then `v` — bash binds vi-command
+`"v": vi-edit-and-execute-command` by default; `$EDITOR`/`$VISUAL` are both `nvim`.
+
+### Plan — APPROVED by user
+Fix in the shell layer, not the emulator (per `docs/terminal-agnostic-config.md`: the
+behaviour is shell-ownable, so Ghostty must not implement it). Add to
+`config/bash/bashrc`, after the Bash options block:
+
+    bind -m vi-insert  '"\C-x\C-x": edit-and-execute-command'
+    bind -m vi-command '"\C-x\C-x": edit-and-execute-command'
+
+`^x^x` chosen to match `config/zsh/zshrc:62` (not `^x^e`, which collides with the tmux
+prefix C-e). Safe to run unguarded: bashrc returns early for non-interactive shells
+(lines 8-11), so `bind` always has a readline instance.
+
+### Verification (evidence)
+- `bash -n config/bash/bashrc` -> clean.
+- Real interactive bash under a PTY, reading the live `~/.bashrc` symlink
+  (`readlink -f ~/.bashrc` -> `config/bash/bashrc`):
+  - `bind -m vi-insert  -q edit-and-execute-command` -> `can be invoked via "\C-x\C-x"`
+  - `bind -m vi-command -q edit-and-execute-command` -> `can be invoked via "\C-x\C-x"`
+  - No regression: `bind -m vi-command -q vi-edit-and-execute-command` -> still `"v"`.
+- `$EDITOR`/`$VISUAL` both `nvim`, so the chord lands in nvim.
+- Not verified: the physical keypress itself (no wtype/ydotool here). The chord is
+  registered in readline; `super+x super+x` reaching it depends on the Ghostty
+  `super+x=text:\x18` forward, which is pre-existing and unchanged.
+
+### Changes (two isolated commits, main)
+- `b9cf922` — workflow_state: previous session's log, committed on its own.
+- (this) — the two `bind` lines in `config/bash/bashrc` + this entry.
+
+### Open (not done, not asked for)
+`config/bash/bashrc` still carries the pre-existing uncommitted `PNPM_HOME`
+`/home/dan` -> `$HOME` change. Staged around via a hunk-level `git apply --cached`;
+left unstaged again, as in the previous session. Nothing pushed.
+
+### Status
+VERIFIED

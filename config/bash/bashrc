@@ -37,6 +37,18 @@ shopt -s dirspell     # Correct directory spelling during completion
 shopt -s autocd       # cd by typing a directory path (parity with zsh autocd)
 
 # ─────────────────────────────────────────────────────────────────────────────
+#   Readline keybindings
+# ─────────────────────────────────────────────────────────────────────────────
+# Edit the current command line in $VISUAL/$EDITOR. Readline's default binding
+# for edit-and-execute-command (\C-x\C-e) lives in the emacs keymap only, which
+# `set -o vi` above makes unreachable — so bind it explicitly in both vi keymaps.
+# Sequence matches config/zsh/zshrc so the chord is the same in either shell
+# (^X^X rather than ^X^E, which would collide with the tmux prefix C-e).
+# bash's own vi-command `v` binding keeps working alongside this.
+bind -m vi-insert  '"\C-x\C-x": edit-and-execute-command'
+bind -m vi-command '"\C-x\C-x": edit-and-execute-command'
+
+# ─────────────────────────────────────────────────────────────────────────────
 #   History
 # ─────────────────────────────────────────────────────────────────────────────
 HISTCONTROL=ignoreboth # Ignore duplicates and lines starting with space
