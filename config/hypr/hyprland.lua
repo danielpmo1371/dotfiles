@@ -28,7 +28,7 @@ hl.monitor({
 local terminal    = "kitty"
 local fileManager = "dolphin"
 local menu        = "wofi --show drun"
-local browser     = "zen-browser"
+local browser     = "google-chrome-stable"
 
 
 -------------------
@@ -324,8 +324,8 @@ local function cycleWindows(forward)
     end
 end
 
-hl.bind("ALT + Tab",         cycleWindows(true))
-hl.bind("ALT + SHIFT + Tab", cycleWindows(false))
+hl.bind("CTRL + Tab",         cycleWindows(true))
+hl.bind("CTRL + SHIFT + Tab", cycleWindows(false))
 
 -- Switch workspaces with mainMod + [0-9]
 -- Move active window to a workspace with mainMod + SHIFT + [0-9]
@@ -334,6 +334,14 @@ for i = 1, 10 do
     hl.bind(mainMod .. " + " .. key,             hl.dsp.focus({ workspace = i}))
     hl.bind(mainMod .. " + SHIFT + " .. key,     hl.dsp.window.move({ workspace = i }))
 end
+
+-- Show the current workspace number (no status bar is running).
+-- hyprctl notify args: <icon> <duration_ms> <color> <message>; -1 = no icon, 0 = default color.
+local notifyNoIcon, notifyDefaultColor, notifyDurationMs = -1, 0, 2000
+hl.bind(mainMod .. " + I", hl.dsp.exec_cmd(
+    [[sh -c 'hyprctl notify ]] .. notifyNoIcon .. " " .. notifyDurationMs .. " " .. notifyDefaultColor
+        .. [[ "workspace $(hyprctl activeworkspace -j | jq -r .id)"']]
+))
 
 -- Example special workspace (scratchpad)
 hl.bind(mainMod .. " + S",         hl.dsp.workspace.toggle_special("magic"))
