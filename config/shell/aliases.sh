@@ -95,39 +95,123 @@ alias update-claude='sudo npm i -g @anthropic-ai/claude-code'
 # flag — anything appended after it (e.g. a starter prompt) would be eaten as
 # the session name instead of reaching claude as the prompt.
 alias cdang='claude --rc --dangerously-skip-permissions'
+# Newest recorded session for the current directory, independent of scrollback.
+#
+# Claude stores each session at ~/.claude/projects/<cwd with / turned into ->/
+# <session-id>.jsonl, so the filename IS the session id and the newest file is
+# the most recent session for this directory. Directory-scoped, not pane-scoped:
+# if two panes ran claude in the same cwd this returns the newer of the two.
+_cres_session_from_transcripts() {
+    local dir="$HOME/.claude/projects/${PWD//\//-}"
+    [ -d "$dir" ] || return 1
+
+    # List names (not a glob): zsh errors on an unmatched glob under nomatch,
+    # and an empty project dir is an ordinary case, not an error.
+    local newest
+    newest=$(ls -1t "$dir" 2>/dev/null | grep -E '\.jsonl$' | head -1)
+    [ -n "$newest" ] || return 1
+
+    echo "${newest%.jsonl}"
+}
+
 # Re-run the exact `claude --resume <session>` hint claude prints on quit, with
 # cdang's flags. Scrapes THIS pane's scrollback for the last such line, so it
 # resumes this pane's session even if newer sessions were started in other tabs
 # (which would win with --continue). Handles both hint formats: quoted names
-# (older CLIs) and bare UUIDs (current). Tmux-only by design.
+# (older CLIs) and bare UUIDs (current).
+#
+# Falls back to the transcript directory when the scrollback has no hint, which
+# is the normal case after a reboot rather than an edge case. Measured: claude
+# prints the hint on /exit, SIGTERM and SIGHUP alike, but at shutdown systemd
+# stops each pane's tmux-spawn-*.scope with KillMode=control-group, which
+# signals the pane's SHELL too -- the shell exits, tmux stops rendering, and
+# claude's hint (written ~1s later) never reaches the pane. A running claude is
+# also in alt-screen, which has no scrollback, so tmux-continuum's periodic save
+# never captures a hint either. Only tmux-restart.sh's exit-then-save ordering
+# puts one in a resurrect save; nothing enforces that on an unplanned reboot.
+#
+# The session stays resumable in every one of those cases -- what is lost is the
+# ability to find its id from the pane, which is what this fallback restores.
 cres() {
-    if [ -z "$TMUX" ]; then
-        echo "cres: not inside tmux — can't read scrollback for the resume hint" >&2
-        return 1
-    fi
-    local session
+    local session=""
+
     # Anchor to line start so prose/error messages that merely mention
     # `claude --resume ...` mid-line don't shadow the real quit hint.
-    session=$(tmux capture-pane -p -S - -t "$TMUX_PANE" \
-        | grep -E '^[[:space:]]*claude --resume ' \
-        | grep -Eo 'claude --resume ("[^"]+"|[A-Za-z0-9_-]+)' | tail -1 \
-        | sed -E 's/^claude --resume "?([^"]+)"?$/\1/')
-    if [ -z "$session" ]; then
-        echo "cres: no 'claude --resume ...' hint found in this pane's scrollback" >&2
-        return 1
+    if [ -n "$TMUX" ]; then
+        session=$(tmux capture-pane -p -S - -t "$TMUX_PANE" \
+            | grep -E '^[[:space:]]*claude --resume ' \
+            | grep -Eo 'claude --resume ("[^"]+"|[A-Za-z0-9_-]+)' | tail -1 \
+            | sed -E 's/^claude --resume "?([^"]+)"?$/\1/')
     fi
+
+    if [ -z "$session" ]; then
+        session=$(_cres_session_from_transcripts) || {
+            echo "cres: no resume hint in this pane and no recorded session for $PWD" >&2
+            return 1
+        }
+        # Say so: this one is the newest session for the directory, which is not
+        # necessarily the one that ran in this pane.
+        echo "cres: no hint in scrollback — resuming newest session for $PWD" >&2
+    fi
+
     cdang --resume "$session"
 }
 
 # Fast one-shot query via `llm`. Provider chosen by $AI_PROVIDER (see env.sh);
-# defaults to Groq for the lowest time-to-first-token. Streams to stdout.
-# Rendered as markdown through bat when on a tty (line-buffered, so output
-# appears per-line instead of per-token); raw when piped or bat is missing.
+# defaults to Groq for the lowest time-to-first-token.
+#
+# The output stage is chosen by $Q_RENDER (see env.sh):
+#   pretty - the finished answer is rendered as markdown by glow, so bold,
+#            bullets, tables and code blocks display as formatting instead of
+#            leaving their literal `*`/backtick markers on screen. Rendering
+#            needs the whole document, so nothing appears until the model is
+#            done.
+#   raw    - the answer streams line by line through bat, which only syntax
+#            highlights markdown (the `*` markers stay visible). Keeps the
+#            lowest time-to-first-token.
+# Renderers are optional: glow -> bat -> cat, so a machine without them still
+# works. Piped output (no tty) is always raw markdown so it stays parseable.
+#
 # The raw answer is copied to the clipboard (pbcopy, when available) and the
-# Q&A appended to $Q_LOG_FILE (default ~/.q_history.md).
-#   q "explain this regex"            # uses $AI_PROVIDER
+# Q&A appended to $Q_LOG_FILE (default ~/.q_history.md) as markdown - display
+# formatting never reaches either, they stay free of ANSI escapes.
+#   q "explain this regex"            # uses $AI_PROVIDER / $Q_RENDER
+#   Q_RENDER=raw q "..."              # stream this one answer instead
 #   AI_PROVIDER=gemini q "..."        # switch provider for one call
 #   AI_MODEL=groq/llama-3.3-70b-versatile q "..."   # pin a specific model
+
+# Width for the markdown renderer. glow only auto-detects the terminal width
+# when its own stdout is a tty; here it feeds the pager, where it would
+# otherwise fall back to its built-in 80 columns.
+_q_render_width() {
+    local cols="$COLUMNS"
+    if [ -z "$cols" ] && command -v tput > /dev/null 2>&1; then
+        cols="$(tput cols 2>/dev/null)"
+    fi
+    echo "${cols:-$Q_FALLBACK_WIDTH}"
+}
+
+# Display a completed answer: render markdown if we can, degrade if we cannot.
+_q_show_pretty() {
+    local answer="$1"
+    if command -v glow > /dev/null 2>&1; then
+        PAGER="$Q_PAGER" glow --width "$(_q_render_width)" --pager "$answer"
+    elif command -v bat > /dev/null 2>&1; then
+        bat --style=plain --language=md --paging=always --pager="$Q_PAGER" "$answer"
+    else
+        cat "$answer"
+    fi
+}
+
+# Filter that highlights the answer as it streams in (stdin -> stdout).
+_q_show_raw() {
+    if command -v bat > /dev/null 2>&1; then
+        bat --style=plain --language=md --paging=always --pager="$Q_PAGER"
+    else
+        cat
+    fi
+}
+
 q() {
     local model="$AI_MODEL"
     if [ -z "$model" ]; then
