@@ -158,15 +158,6 @@
             "timeout": 5
           }
         ]
-      },
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "if [[ \"$TOOL_INPUT_file_path\" == *.md ]]; then open -a 'MacDown 3000' \"$TOOL_INPUT_file_path\" 2>/dev/null; fi"
-          }
-        ]
       }
     ],
     "UserPromptSubmit": [
