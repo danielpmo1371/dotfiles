@@ -1409,3 +1409,43 @@ Leftover for the user to close (No-Delete Rule): `tmux kill-session -t tui-verif
 
 ### Status
 VERIFIED
+
+---
+
+## Session 2026-09-21 (cont.) — move Claude's `Ctrl+E` to `Ctrl+F`
+
+### Why
+tmux prefix is `C-e` and `tmux.conf:67 bind C-e copy-mode` overrides
+`:12 bind C-e send-prefix`, so a literal `Ctrl+E` can never reach Claude.
+Claude's `transcript:toggleShowAll` defaults to `ctrl+e` (context `Transcript`),
+i.e. permanently unreachable in this setup.
+
+### Change
+New `config/claude/keybindings.json`, context `Transcript`:
+`"ctrl+e": null` (unbind) + `"ctrl+f": "transcript:toggleShowAll"`.
+Both halves are required — user bindings are additive, so a move needs the
+explicit unbind.
+
+Registered in `installers/claude.sh` `CLAUDE_FILES` so it is symlinked like the
+other Claude config. Symlink created through the real code path
+(`link_target_files "claude" "$HOME/.claude" "keybindings.json"`), not by hand.
+
+### Collateral (accepted, flagged to user)
+`ctrl+f` was `scroll:fullPageDown` in the same `Transcript` context. The user
+binding is appended after defaults and now shadows it. `space` remains bound to
+`scroll:fullPageDown`, so page-down in the transcript still works.
+
+### Verification (evidence)
+`CLAUDE_CODE_EXIT_AFTER_FIRST_RENDER=1 claude --debug` under a PTY, debug log
+`~/.claude/debug/6084a3e2-….txt`:
+- `[keybindings] Loaded 2 user bindings from /home/dan/.claude/keybindings.json`
+- `[keybindings] KeybindingSetup initialized with 230 bindings, 0 warnings`
+- `[keybindings] Watching for changes to …` (hot-reloads, no restart needed)
+Also `python3 -m json.tool` clean and `bash -n installers/claude.sh` clean.
+Pre-existing unrelated errors in that log: github MCP `GITHUB_PERSONAL_ACCESS_TOKEN`.
+
+### Still NOT changed
+`config/tmux/tmux.conf:12` `bind C-e send-prefix` remains dead code.
+
+### Status
+VERIFIED

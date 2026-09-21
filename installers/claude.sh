@@ -14,6 +14,7 @@ source "$DOTFILES_ROOT/lib/install-common.sh"
 CLAUDE_FILES=(
     "CLAUDE.md"
     "settings.json"
+    "keybindings.json"
     "commands"
     "skills"
     "scripts"
