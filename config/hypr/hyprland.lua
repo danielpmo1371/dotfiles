@@ -263,7 +263,7 @@ hl.bind(mainMod .. " + M", hl.dsp.exit())
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))
 
 -- Floating windows take 85% of the monitor's usable area, centred.
-local floatRatio = 0.85
+local floatRatio = 0.95
 
 -- monitor.width/height are physical pixels, but windows are sized in logical
 -- ones and monitor.reserved is already logical -- so scale before subtracting.
