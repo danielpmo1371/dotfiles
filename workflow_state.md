@@ -80,10 +80,52 @@ well-formed (every line parses). tmux kill-* sends SIGHUP; at shutdown each
 path already delivers a graceful signal with ~75× the grace needed — the
 requested interception layer guards a failure that does not occur.
 
-Not yet closed (agent running): does the pane PRINT `claude --resume <id>` on a
-signal exit? `tmux-restart.sh` saves pane CONTENTS via tmux-resurrect so `cres` /
-prefix+R can scrape that hint. If signals exit silently, the `/exit` dance is
-still load-bearing for workspace restore even though session resumability is fine.
+### Hint loss — the one real gap, now FIXED (`8e0ffb8`)
+
+Signals DO print `claude --resume <id>` (identical for /exit, SIGTERM, SIGHUP;
+all match the cres scraper). Mid-tool-call SIGTERM is also clean: exits ~2s,
+62/62 transcript lines parse, no orphaned children, and the resumed session
+narrates the interruption instead of wedging on the dangling `tool_use`.
+
+But the REAL shutdown path loses the hint. tmux already puts every pane in a
+`tmux-spawn-*.scope` (`KillMode=control-group`), so this was tested for real via
+`systemctl --user stop`, not simulated:
+
+| | scope stop | control: single-PID SIGTERM |
+|---|---|---|
+| Exit | 1.18s / 1.07s (`Result=success`, no SIGKILL) | ~3s |
+| SessionEnd | fired | fired |
+| Resumable | yes | yes |
+| Hint in pane | **NO** | YES |
+| `cres` | **fails** | works |
+
+Cause: control-group signals the pane's SHELL too. Shell exits first, tmux stops
+rendering, claude's hint (~1s later) has nowhere to go. Claude shut down fine.
+
+Compounding: a RUNNING claude is in alt-screen, which has no scrollback. Verified
+`~/.local/share/tmux/resurrect/pane_contents.tar.gz` (current, 23 panes, all 5
+sessions): **zero** resume hints. So continuum's 15-min autosave can never
+capture one; only tmux-restart.sh's exit→settle→save ordering can.
+
+Fix chosen: `cres` falls back to `~/.claude/projects/<cwd with / as ->/<id>.jsonl`
+(filename IS the session id, newest wins). Scrollback still takes precedence
+because it is pane-accurate; the fallback is directory-scoped and says so on
+stderr. Works after reboot, crash, SIGKILL and power loss — none of which a
+shutdown drain could cover. No new processes, no systemd ordering.
+
+`tests/test-cres-fallback.sh`: 16/16 under bash AND zsh, hermetic (fake HOME,
+isolated tmux socket, claude stubbed). It caught two real bugs during
+development: zsh `nomatch` erroring on an unmatched glob, and `cdang` being an
+ALIAS (expanded at function-parse time, so it cannot be stubbed after sourcing;
+bash also needs `expand_aliases` non-interactively).
+
+### Not done (deliberately)
+No shutdown-interception layer: nothing tested ever became non-resumable, so it
+would guard a failure that does not occur. `tmux-restart.sh` left as-is — its
+`/exit` dance is redundant as to SIGNAL TYPE (SIGTERM is equivalent and faster)
+but its ORDERING and TARGETING are load-bearing: claude must exit before the
+resurrect save, and only claude may be signalled, or the pane shell dies first
+and the hint is lost.
 
 Systemd trap worth remembering: `kitty-*.scope` and every `tmux-spawn-*.scope`
 already declare `Before=shutdown.target` + `Conflicts=shutdown.target`, so a
