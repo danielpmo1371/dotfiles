@@ -1120,3 +1120,37 @@ State.Status = NEEDS_PLAN_APPROVAL
   decisive assertion "pretty path shows no literal `**`" has NOT run. Reported as skipped, not green.
 - GAP: no Groq key on this machine, so nothing was verified against a live Groq answer.
 State.Status = VERIFIED_EXCEPT_GLOW
+
+## Log — 2026-09-21 Hyprland Alt+Tab window cycling
+
+Request: "add alt+tab to hyprland". Scope kept to `config/hypr/hyprland.lua` (symlinked to
+`~/.config/hypr`), no unrelated edits.
+
+### Change
+`hl.bind("ALT + Tab")` / `hl.bind("ALT + SHIFT + Tab")` -> a shared `cycleWindows(forward)`
+closure dispatching `hl.dsp.window.cycle_next({ next = forward })` then
+`hl.dsp.window.bring_to_top()` (cycle_next only focuses; floating windows stay buried without
+bring_to_top).
+
+### Keyboard-swap caveat (documented inline, do not "fix")
+`input.kb_options = "ctrl:swap_lalt_lctl"` means the ALT modifier is emitted by the *physical
+left Ctrl* key, not the key labelled Alt. Binding the switcher on CTRL instead would shadow every
+in-app tab switcher (browsers, terminals), so it stays on ALT.
+
+### Sources
+Hyprland 0.56.2. API confirmed against the official wiki via Context7 (`/hyprwm/hyprland-wiki`):
+`cycle_next({ window?, next?, tiled?, floating? })`, and the wiki's own Alt+Tab snippet
+(cycle_next + bring_to_top). Cross-checked against `/usr/share/hypr/stubs/hl.meta.lua`.
+
+### Verification (evidence)
+- `luac -p config/hypr/hyprland.lua` -> LUA SYNTAX OK.
+- `hyprctl reload` -> ok, no config error.
+- `hyprctl binds` -> two Tab binds registered: modmask 8 (ALT) and modmask 9 (ALT|SHIFT).
+- Direction proven live with 3 scratch kitty windows on ws10:
+  `next = true` -> A->B->C->A; `next = false` -> C->B->A->C. Opposite directions, as intended.
+- Control run: `cycle_next({ nextt = true })` also returns `ok` -> unknown keys are silently
+  ignored, so an `ok` alone proves nothing. Hence the 3-window ordering test above.
+- Scratch windows terminated, ws10 empty, focus restored to ws1 (pre-test state).
+- GAP (not a pass): the keypress path itself was not simulated -- no wtype/ydotool on this box.
+  Verified bind registration + dispatcher behaviour, not a synthetic ALT+Tab keystroke.
+State.Status = VERIFIED_EXCEPT_KEYSTROKE_SIM

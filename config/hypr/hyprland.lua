@@ -28,6 +28,7 @@ hl.monitor({
 local terminal    = "kitty"
 local fileManager = "dolphin"
 local menu        = "wofi --show drun"
+local browser     = "zen-browser"
 
 
 -------------------
@@ -260,9 +261,44 @@ local closeWindowBind = hl.bind(mainMod .. " + C", hl.dsp.window.close())
 -- closeWindowBind:set_enabled(false)
 hl.bind(mainMod .. " + M", hl.dsp.exit())
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))
-hl.bind(mainMod .. " + V", hl.dsp.window.float({ action = "toggle" }))
-hl.bind(mainMod .. " + R", hl.dsp.exec_cmd(menu))
-hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
+
+-- Floating windows take 85% of the monitor's usable area, centred.
+local floatRatio = 0.85
+
+-- monitor.width/height are physical pixels, but windows are sized in logical
+-- ones and monitor.reserved is already logical -- so scale before subtracting.
+local function usableSize(monitor)
+    local w, h = monitor.width / monitor.scale, monitor.height / monitor.scale
+    if monitor.transform % 2 == 1 then -- 90/270 rotation swaps the axes
+        w, h = h, w
+    end
+    local r = monitor.reserved
+    return w - r.left - r.right, h - r.top - r.bottom
+end
+
+hl.bind(mainMod .. " + V", function()
+    local win = hl.get_active_window()
+    if not win then return end
+
+    local wasFloating = win.floating
+    hl.dispatch(hl.dsp.window.float({ action = wasFloating and "disable" or "enable" }))
+
+    -- Only size on the way *into* float: resizing a tiled window would skew the
+    -- dwindle split, and both resize and center reject fullscreen windows.
+    if wasFloating or win.fullscreen ~= 0 then return end
+
+    local monitor = win.monitor or hl.get_active_monitor()
+    if not monitor then return end
+
+    local w, h = usableSize(monitor)
+    hl.dispatch(hl.dsp.window.resize({ x = math.floor(w * floatRatio), y = math.floor(h * floatRatio) }))
+    hl.dispatch(hl.dsp.window.center()) -- after resize: it centres the goal size
+end)
+
+hl.bind(mainMod .. " + P", hl.dsp.exec_cmd(menu))
+hl.bind(mainMod .. " + W", hl.dsp.exec_cmd(browser))
+hl.bind(mainMod .. " + D", hl.dsp.exec_cmd("google-chrome-stable"))
+-- hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
 -- hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))    -- dwindle only
 
 -- Move focus with mainMod + arrow keys
@@ -274,6 +310,22 @@ hl.bind(mainMod .. " + up",    hl.dsp.focus({ direction = "up" }))
 hl.bind(mainMod .. " + k",    hl.dsp.focus({ direction = "up" }))
 hl.bind(mainMod .. " + down",  hl.dsp.focus({ direction = "down" }))
 hl.bind(mainMod .. " + j",  hl.dsp.focus({ direction = "down" }))
+
+-- Alt+Tab cycles the windows of the active workspace (SHIFT reverses).
+-- Careful with the ctrl:swap_lalt_lctl kb_option above: the ALT modifier is
+-- emitted by the *physical left Ctrl* key, not the key labelled Alt. Putting
+-- the switcher on CTRL instead would shadow every in-app tab switcher
+-- (browsers, terminals), so it stays on ALT.
+local function cycleWindows(forward)
+    return function()
+        hl.dispatch(hl.dsp.window.cycle_next({ next = forward }))
+        -- cycle_next only focuses; floating windows stay buried without this.
+        hl.dispatch(hl.dsp.window.bring_to_top())
+    end
+end
+
+hl.bind("ALT + Tab",         cycleWindows(true))
+hl.bind("ALT + SHIFT + Tab", cycleWindows(false))
 
 -- Switch workspaces with mainMod + [0-9]
 -- Move active window to a workspace with mainMod + SHIFT + [0-9]
@@ -289,8 +341,10 @@ hl.bind(mainMod .. " + SHIFT + S", hl.dsp.window.move({ workspace = "special:mag
 
 -- Scroll through existing workspaces with mainMod + scroll (and SHIFT + h/l)
 hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }))
-hl.bind(mainMod .. " + SHIFT + l", hl.dsp.focus({ workspace = "e+1" }))
+hl.bind(mainMod .. " + SHIFT + l", hl.dsp.focus({ workspace = "+1" }))
+hl.bind(mainMod .. " + SHIFT + right", hl.dsp.focus({ workspace = "+1" }))
 hl.bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "e-1" }))
+hl.bind(mainMod .. " + SHIFT + left",   hl.dsp.focus({ workspace = "e-1" }))
 hl.bind(mainMod .. " + SHIFT + h",   hl.dsp.focus({ workspace = "e-1" }))
 
 -- Move/resize windows with mainMod + LMB/RMB and dragging
@@ -299,7 +353,7 @@ hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
 
 -- Resize current window: enter the `resize` submap with mainMod + SHIFT + R
 -- (mainMod + R is the app launcher)
-hl.bind(mainMod .. " + SHIFT + R", hl.dsp.submap("resize"))
+hl.bind(mainMod .. " + R", hl.dsp.submap("resize"))
 
 -- Start the `resize` submap
 hl.define_submap("resize", function()
