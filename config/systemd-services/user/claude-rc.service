@@ -1,0 +1,19 @@
+[Unit]
+  Description=Claude Code Remote Control
+  After=network-online.target
+  Wants=network-online.target
+
+  [Service]
+  Type=simple
+  WorkingDirectory=%h/repos
+  # Start through a login shell so it gets your PATH and env (git, node, az, secrets, etc.)
+  ExecStart=/bin/zsh -lc 'exec %h/.local/bin/claude remote-control --name %H-repos'
+  Restart=on-failure
+  RestartSec=10
+  # Keep logs in the journal
+  StandardOutput=journal
+  StandardError=journal
+
+  [Install]
+  WantedBy=default.target
+
