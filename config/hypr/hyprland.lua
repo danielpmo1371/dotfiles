@@ -43,7 +43,7 @@ local browser     = "google-chrome-stable"
 -- hl.on("hyprland.start", function ()
 --   hl.exec_cmd(terminal)
 --   hl.exec_cmd("nm-applet")
---   hl.exec_cmd("waybar & hyprpaper & firefox")
+hl.exec_cmd("wayle & hyprpaper & zen-browser")
 -- end)
 
 
@@ -107,8 +107,8 @@ hl.config({
         rounding_power = 2,
 
         -- Change transparency of focused and unfocused windows
-        active_opacity   = 1.0,
-        inactive_opacity = 1.0,
+        active_opacity   = 0.9,
+        inactive_opacity = 0.7,
 
         shadow = {
             enabled      = true,
@@ -261,6 +261,14 @@ local closeWindowBind = hl.bind(mainMod .. " + C", hl.dsp.window.close())
 -- closeWindowBind:set_enabled(false)
 hl.bind(mainMod .. " + M", hl.dsp.exit())
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))
+hl.bind(mainMod .. " + P", hl.dsp.exec_cmd(menu))
+hl.bind(mainMod .. " + W", hl.dsp.exec_cmd(browser))
+hl.bind(mainMod .. " + S", hl.dsp.exec_cmd("zen-browser"))
+hl.bind(mainMod .. " + space", function()
+    hl.plugin.hyprexpo.expo("toggle")
+end)
+-- hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
+-- hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))    -- dwindle only
 
 -- Floating windows take 85% of the monitor's usable area, centred.
 local floatRatio = 0.95
@@ -295,11 +303,6 @@ hl.bind(mainMod .. " + V", function()
     hl.dispatch(hl.dsp.window.center()) -- after resize: it centres the goal size
 end)
 
-hl.bind(mainMod .. " + P", hl.dsp.exec_cmd(menu))
-hl.bind(mainMod .. " + W", hl.dsp.exec_cmd(browser))
-hl.bind(mainMod .. " + D", hl.dsp.exec_cmd("google-chrome-stable"))
--- hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
--- hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))    -- dwindle only
 
 -- Move focus with mainMod + arrow keys
 hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))
@@ -334,6 +337,12 @@ for i = 1, 10 do
     hl.bind(mainMod .. " + " .. key,             hl.dsp.focus({ workspace = i}))
     hl.bind(mainMod .. " + SHIFT + " .. key,     hl.dsp.window.move({ workspace = i }))
 end
+
+-- Toggle back and forth between the current and the last-focused workspace
+-- (cmd-tab feel). "previous" is global; "previous_per_monitor" would scope it
+-- to the active monitor. SUPER is untouched by the ctrl:swap_lalt_lctl option
+-- above, and Tab is otherwise only bound with CTRL (window cycling).
+hl.bind(mainMod .. " + Tab", hl.dsp.focus({ workspace = "previous" }))
 
 -- Show the current workspace number (no status bar is running).
 -- hyprctl notify args: <icon> <duration_ms> <color> <message>; -1 = no icon, 0 = default color.
@@ -447,4 +456,22 @@ hl.window_rule({
 
     move  = "20 monitor_h-120",
     float = true,
+})
+
+-- Floating windows get a thicker, contrasting border so they read as distinct
+-- from the tiled cyan/green gradient set in `general.col` above. `border_size`
+-- and `border_color` are *dynamic* effects: Hyprland re-evaluates them when a
+-- window's float state changes, so the SUPER+V toggle applies and reverts this
+-- live. The two-colour string is `<active> <inactive>` -- a gradient table
+-- ({ colors = ..., angle = ... }) would only set the active colour.
+local floatBorderSize     = 3
+local floatBorderActive   = "rgb(FF8800)"
+local floatBorderInactive = "rgb(553300)"
+
+hl.window_rule({
+    name  = "floating-accent-border",
+    match = { float = true },
+
+    border_size  = floatBorderSize,
+    border_color = floatBorderActive .. " " .. floatBorderInactive,
 })
