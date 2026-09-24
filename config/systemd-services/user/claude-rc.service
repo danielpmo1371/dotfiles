@@ -6,12 +6,13 @@
   [Service]
   Type=simple
   WorkingDirectory=%h/repos
-  # Start through a login shell so it gets your PATH and env (git, node, az, secrets, etc.)
-  ExecStart=/bin/zsh -lc 'exec %h/.local/bin/claude remote-control --name %H-repos'
+  # Interactive login shell (-i) so ~/.zshrc runs and exports PATH, secrets, AI_PROVIDER, etc.
+  # A plain -l shell only reads ~/.zprofile/~/.zlogin, which don't exist here.
+  ExecStart=/bin/zsh -lic 'exec %h/.local/bin/claude remote-control --name %H-repos'
   Restart=on-failure
   RestartSec=10
-  # Keep logs in the journal
-  StandardOutput=journal
+  # stdout is the TUI redrawing every second (~500k journal lines/day); errors go to stderr
+  StandardOutput=null
   StandardError=journal
 
   [Install]
