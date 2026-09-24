@@ -2,7 +2,7 @@
 
 # Test harness for dotfiles installers
 # Usage: ./tests/test-installer.sh <component|all>
-# Components: tools, secrets, terminals, fonts, tmux, bash, zsh, config-dirs, claude, mcp
+# Components: tools, secrets, terminals, fonts, tmux, bash, zsh, config-dirs, claude, mcp, services
 
 set -euo pipefail
 
@@ -184,6 +184,43 @@ test_claude() {
     assert_valid_json "$HOME/.claude/settings.json" "claude settings JSON"
 }
 
+# claude-rc Remote Control service. The installer skips when Claude Code is
+# absent and only links (no enable) without a systemd user bus (Docker/CI), so
+# those cases are SKIPs, not failures.
+test_services() {
+    echo -e "\n${BLUE}=== Testing: services ===${NC}"
+    if [ ! -x "$HOME/.local/bin/claude" ]; then
+        echo -e "  ${YELLOW}SKIP${NC} Claude Code not installed — installer skips claude-rc"
+        SKIP=$((SKIP + 1))
+        return
+    fi
+
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        local label="com.nuvemlabs.claude-rc"
+        assert_file_exists "$HOME/Library/LaunchAgents/$label.plist" "claude-rc LaunchAgent plist"
+        if launchctl print "gui/$(id -u)/$label" &>/dev/null; then
+            echo -e "  ${GREEN}PASS${NC} $label loaded"
+            PASS=$((PASS + 1))
+        else
+            echo -e "  ${RED}FAIL${NC} $label not loaded"
+            FAIL=$((FAIL + 1))
+        fi
+        return
+    fi
+
+    local unit="claude-rc.service"
+    assert_file_exists "$HOME/.config/systemd/user/$unit" "claude-rc systemd unit"
+    if ! command -v systemctl &>/dev/null || ! systemctl --user show-environment &>/dev/null; then
+        echo -e "  ${YELLOW}SKIP${NC} no systemd user session — enable not checked"
+        SKIP=$((SKIP + 1))
+    elif systemctl --user is-enabled "$unit" &>/dev/null; then
+        echo -e "  ${GREEN}PASS${NC} $unit enabled"
+        PASS=$((PASS + 1))
+    else
+        echo -e "  ${RED}FAIL${NC} $unit not enabled"
+        FAIL=$((FAIL + 1))
+    fi
+}
 test_mcp() {
     echo -e "\n${BLUE}=== Testing: mcp ===${NC}"
     # MCP merges config into ~/.claude.json or similar
@@ -225,6 +262,7 @@ case "$component" in
     config-dirs) test_config_dirs ;;
     claude)      test_claude ;;
     mcp)         test_mcp ;;
+    services)    test_services ;;
     all)
         test_tools
         test_secrets
@@ -236,10 +274,11 @@ case "$component" in
         test_config_dirs
         test_claude
         test_mcp
+        test_services
         ;;
     *)
         echo "Unknown component: $component"
-        echo "Usage: $0 <tools|secrets|terminals|fonts|tmux|bash|zsh|config-dirs|claude|mcp|all>"
+        echo "Usage: $0 <tools|secrets|terminals|fonts|tmux|bash|zsh|config-dirs|claude|mcp|services|all>"
         exit 1
         ;;
 esac

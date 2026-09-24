@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Claude Code Remote Control (claude-rc) — macOS LaunchAgent.
+  macOS counterpart of config/systemd-services/user/claude-rc.service.
+  Installed (copied, not symlinked) to ~/Library/LaunchAgents by installers/services.sh.
+
+  launchd does not expand ~ or $HOME in WorkingDirectory / StandardOutPath /
+  StandardErrorPath, so the login shell does the redirects (first, so a failing cd is logged too)
+  and the cd instead.
+  zsh -lic sources ~/.zshrc so secrets are exported. stdout is discarded because
+  the remote-control TUI redraws every second; errors go to
+  ~/Library/Logs/claude-rc.log.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nuvemlabs.claude-rc</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/zsh</string>
+        <string>-lic</string>
+        <string>exec &gt;/dev/null 2&gt;&gt;"$HOME/Library/Logs/claude-rc.log"; cd "$HOME/repos" &amp;&amp; exec "$HOME/.local/bin/claude" remote-control --name "$(hostname -s)-repos"</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <!-- Restart only on non-zero exit (systemd Restart=on-failure) -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <!-- Minimum seconds between restarts (systemd RestartSec=10) -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+</dict>
+</plist>

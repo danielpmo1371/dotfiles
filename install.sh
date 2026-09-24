@@ -23,6 +23,7 @@
 #   9. config-dirs.sh - Symlink config directories (nvim) - no dependencies
 #   10. claude.sh     - Claude Code CLI + settings - requires: node, npm
 #  11. mcp.sh        - MCP configuration - requires: jq, node, npm
+#  12. services.sh   - claude-rc Remote Control service (systemd/launchd) - requires: ~/.local/bin/claude (skips if absent)
 
 set -e
 
@@ -172,6 +173,7 @@ CLI MODE
   ./install.sh --claude     Install Claude Code CLI
   ./install.sh --mcp        Configure MCP servers
   ./install.sh --llm        Install llm CLI + Groq plugin (fast `q` query)
+  ./install.sh --services   Install claude-rc Remote Control service
 
 OPTIONS
   --dialog    Force dialog mode
@@ -230,7 +232,8 @@ select_components() {
         "mcp:MCP server configuration:off" \
         "memory-hooks:MCP memory service hooks:off" \
         "logging-hooks:Session logging hooks:off" \
-        "claude-azdo-pipeline-hooks:Claude AZDO pipeline guard hooks:off") || result=""
+        "claude-azdo-pipeline-hooks:Claude AZDO pipeline guard hooks:off" \
+        "services:claude-rc Remote Control service:off") || result=""
 
     # Parse space-separated result into array
     read -ra SELECTED_COMPONENTS <<< "$result"
@@ -372,6 +375,13 @@ get_component_targets() {
             ;;
         casks)
             echo "install:::macOS GUI apps from config/brew/Brewfile (brew bundle)"
+            ;;
+        services)
+            if [[ "$OSTYPE" == darwin* ]]; then
+                echo "install:::claude-rc LaunchAgent (copied to ~/Library/LaunchAgents)"
+            else
+                echo "symlink:$root/config/systemd-services:$HOME/.config/systemd"
+            fi
             ;;
     esac
 }
@@ -529,6 +539,7 @@ run_dialog_installation() {
             memory-hooks) run_installer "memory-hooks.sh" "main" ;;
             logging-hooks) run_installer "logging-hooks.sh" "main" ;;
             claude-azdo-pipeline-hooks) run_installer "claude-azdo-pipeline-hooks.sh" "main" ;;
+            services)     run_installer "services.sh" "install_services" ;;
             *)            continue ;;
         esac
         echo ""
@@ -608,6 +619,7 @@ show_help() {
     echo "  --memory-hooks Install MCP memory hooks"
     echo "  --logging-hooks Install session logging hooks"
     echo "  --claude-azdo-pipeline-hooks  Install Claude AZDO pipeline guard hooks"
+    echo "  --services     Install claude-rc Remote Control service (systemd/launchd)"
     echo ""
     echo "Backup & Restore:"
     echo "  --restore      Interactive restore from backup"
@@ -725,6 +737,9 @@ install_claude_handover() {
 
     _run_step "claude (cli)"    "claude.sh" "install_claude_code"
     _run_step "claude (config)" "claude.sh" "install_claude_config"
+    # Remote Control background service — last, it needs the Claude Code CLI
+    # (self-skips when ~/.local/bin/claude is absent).
+    _run_step "services"        "services.sh" "install_services"
 
     local end; end=$(date +%s)
     log_info "⏱  Phase 2 total: $(format_duration $((end - start)))"
@@ -897,6 +912,14 @@ main() {
                     log_warn "Claude AZDO pipeline hooks installation failed, continuing..."
                     ((failures++))
                     failed_components+="  - claude-azdo-pipeline-hooks\n"
+                }
+                ;;
+            --services)
+                # claude-rc Remote Control service (skips if Claude Code is absent)
+                run_installer "services.sh" "install_services" || {
+                    log_warn "Services installation failed, continuing..."
+                    ((failures++))
+                    failed_components+="  - services\n"
                 }
                 ;;
             --all)

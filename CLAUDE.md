@@ -32,6 +32,7 @@ Personal dotfiles repository with modular installation system. Supports macOS an
 ./install.sh --claude       # Claude Code CLI and settings (requires: node, npm)
 ./install.sh --claude-azdo-pipeline-hooks  # Pipeline guard hooks (auto-run by --claude)
 ./install.sh --llm          # llm CLI + Groq plugin, powers the `q` quick-query (requires: python3)
+./install.sh --services     # claude-rc Remote Control service: systemd (Linux) / launchd (macOS) (requires: Claude Code)
 
 # After shell config changes
 source ~/.zshrc  # or ~/.bashrc
@@ -60,7 +61,7 @@ config/              # Configuration files organized by tool
 ### Key Patterns
 
 **Installation Flow**: `install.sh` dispatches to `installers/*.sh` scripts which source `lib/install-common.sh` for utilities. Order matters for `--all`:
-1. tools.sh → casks.sh (macOS only) → secrets.sh → terminals.sh → fonts.sh → tmux.sh → bash.sh → zsh.sh → config-dirs.sh → claude.sh
+1. tools.sh → casks.sh (macOS only) → secrets.sh → terminals.sh → fonts.sh → tmux.sh → bash.sh → zsh.sh → config-dirs.sh → claude.sh → services.sh
 
 **Casks (macOS GUI apps)**: Declared in `config/brew/Brewfile`, installed by `installers/casks.sh` via `brew bundle`. To add an app, add a `cask "name"` line to the Brewfile and run `./install.sh --casks`. No-op on Linux.
 
@@ -72,6 +73,8 @@ config/              # Configuration files organized by tool
 **Shell Config**: Modular design where `~/.zshrc` and `~/.bashrc` source shared files from `config/shell/` (env.sh, path.sh, aliases.sh, git.sh, tmux.sh).
 
 **Quick AI query (`q`)**: The `q` function (`config/shell/aliases.sh`) is a one-shot query over the `llm` CLI, optimized for low time-to-first-token (defaults to Groq's `llama-3.1-8b-instant`). Provider is a one-var switch: `AI_PROVIDER` in `env.sh` (`groq|gemini|openai|claude`) maps to a model id in the function; `AI_MODEL` pins a specific id. The Groq key lives in the keychain (`secret_set GROQ_API_KEY ...`) and is exported as `LLM_GROQ_KEY` by `secrets.sh`. Installed via `./install.sh --llm` (standalone, not part of `--all` since it needs an API key).
+
+**Remote Control service (`claude-rc`)**: `installers/services.sh` (`--services`, last step of `--all`) runs `claude remote-control` in `~/repos` as a background service. Linux: systemd user unit in `config/systemd-services/`, linked as `~/.config/systemd` (if that is a real dir or a foreign symlink, only `user/claude-rc.service` is linked into it), then `enable --now`; linger is suggested, never enabled automatically. Without a systemd user bus (Docker/CI) it links but does not enable. macOS: LaunchAgent `config/launchd/com.nuvemlabs.claude-rc.plist`, copied (not linked — symlinked agents are unreliable) to `~/Library/LaunchAgents` and bootstrapped into `gui/<uid>`; runs only while logged in, errors in `~/Library/Logs/claude-rc.log`. Skipped entirely when `~/.local/bin/claude` is absent. Both run via `zsh -lic` so secrets are exported, and discard stdout because the TUI redraws every second (errors go to stderr).
 
 **Package Manager**: Auto-detects available managers, prompts user on first run, caches choice in `~/.dotfiles_pkg_manager`.
 
