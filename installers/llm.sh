@@ -73,7 +73,7 @@ install_llm() {
     fi
 
     echo ""
-    log_info "Default quick-query model: groq/llama-3.1-8b-instant (AI_PROVIDER=groq)"
+    log_info "Default quick-query model: groq/openai/gpt-oss-20b (AI_PROVIDER=groq)"
 }
 
 # Run if executed directly
