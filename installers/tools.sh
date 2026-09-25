@@ -83,6 +83,8 @@ install_tools() {
         "zoxide|zoxide|zoxide|"
         "fzf|fzf|fzf|"
         "jq|jq|jq|"
+        # Pipe viewer; drives `tmprogress` in config/shell/aliases.sh
+        "pv|pv|pv|"
         "htop|htop|htop|"
         "btop|btop|btop|"
         "lazydocker|lazydocker|lazydocker|"
