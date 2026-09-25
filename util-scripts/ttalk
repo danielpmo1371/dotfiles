@@ -2,6 +2,8 @@
 # ttalk — speak a short message aloud (task-completion notifications).
 # Replaces the former Deepgram-based termtalk project: local TTS needs no
 # API key or network, so notifications can never silently die on auth.
+# Prefers Piper (neural voice, model at $PIPER_VOICE) and falls back to the
+# system engines when Piper, the model or an audio player is missing.
 # Exits 0 even with no TTS engine available — callers (Claude sessions,
 # scripts) must never fail because audio is missing.
 
@@ -10,8 +12,31 @@ set -u
 msg="$*"
 [[ -z "$msg" ]] && { echo "usage: ttalk <message>" >&2; exit 1; }
 
+play_wav() {
+    if command -v pw-play >/dev/null 2>&1; then
+        pw-play "$1"
+    elif command -v paplay >/dev/null 2>&1; then
+        paplay "$1"
+    else
+        return 1
+    fi
+}
+
+speak_piper() {
+    command -v piper-tts >/dev/null 2>&1 || return 1
+    [[ -f "${PIPER_VOICE:-}" ]] || return 1
+    local wav status
+    wav=$(mktemp "${TMPDIR:-/tmp}/ttalk.XXXXXX") || return 1
+    printf '%s' "$msg" | piper-tts -m "$PIPER_VOICE" -f "$wav" && play_wav "$wav"
+    status=$?
+    rm -f "$wav"
+    return "$status"
+}
+
 speak() {
-    if command -v say >/dev/null 2>&1; then          # macOS
+    if speak_piper; then
+        return
+    elif command -v say >/dev/null 2>&1; then        # macOS
         say "$msg"
     elif command -v espeak-ng >/dev/null 2>&1; then  # Linux
         espeak-ng "$msg"
