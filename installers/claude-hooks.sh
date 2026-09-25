@@ -5,6 +5,8 @@
 # files that settings.json references and that are NOT pipeline-specific:
 #   - destructive-ops-guard.sh (PreToolUse/Bash; enforces the No-Delete Rule)
 #   - notification.sh          (Notification; desktop notification side effect)
+#   - tmux-pane-registry.sh    (SessionStart/SessionEnd; records pane -> session
+#                               for util-scripts/tmux-claude-relaunch.sh)
 #
 # The Azure DevOps pipeline guard hooks are owned by claude-azdo-pipeline-hooks.sh.
 #
@@ -31,6 +33,7 @@ HOOKS_TARGET_DIR="$HOME/.claude/hooks"
 CLAUDE_HOOK_FILES=(
     "destructive-ops-guard.sh"
     "notification.sh"
+    "tmux-pane-registry.sh"
 )
 
 DRY_RUN=false

@@ -81,6 +81,11 @@
         "hooks": [
           {
             "type": "command",
+            "command": "$HOME/.claude/hooks/tmux-pane-registry.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
             "command": "$HOME/.claude/hooks/logging/session-goal-tracker.sh",
             "timeout": 5
           },
@@ -95,6 +100,11 @@
     "SessionEnd": [
       {
         "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/tmux-pane-registry.sh",
+            "timeout": 5
+          },
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/logging/session-goal-tracker.sh",

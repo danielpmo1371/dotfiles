@@ -371,6 +371,7 @@ get_component_targets() {
         claude-hooks)
             echo "symlink:$root/config/claude/hooks/destructive-ops-guard.sh:$HOME/.claude/hooks/destructive-ops-guard.sh"
             echo "symlink:$root/config/claude/hooks/notification.sh:$HOME/.claude/hooks/notification.sh"
+            echo "symlink:$root/config/claude/hooks/tmux-pane-registry.sh:$HOME/.claude/hooks/tmux-pane-registry.sh"
             ;;
         fonts)
             echo "download:::Nerd Fonts (MesloLGS NF)"
