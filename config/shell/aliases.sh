@@ -56,6 +56,7 @@ alias setup-vim='nvim ~/.config/nvim/init.lua'
 alias setup-ssh='nvim ~/.ssh/config'
 alias setup-dns='nvim /etc/resolv.conf'
 alias setup-alias="nvim $DOTFILES_DIR/config/shell/aliases.sh"
+alias setup-hyprland="nvim ~/.config/hypr/hyprland.lua"
 alias setup-tmux='nvim ~/.tmux.conf'
 alias setup-ghostty='nvim ~/.config/ghostty/config'
 alias setup-claude='nvim ~/.claude/settings.json'
@@ -63,6 +64,7 @@ alias setup-claude-prompt='nvim ~/.claude/CLAUDE.md'
 alias re-tmux='tmux source-file ~/.tmux.conf'
 alias dot='z dot'
 alias ff='fastfetch'
+alias inst='sudo pacman -S'
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Git
@@ -226,16 +228,24 @@ q() {
             *)      echo "q: unknown AI_PROVIDER '$AI_PROVIDER' (groq|gemini|openai|claude)" >&2; return 2 ;;
         esac
     fi
+    local render="${Q_RENDER:-pretty}"
+    case "$render" in
+        pretty|raw) ;;
+        *) echo "q: unknown Q_RENDER '$render' (pretty|raw)" >&2; return 2 ;;
+    esac
     if ! command -v llm >/dev/null 2>&1; then
         echo "q: 'llm' not installed -> run: ./install.sh --llm" >&2
         return 127
     fi
     local tmp
     tmp="$(mktemp)" || return 1
-    if [ -t 1 ] && command -v bat >/dev/null 2>&1; then
-        llm -m "$model" "$@" | tee "$tmp" | bat --style=plain --language=md --paging=always --pager='less -RFX'
-    else
+    if [ ! -t 1 ]; then
         llm -m "$model" "$@" | tee "$tmp"
+    elif [ "$render" = "pretty" ]; then
+        llm -m "$model" "$@" > "$tmp"
+        [ -s "$tmp" ] && _q_show_pretty "$tmp"
+    else
+        llm -m "$model" "$@" | tee "$tmp" | _q_show_raw
     fi
     if [ -s "$tmp" ]; then
         if command -v pbcopy >/dev/null 2>&1; then
