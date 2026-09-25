@@ -1960,3 +1960,51 @@ DONE on Linux — PENDING macOS run by user
 - Committed: f83912f logging-hooks double-run, f7a107a cd tty guard, 7934cc8 lazy-lock, 7e6b8b5 /wrap-up, 295c86c hook install + settings hook lines, 98071cd untrack settings.json.bak.
 - q pretty path was broken once glow landed: (1) less missing -> glow printed nothing; (2) glow 3 renders files as markdown only with a .md name, mktemp has none -> literal **. Fixed: 75620fd (less in tools.sh), c7c128d (glow via stdin, page only if Q_PAGER cmd exists; regression test), b16bb53 (CLAUDE.md q docs).
 - Left for Daniel: tmux.conf (#6 nav/battery + comment-block fix), skills/synced/, notes.md, this file (commit last).
+
+## 2026-09-25 — `q`: direct Groq API path (cut ~1.5s of llm startup)
+
+### State
+Status = NEEDS_PLAN_APPROVAL
+
+### Evidence (measured this session)
+- Groq API direct (curl, 5 runs, median): gpt-oss-20b first byte 0.31s / full 0.49s;
+  gpt-oss-120b 0.39s / 0.55s; allam-2-7b 0.38s / 0.43s. gpt-oss-20b stays the default.
+- Through `llm`: first output 1.9–2.2s for every model. `llm --version` alone = 1.59s.
+- `LLM_LOAD_PLUGINS=` / `=llm-groq` → 1.49s / 1.53s: cost is llm's own imports, not plugins.
+  So only bypassing llm removes it. Bare python3 startup = 0.02s.
+- `llama-3.1-8b-instant` no longer offered to this account (why cb8c677 switched models;
+  docs fixed in 647bcef).
+
+### Plan
+1. `config/shell/env.sh` — new knobs, no magic values in the function:
+   - `Q_BACKEND="direct"`   # direct | llm — direct only applies to AI_PROVIDER=groq
+   - `Q_GROQ_API_URL="https://api.groq.com/openai/v1/chat/completions"`
+2. `config/shell/aliases.sh` — add `_q_groq_direct MODEL PROMPT RENDER`:
+   - model id = `${model#groq/}` (llm ids are `groq/<id>`, the API wants `<id>`).
+   - request body built with `jq -n --arg` (safe quoting of any prompt text).
+   - key via `curl --config -` / header on stdin: NEVER in argv (visible in `ps`).
+   - missing `GROQ_API_KEY` → stderr hint `secret_set GROQ_API_KEY …`, return 1.
+   - pretty mode + piped output: `stream:false`, extract `.choices[0].message.content`.
+   - raw mode on a tty: `stream:true`, parse SSE `data:` lines with `jq --unbuffered -rj`
+     → keeps per-token streaming into `_q_show_raw`.
+   - HTTP/API error → print `.error.message` to stderr, non-zero exit, nothing logged.
+3. `q()` dispatch: `groq/*` model AND `Q_BACKEND=direct` AND curl+jq present → direct path;
+   otherwise unchanged llm path (gemini/openai/claude, `Q_BACKEND=llm`, missing jq).
+   Everything downstream (tee when piped, glow render, pbcopy, `~/.q_history.md`) unchanged.
+4. Tests — `tests/test-q-direct.sh`, hermetic (stub `curl` on PATH, fixture JSON/SSE):
+   non-stream parse, SSE parse, API error → stderr + rc≠0 + no history entry, missing key hint,
+   key absent from curl argv, `Q_BACKEND=llm` and non-groq provider still call llm,
+   `groq/` prefix stripped. Re-run `tests/test-q-render.sh` (must stay green).
+5. Live verification (real path, no bypass): `q "…"` pretty + `Q_RENDER=raw` + piped;
+   time first output vs llm path, 5 runs, report medians.
+6. Docs: CLAUDE.md `q` paragraph + usage comment above `q()` (Q_BACKEND toggle).
+
+### Trade-offs / rollback
+- Lost on direct path only: llm's sqlite log (`llm logs`) and llm-only flags passed through
+  `q "$@"`. q's own `~/.q_history.md` log remains. Escape hatch: `Q_BACKEND=llm q …`.
+- Rollback: set `Q_BACKEND=llm` in env.sh, or revert the commit(s). One atomic commit per step
+  group: (env+aliases+tests) then (docs).
+
+### Log
+- 647bcef docs: q default model is gpt-oss-20b (housekeeping before this work).
+- Enable link `default.target.wants/claude-rc.service` made relative (`../claude-rc.service`); verified is-enabled, enable no-op, default.target dep, service not restarted. Commit: see git log.
