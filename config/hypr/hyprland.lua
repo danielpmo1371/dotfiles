@@ -43,8 +43,12 @@ local browser     = "google-chrome-stable"
 -- hl.on("hyprland.start", function ()
 --   hl.exec_cmd(terminal)
 --   hl.exec_cmd("nm-applet")
-hl.exec_cmd("wayle & hyprpaper")
 -- end)
+-- Inside the start hook so config reloads don't spawn duplicate instances.
+hl.on("hyprland.start", function ()
+    hl.exec_cmd("wayle panel start") -- bare `wayle` only prints help
+    hl.exec_cmd("hyprpaper")
+end)
 
 
 -------------------------------
@@ -271,33 +275,28 @@ hl.bind(mainMod .. " + Q", hl.dsp.exec_cmd(terminal))
 local closeWindowBind = hl.bind(mainMod .. " + C", hl.dsp.window.close())
 -- closeWindowBind:set_enabled(false)
 hl.bind(mainMod .. " + M", hl.dsp.exit())
-hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))
+hl.bind(mainMod .. " + F", hl.dsp.exec_cmd(fileManager))
 hl.bind(mainMod .. " + P", hl.dsp.exec_cmd(menu))
-hl.bind(mainMod .. " + W", hl.dsp.exec_cmd(browser))
-hl.bind(mainMod .. " + S", hl.dsp.exec_cmd("zen-browser"))
+hl.bind(mainMod .. " + W", hl.dsp.exec_cmd("zen-browser"))
+hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(browser))
 hl.bind(mainMod .. " + space", function()
     hl.plugin.hyprexpo.expo("toggle")
 end)
-hl.bind(mainMod .. " + space", "submap", "expo")
-submaps = {
-  expo = {
-    -- binde for repeating navigation actions
-    binde = {
-        { "", "l", "workspace", "e+1" },
-        { "", "h", "workspace", "e-1" },
-        { "", "j", "workspace", "e+3" }, -- Adjust based on grid columns
-        { "", "k", "workspace", "e-3" },
-    },
-    -- Reset keys to escape the submap safely
-    bind = {
-        { "", "catchall", "hyprexpo:expo_toggle", "" },
-        { "", "catchall", "submap", "reset" },
-        { "", "escape", "hyprexpo:expo_toggle", "" },
-        { "", "escape", "submap", "reset" },
-    },
-
-  }
-}
+-- hyprexpo enters the `hyprexpo` submap itself while the overview is open and
+-- resets it on close; see docs/configuration/keyboard.md in sandwichfarm/hyprexpo.
+-- Raw digits are handled by the plugin (number_key_mode = "workspace").
+hl.define_submap("hyprexpo", function()
+    for _, nav in ipairs({
+        { key = "h", dir = "left" },  { key = "left",  dir = "left" },
+        { key = "l", dir = "right" }, { key = "right", dir = "right" },
+        { key = "k", dir = "up" },    { key = "up",    dir = "up" },
+        { key = "j", dir = "down" },  { key = "down",  dir = "down" },
+    }) do
+        hl.bind(nav.key, function() hl.plugin.hyprexpo.kb_focus(nav.dir) end)
+    end
+    hl.bind("return", function() hl.plugin.hyprexpo.kb_confirm() end)
+    hl.bind("escape", function() hl.plugin.hyprexpo.expo("cancel") end)
+end)
 -- hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
 -- hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))    -- dwindle only
 
@@ -345,11 +344,10 @@ hl.bind(mainMod .. " + k",    hl.dsp.focus({ direction = "up" }))
 hl.bind(mainMod .. " + down",  hl.dsp.focus({ direction = "down" }))
 hl.bind(mainMod .. " + j",  hl.dsp.focus({ direction = "down" }))
 
--- Alt+Tab cycles the windows of the active workspace (SHIFT reverses).
--- Careful with the ctrl:swap_lalt_lctl kb_option above: the ALT modifier is
--- emitted by the *physical left Ctrl* key, not the key labelled Alt. Putting
--- the switcher on CTRL instead would shadow every in-app tab switcher
--- (browsers, terminals), so it stays on ALT.
+-- Physical Alt+Tab cycles the windows of the active workspace (SHIFT reverses).
+-- The ctrl:swap_lalt_lctl kb_option above makes the key labelled Alt emit
+-- CTRL, so the bind is CTRL + Tab. Trade-off, accepted: apps no longer see
+-- CTRL + Tab from that key for their own tab switching.
 local function cycleWindows(forward)
     return function()
         hl.dispatch(hl.dsp.window.cycle_next({ next = forward }))
