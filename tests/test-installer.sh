@@ -116,6 +116,7 @@ test_tools() {
     assert_command_exists jq
     assert_command_exists htop
     assert_command_exists tree
+    assert_command_exists less
 }
 
 test_secrets() {

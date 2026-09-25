@@ -76,6 +76,8 @@ install_tools() {
         "rg|ripgrep|ripgrep|"
         "fd|fd|fd-find|fd"
         "bat|bat|bat|"
+        # Pager for $Q_PAGER (config/shell/env.sh); minimal Arch images lack it
+        "less|less|less|"
         "delta|git-delta|git-delta|"
         "lsd|lsd|lsd|"
         "zoxide|zoxide|zoxide|"
