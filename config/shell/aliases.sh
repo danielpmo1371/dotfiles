@@ -200,7 +200,15 @@ _q_render_width() {
 _q_show_pretty() {
     local answer="$1"
     if command -v glow > /dev/null 2>&1; then
-        PAGER="$Q_PAGER" glow --width "$(_q_render_width)" --pager "$answer"
+        # Fed on stdin: glow only renders a *file* as markdown when its name
+        # ends in .md, and mktemp names don't (BSD mktemp has no --suffix).
+        # glow execs $PAGER itself and shows nothing if it is missing, so page
+        # only when the pager's command exists.
+        if command -v "${Q_PAGER%% *}" > /dev/null 2>&1; then
+            PAGER="$Q_PAGER" glow --width "$(_q_render_width)" --pager - < "$answer"
+        else
+            glow --width "$(_q_render_width)" - < "$answer"
+        fi
     elif command -v bat > /dev/null 2>&1; then
         bat --style=plain --language=md --paging=always --pager="$Q_PAGER" "$answer"
     else

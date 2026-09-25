@@ -115,6 +115,14 @@ if command -v glow &>/dev/null; then
     else
         pass "pretty path shows no literal '**' markers"
     fi
+    # glow execs $PAGER itself and prints nothing when it is missing, so a
+    # machine without the pager must still see the answer (unpaged).
+    nopager="$(run_tty "Q_PAGER='q-test-missing-pager -R' Q_RENDER=pretty q 'x'")"
+    if printf '%s' "$nopager" | grep -q 'Panes'; then
+        pass "pretty path renders unpaged when \$Q_PAGER is not installed"
+    else
+        fail "pretty path produced nothing when \$Q_PAGER is not installed"
+    fi
 else
     skip "glow not installed — pretty-path rendering not exercised"
     # The fallback still has to work, or a glow-less machine loses `q` entirely.
