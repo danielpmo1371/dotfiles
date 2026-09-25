@@ -246,4 +246,9 @@ main() {
   log_success "Logging hooks installation complete!"
 }
 
-main "$@"
+# install.sh's run_installer() sources this file and then calls main itself, so
+# a bare `main "$@"` here ran the whole installation twice. Same guard as
+# claude-azdo-pipeline-hooks.sh and memory-hooks.sh.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
+fi
