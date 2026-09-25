@@ -244,3 +244,4 @@ alias dirstat='du -hd 1 | sort -h'
 alias dstat='dirstat'
 alias ds='dstat'
 alias timemachine-logs="/usr/bin/log show --last 15m --predicate 'subsystem == \"com.apple.TimeMachine\"' --info | grep -iE 'error|fail|interrupt' | tail -20"
+alias mntmac='sshfs daniel@dan-mac:/ ~/mnt/dan-mac'
