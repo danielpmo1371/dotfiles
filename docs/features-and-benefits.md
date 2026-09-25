@@ -39,7 +39,7 @@ Behaviour lives in the most portable layer that can implement it —
 Prefix is `C-e` (`Cmd+e` on macOS).
 
 ### Never lose state
-- **resurrect + continuum**: autosave every 15 minutes, auto-restore on tmux
+- **resurrect + continuum**: autosave every 5 minutes, auto-restore on tmux
   start, scrollback and nvim sessions included. *A reboot costs nothing.*
 - **Pane border labels**: every pane shows its index, cwd, and title on its
   border — no guessing which shell is where.
