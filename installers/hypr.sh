@@ -30,7 +30,7 @@ install_hypr() {
     # Keybinding dependencies (launcher, screenshots). Config-only installer:
     # warn, don't install — package installation stays in tools.sh territory.
     local dep missing=()
-    for dep in wofi grim slurp wl-copy; do
+    for dep in wofi grim slurp wl-copy awww jq; do
         command -v "$dep" &>/dev/null || missing+=("$dep")
     done
     if [ ${#missing[@]} -gt 0 ]; then

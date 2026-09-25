@@ -1,0 +1,104 @@
+#!/bin/bash
+# wall-next
+# Cycle the FOCUSED Hyprland monitor's wallpaper to the next/previous image,
+# with an awww transition.
+#
+# Usage:
+#   wall-next [next|prev]   (default: next)
+#
+# Bound in hyprland.lua to SUPER+SHIFT+N (next) / SUPER+SHIFT+B (prev).
+#
+# Image list = every jpg/jpeg/png/webp/gif file (case-insensitive) under
+# $WALLPAPER_DIR, `.git` dirs pruned, sorted with LC_ALL=C for a stable order
+# across runs regardless of locale. awww is the only state (no state file
+# here): the focused monitor's current image comes from `awww query -j`. If
+# it isn't set yet, or isn't one of ours, next starts at the first image and
+# prev starts at the last.
+
+set -uo pipefail
+
+WALLPAPER_DIR="${WALLPAPER_DIR:-$HOME/Pictures/walls}"
+WALL_TRANSITION="${WALL_TRANSITION:-grow}"
+WALL_TRANSITION_DURATION="${WALL_TRANSITION_DURATION:-1}"
+IMAGE_EXTENSIONS=(jpg jpeg png webp gif)
+
+notify() {
+    command -v notify-send >/dev/null 2>&1 && notify-send "wall-next" "$1"
+    echo "wall-next: $1" >&2
+}
+
+fail() {
+    notify "$1"
+    exit 1
+}
+
+# Print every image under $WALLPAPER_DIR, one per line, LC_ALL=C sorted.
+list_images() {
+    local ext find_expr=()
+    for ext in "${IMAGE_EXTENSIONS[@]}"; do
+        [ ${#find_expr[@]} -eq 0 ] || find_expr+=(-o)
+        find_expr+=(-iname "*.$ext")
+    done
+    find -L "$WALLPAPER_DIR" -name ".git" -prune -o -type f \( "${find_expr[@]}" \) -print \
+        | LC_ALL=C sort
+}
+
+main() {
+    local direction="${1:-next}"
+    case "$direction" in
+        next|prev) ;;
+        *) fail "usage: wall-next [next|prev]" ;;
+    esac
+
+    command -v awww >/dev/null 2>&1 || fail "awww not found"
+    command -v jq >/dev/null 2>&1 || fail "jq not found"
+    command -v hyprctl >/dev/null 2>&1 || fail "hyprctl not found"
+
+    local monitor
+    monitor=$(hyprctl monitors -j | jq -er '.[] | select(.focused) | .name') \
+        || fail "no focused monitor found"
+
+    local images=()
+    while IFS= read -r line; do
+        images+=("$line")
+    done < <(list_images)
+    [ ${#images[@]} -gt 0 ] || fail "no wallpapers found under $WALLPAPER_DIR"
+
+    local query
+    query=$(awww query -j 2>&1) || fail "awww-daemon is not running ($query)"
+
+    local current
+    current=$(printf '%s' "$query" \
+        | jq -er --arg m "$monitor" '.[""][]? | select(.name == $m) | .displaying.image // empty') \
+        || current=""
+
+    local count=${#images[@]}
+    local idx=-1 i
+    for i in "${!images[@]}"; do
+        if [ "${images[$i]}" = "$current" ]; then
+            idx=$i
+            break
+        fi
+    done
+
+    local target_idx
+    if [ "$idx" -eq -1 ]; then
+        if [ "$direction" = "next" ]; then
+            target_idx=0
+        else
+            target_idx=$((count - 1))
+        fi
+    elif [ "$direction" = "next" ]; then
+        target_idx=$(( (idx + 1) % count ))
+    else
+        target_idx=$(( (idx - 1 + count) % count ))
+    fi
+
+    local target="${images[$target_idx]}"
+    awww img -o "$monitor" -t "$WALL_TRANSITION" --transition-duration "$WALL_TRANSITION_DURATION" "$target" \
+        || fail "awww img failed for $target on $monitor"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi

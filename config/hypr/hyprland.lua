@@ -47,7 +47,7 @@ local browser     = "google-chrome-stable"
 -- Inside the start hook so config reloads don't spawn duplicate instances.
 hl.on("hyprland.start", function ()
     hl.exec_cmd("wayle panel start") -- bare `wayle` only prints help
-    hl.exec_cmd("hyprpaper")
+    hl.exec_cmd("awww-daemon") -- restores the last image per output from its own cache
 end)
 
 
@@ -279,6 +279,9 @@ hl.bind(mainMod .. " + F", hl.dsp.exec_cmd(fileManager))
 hl.bind(mainMod .. " + P", hl.dsp.exec_cmd(menu))
 hl.bind(mainMod .. " + W", hl.dsp.exec_cmd("zen-browser"))
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(browser))
+-- Cycle the focused monitor's wallpaper (awww); exec env may lack PATH, so absolute path.
+hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/wall-next next"))
+hl.bind(mainMod .. " + SHIFT + B", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/wall-next prev"))
 hl.bind(mainMod .. " + space", function()
     hl.plugin.hyprexpo.expo("toggle")
 end)

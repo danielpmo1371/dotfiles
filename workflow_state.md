@@ -1,5 +1,63 @@
 # Workflow State
 
+## ACTIVE: Hyprland wallpapers — awww + per-monitor next/prev (2026-09-25)
+
+### State
+- **Status**: COMPLETE (verified: 13/13 tests, live cycle on eDP-1; physical keypress pending user)
+- **Branch**: main
+
+### Goal
+Keybind cycles the FOCUSED monitor's wallpaper to the next/previous image (sorted
+order across all collections), with awww transitions.
+
+### Facts established
+- awww 0.12.1 in `extra` (swww renamed; GitHub swww archived). NOT installed yet.
+- hyprpaper 0.8.4 installed; `hyprland.lua:50` autostarts it (uncommitted user edit,
+  along with `force_default_wallpaper = 1` at :221).
+- `SUPER+W` is taken (zen-browser). `SUPER+SHIFT+N` and `SUPER+SHIFT+B` are free.
+- `util-scripts/` is on the shell PATH, but Hyprland's exec env may not be -> binds
+  use an absolute `$HOME/repos/dotfiles/util-scripts/...` path.
+- Single monitor today: eDP-1 3840x2160.
+- Collections (personal use only, mostly unlicensed; rose-pine is CC0) cloned
+  `--depth 1` into `~/Pictures/walls/` (outside the repo, not tracked): rose-pine,
+  gruvbox, ml4w, jakoolit, aesthetic, dharmx, omarchy (sparse `themes/*/backgrounds`).
+
+### Plan
+1. User installs awww: `sudo pacman -S awww`.
+2. `util-scripts/wall-next [next|prev]`:
+   - `WALLPAPER_DIR` (default `~/Pictures/walls`), `WALL_TRANSITION` (default `grow`)
+     and duration as env vars with defaults, no magic values inline.
+   - focused monitor = `hyprctl monitors -j | jq '.[]|select(.focused).name'`.
+   - current image = `awww query` line for that output (awww is the state; no
+     state file). Not found / not an image -> start from the first file.
+   - list = `find -L` image files (jpg/jpeg/png/webp/gif), `.git` pruned, `sort`;
+     step +1/-1 with wrap-around; `awww img -o <mon> --transition-type ...`.
+   - Fails loudly (notify-send + non-zero) if awww-daemon isn't running or the dir is empty.
+3. `hyprland.lua`: autostart `awww-daemon` in place of `hyprpaper` (daemon restores
+   the last image per output on restart); bind `SUPER+SHIFT+N` next, `SUPER+SHIFT+B` back (user choice; both free).
+4. `installers/hypr.sh`: add `awww`, `jq` to the missing-binaries warn list.
+5. `tests/test-wall-next.sh`: hermetic, fake `hyprctl`/`awww` on PATH, temp dir of
+   images -> asserts next, prev, wrap-around, unknown current, empty dir, daemon down.
+6. CLAUDE.md: one Key Patterns line.
+7. Verify live: run the script, check `awww query` changed on eDP-1; `hyprctl configerrors` clean.
+
+### Rollback
+Revert commit; re-enable `hyprpaper` autostart line. Wallpapers dir is standalone (`rm -r` by user).
+
+### Log
+- 2026-09-25: research done (daemon/collections). Started shallow clones into ~/Pictures/walls.
+- 2026-09-25: plan approved with binds SUPER+SHIFT+N/B. awww 0.12.1 installed by user. Dispatched implementer.
+- 2026-09-25: implemented util-scripts/wall-next, hyprland.lua (autostart + binds), installers/hypr.sh,
+  tests/test-wall-next.sh (13/13 pass), CLAUDE.md paragraph. Confirmed `awww query -j` format and that
+  awww-daemon restores the last per-output image from its own cache on restart by default (no flag
+  needed; `--no-cache` opts out). Live: next/next/prev cycled real files correctly (cross-checked
+  against the real sorted 3184-file list); `hyprctl reload` + `configerrors` clean; `hyprctl binds -j`
+  shows both binds (modmask 65, keys N/B, dispatcher `__lua`, matching existing exec_cmd binds).
+  Not verified: an actual physical keypress trigger — this Hyprland-Lua fork's `hyprctl dispatch exec`
+  CLI syntax differs from stock Hyprland and I did not find the right incantation; out of scope for
+  the plan's checklist, but worth a manual keypress check by the user.
+- 2026-09-25: all 7 clones OK, 3184 images, ~15 GB on disk (du incl. .git packs; larger than repo sizes quoted).
+
 ## ACTIVE: tmux shortcut — fork this pane's claude session into a new pane (2026-09-25)
 
 ### State
