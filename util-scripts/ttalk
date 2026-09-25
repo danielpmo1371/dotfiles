@@ -2,12 +2,17 @@
 # ttalk — speak a short message aloud (task-completion notifications).
 # Replaces the former Deepgram-based termtalk project: local TTS needs no
 # API key or network, so notifications can never silently die on auth.
-# Prefers Piper (neural voice, model at $PIPER_VOICE) and falls back to the
-# system engines when Piper, the model or an audio player is missing.
+# Prefers Piper (neural voice, model at $PIPER_VOICE, default below) and falls
+# back to the system engines when Piper, the model or an audio player is missing.
 # Exits 0 even with no TTS engine available — callers (Claude sessions,
 # scripts) must never fail because audio is missing.
 
 set -u
+
+# Default voice; export PIPER_VOICE (e.g. in env.sh) to override. Kept here
+# rather than only in env.sh so shells/sessions started before an env change,
+# and non-login contexts (Hyprland binds, cron), still get the Piper voice.
+PIPER_VOICE="${PIPER_VOICE:-${XDG_DATA_HOME:-$HOME/.local/share}/piper/voices/en_GB-cori-high.onnx}"
 
 msg="$*"
 [[ -z "$msg" ]] && { echo "usage: ttalk <message>" >&2; exit 1; }

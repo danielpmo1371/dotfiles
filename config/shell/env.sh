@@ -60,9 +60,9 @@ export AZURE_DEVOPS_PAT
 # ─────────────────────────────────────────────────────────────────────────────
 export TALKING_AGENT=1
 export TTALK_WORD_COUNT=20
-# Piper voice model for ttalk (downloaded from huggingface.co/rhasspy/piper-voices,
-# not tracked). Missing file → ttalk falls back to espeak-ng.
-export PIPER_VOICE="$XDG_DATA_HOME/piper/voices/en_GB-cori-high.onnx"
+# ttalk Piper voice: default (en_GB-cori-high) lives in util-scripts/ttalk. Models are
+# downloaded from huggingface.co/rhasspy/piper-voices, not tracked; missing → espeak-ng.
+# export PIPER_VOICE="$XDG_DATA_HOME/piper/voices/en_GB-jenny_dioco-medium.onnx"  # optional override
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Colors
