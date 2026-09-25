@@ -2,7 +2,9 @@
 
 # Test harness for dotfiles installers
 # Usage: ./tests/test-installer.sh <component|all>
-# Components: tools, secrets, terminals, fonts, tmux, bash, zsh, config-dirs, claude, mcp, services
+# Components: tools, secrets, terminals, fonts, tmux, bash, zsh, config-dirs, claude, mcp, llm, services
+# `llm` is deliberately excluded from `all`: --llm is a standalone install (needs an
+# API key), so most machines legitimately lack it and would report false failures.
 
 set -euo pipefail
 
@@ -184,6 +186,21 @@ test_claude() {
     assert_valid_json "$HOME/.claude/settings.json" "claude settings JSON"
 }
 
+test_llm() {
+    echo -e "\n${BLUE}=== Testing: llm ===${NC}"
+    assert_command_exists llm "llm CLI"
+    # Renderer for the `q` quick-query. Its absence is a cosmetic downgrade
+    # (q falls back to bat), but on a machine that ran --llm it should be here.
+    assert_command_exists glow "glow (markdown renderer for q)"
+    if command -v llm &>/dev/null && llm plugins 2>/dev/null | grep -q llm-groq; then
+        echo -e "  ${GREEN}PASS${NC} llm-groq plugin registered"
+        PASS=$((PASS + 1))
+    else
+        echo -e "  ${RED}FAIL${NC} llm-groq plugin not registered"
+        FAIL=$((FAIL + 1))
+    fi
+}
+
 # claude-rc Remote Control service. The installer skips when Claude Code is
 # absent and only links (no enable) without a systemd user bus (Docker/CI), so
 # those cases are SKIPs, not failures.
@@ -221,6 +238,7 @@ test_services() {
         FAIL=$((FAIL + 1))
     fi
 }
+
 test_mcp() {
     echo -e "\n${BLUE}=== Testing: mcp ===${NC}"
     # MCP merges config into ~/.claude.json or similar
@@ -262,6 +280,7 @@ case "$component" in
     config-dirs) test_config_dirs ;;
     claude)      test_claude ;;
     mcp)         test_mcp ;;
+    llm)         test_llm ;;
     services)    test_services ;;
     all)
         test_tools
@@ -278,7 +297,7 @@ case "$component" in
         ;;
     *)
         echo "Unknown component: $component"
-        echo "Usage: $0 <tools|secrets|terminals|fonts|tmux|bash|zsh|config-dirs|claude|mcp|services|all>"
+        echo "Usage: $0 <tools|secrets|terminals|fonts|tmux|bash|zsh|config-dirs|claude|mcp|llm|services|all>"
         exit 1
         ;;
 esac
