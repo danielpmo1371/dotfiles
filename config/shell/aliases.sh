@@ -9,9 +9,12 @@ alias h='hostname'
 # ─────────────────────────────────────────────────────────────────────────────
 #   Navigation
 # ─────────────────────────────────────────────────────────────────────────────
-# Auto-ls after cd
+# Auto-ls after cd. Gated on stdout being a tty: inside a "$(cd ... && pwd)"
+# command substitution the listing would be captured as data and corrupt it.
 cd() {
-    builtin cd "$@" && lsd
+    builtin cd "$@" || return
+    [ -t 1 ] && lsd
+    return 0
 }
 
 alias root='cd ~/repos/'
