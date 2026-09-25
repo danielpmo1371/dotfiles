@@ -102,6 +102,8 @@ install_tools() {
         specs+=("displayplacer|displayplacer||")
     else
         specs+=("notify-send|libnotify|libnotify-bin|libnotify")
+        # trash-cli: freedesktop trash for the rm() override in config/shell/aliases.sh
+        specs+=("trash-put|trash-cli|trash-cli|trash-cli")
     fi
     # toilet removed: the Arch package drags in libcaca -> mesa -> llvm-libs
     # (~300 MB) for a cosmetic ASCII-art banner. Not worth it.

@@ -31,19 +31,94 @@ alias grep='grep -i'
 # Image cat: timg speaks the kitty/iTerm2 graphics protocols (Ghostty-compatible)
 alias icat='timg'
 
-# Override rm to move to a bin folder
+# Override rm: move to the trash instead of deleting.
+# Why: a safety net. Anything removed at an interactive prompt stays
+# recoverable from the trash instead of being gone for good.
+# Dispatch, first match wins:
+#   1. trash-put  (trash-cli, freedesktop Trash spec; Arch/Debian)
+#   2. trash      (macOS 14+ ships /usr/bin/trash; it does not accept "--")
+#   3. mv into ~/.Trash (macOS) or $XDG_DATA_HOME/Trash/files (Linux),
+#      suffixing the name when an entry with that name is already there.
+# rm-style flags (-r -f -i -v ...) are accepted and ignored: trash handles
+# directories. The real binary is still reachable via `command rm` or `\rm`.
+# Known gap: the Linux fallback (3) writes only Trash/files, never the
+# Trash/info/*.trashinfo sidecars, so trash-list/trash-restore and desktop
+# trash UIs will not show those entries. They are recoverable by hand from
+# that directory.
 rm() {
-    # Ensure the bin directory exists before moving files
-    mkdir -p "$HOME/bin"
-    
-    # Check if any arguments were provided to prevent errors
-    if [ $# -eq 0 ]; then
-        echo "rm: missing operand"
+    local -a files=()
+    local arg dropped=no after_dashdash=no
+    for arg in "$@"; do
+        if [[ "$after_dashdash" == yes ]]; then
+            files+=("$arg")
+        elif [[ "$arg" == -- ]]; then
+            after_dashdash=yes
+        elif [[ "$arg" == -?* ]]; then
+            dropped=yes
+        else
+            files+=("$arg")
+        fi
+    done
+    if [[ ${#files[@]} -eq 0 ]]; then
+        if [[ "$dropped" == yes ]]; then
+            echo "rm: missing operand (names starting with '-' need '--' before them)" >&2
+        else
+            echo "rm: missing operand" >&2
+        fi
         return 1
     fi
-    
-    # Move all provided arguments/files into the bin directory
-    mv "$@" "$HOME/bin/"
+
+    if command -v trash-put >/dev/null 2>&1; then
+        trash-put -- "${files[@]}"
+        return
+    fi
+
+    if command -v trash >/dev/null 2>&1; then
+        local -a safe=()
+        local f
+        for f in "${files[@]}"; do
+            case "$f" in
+                -*) safe+=("./$f") ;;
+                *)  safe+=("$f") ;;
+            esac
+        done
+        trash "${safe[@]}"
+        return
+    fi
+
+    local dest
+    if [[ "$OSTYPE" == darwin* ]]; then
+        dest="$HOME/.Trash"
+    else
+        dest="${XDG_DATA_HOME:-$HOME/.local/share}/Trash/files"
+    fi
+    mkdir -p "$dest" || return 1
+
+    local f name target stamp n rc=0
+    for f in "${files[@]}"; do
+        name="${f%/}"
+        name="${name##*/}"
+        if [[ -z "$name" ]]; then
+            echo "rm: refusing to trash '$f'" >&2
+            rc=1
+            continue
+        fi
+        target="$dest/$name"
+        if [[ -e "$target" || -L "$target" ]]; then
+            stamp="$(date +%s)"
+            target="$dest/$name.$stamp"
+            n=1
+            while [[ -e "$target" || -L "$target" ]]; do
+                target="$dest/$name.$stamp.$n"
+                n=$((n + 1))
+            done
+        fi
+        if ! command mv -- "$f" "$target"; then
+            echo "rm: cannot move '$f' to '$dest'" >&2
+            rc=1
+        fi
+    done
+    return $rc
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
