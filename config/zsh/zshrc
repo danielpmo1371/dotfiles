@@ -240,3 +240,7 @@ alias dns-flush='sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder'
 
 # Hermes Agent — ensure ~/.local/bin is on PATH
 export PATH="$HOME/.local/bin:$PATH"
+alias dirstat='du -hd 1 | sort -h'
+alias dstat='dirstat'
+alias ds='dstat'
+alias timemachine-logs="/usr/bin/log show --last 15m --predicate 'subsystem == \"com.apple.TimeMachine\"' --info | grep -iE 'error|fail|interrupt' | tail -20"
