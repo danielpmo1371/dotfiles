@@ -5,9 +5,12 @@
 # Usage:
 #   tmux-claude-picker.sh            # run the picker (needs a tty; tmux.conf wraps it in display-popup)
 #   tmux-claude-picker.sh --list     # print detected Claude panes (used by fzf ctrl-r reload)
+#   tmux-claude-picker.sh --json     # print Claude panes as a tmux-palette Item JSON array (needs jq;
+#                                    #   used by config/tmux-palette/palettes/claude.json)
 #   tmux-claude-picker.sh --vi <key> # fzf transform helper: vi-modal action for <key> (reads $FZF_PROMPT)
 #
-# Keybinding: Cmd+e Cmd+i / Cmd+e i (see config/tmux/tmux.conf)
+# Keybinding: Cmd+e Cmd+i / Cmd+e i opens the tmux-palette "claude" palette, which runs --json
+# (see config/tmux/tmux.conf). The fzf mode below remains usable standalone.
 #
 # Starts in NORMAL mode (j/k move, i enters filter mode, esc closes).
 # In INSERT mode typing filters; esc returns to NORMAL keeping the filter.
@@ -18,6 +21,8 @@ SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SO
 TAB=$'\t'
 NORMAL_PROMPT='[N] '
 INSERT_PROMPT='[I] '
+# Nerd Font robot glyph (nf-md-robot, U+F06A9) as a JSON escape, so jq emits it
+CLAUDE_ICON_JSON='"\udb81\udea9"'
 
 # Print one line per pane with a claude child process: "session:window.pane<TAB>label"
 list_claude_panes() {
@@ -40,6 +45,33 @@ list_claude_panes() {
 
 if [ "${1:-}" = "--list" ]; then
     list_claude_panes
+    exit 0
+fi
+
+# tmux-palette plugin source: one Item per Claude pane. The palette wrapper
+# (bin/tmux-palette.sh) runs `eval "tmux <action>"`, so each target is shell
+# single-quoted with jq's @sh and commands are chained with an escaped `\;`
+# that survives eval as a literal tmux command separator.
+if [ "${1:-}" = "--json" ]; then
+    if ! command -v jq >/dev/null 2>&1; then
+        echo "Error: jq not found. Install with: ./install.sh --tools" >&2
+        exit 1
+    fi
+    list_claude_panes | jq -R -s -c --argjson icon "$CLAUDE_ICON_JSON" '
+        split("\n")
+        | map(select(length > 0) | split("\t") | {target: .[0], label: (.[1] // "")})
+        | map(
+            (.target | sub("\\.[^.]*$"; "")) as $window
+            | (.target | sub(":.*$"; "")) as $session
+            | {
+                icon: $icon,
+                title: .target,
+                description: .label,
+                action: {
+                    tmux: "select-window -t \($window | @sh) \\; select-pane -t \(.target | @sh) \\; switch-client -t \($session | @sh)"
+                }
+            }
+        )'
     exit 0
 fi
 
