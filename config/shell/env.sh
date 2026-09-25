@@ -62,7 +62,7 @@ export TALKING_AGENT=1
 export TTALK_WORD_COUNT=20
 # Piper voice model for ttalk (downloaded from huggingface.co/rhasspy/piper-voices,
 # not tracked). Missing file → ttalk falls back to espeak-ng.
-export PIPER_VOICE="$XDG_DATA_HOME/piper/voices/en_GB-jenny_dioco-medium.onnx"
+export PIPER_VOICE="$XDG_DATA_HOME/piper/voices/en_GB-cori-high.onnx"
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   Colors
