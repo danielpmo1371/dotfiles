@@ -1,5 +1,59 @@
 # Workflow State
 
+## ACTIVE: Wallpaper favorites — wall-fav toggle + favorites cycling (2026-09-25)
+
+### State
+- **Status**: CONSTRUCT (plan approved 2026-09-25)
+- **Branch**: main
+
+### Design
+Favorites = a folder of symlinks, `$WALL_FAVORITES_DIR` (default `~/Pictures/wall-favorites`),
+OUTSIDE `$WALLPAPER_DIR` so the main cycle never lists an image twice. Browsable in a
+file manager / waypaper, zero copies, and cycling it is just `wall-next` over that dir.
+Rejected: a favorites.txt list (not browsable, needs its own cycler); copies (disk, drift).
+
+### Plan
+1. `util-scripts/wall-fav` (toggle): focused monitor -> `awww query -j` current image ->
+   `realpath` (current may itself be a favorites symlink). Link name = path relative to
+   `$WALLPAPER_DIR` with `/` -> `__` (collections reuse basenames; outside the dir -> basename).
+   Link exists -> remove the link (only the symlink; target untouched), else `ln -s`.
+   notify-send "Added/Removed favorite: <name>". Shared helpers (focused monitor,
+   current image, notify/fail) move to `util-scripts/wall-lib.sh`, sourced by both.
+2. `wall-next`: add `--favorites` flag -> uses `$WALL_FAVORITES_DIR`. Matching the current
+   image falls back to realpath comparison (one batched `realpath` call), so switching
+   between the full cycle and the favorites cycle continues from the same picture
+   instead of restarting at the first one.
+3. Binds: `SUPER+SHIFT+F` toggle favorite; `SUPER+CTRL+SHIFT+N/B` next/back within
+   favorites (all free; CTRL = the key labelled Alt, due to ctrl:swap_lalt_lctl).
+4. Tests: extend `tests/test-wall-next.sh` (favorites flag, realpath continuation) and add
+   `tests/test-wall-fav.sh` (add, remove, name collision across collections, current
+   is a favorites link, empty/daemon-down errors). Hermetic temp dirs.
+5. CLAUDE.md: extend the wall-next paragraph. Live check on eDP-1.
+
+### Log
+- 2026-09-25: implemented `util-scripts/wall-lib.sh` (shared notify/fail, focused_monitor,
+  current_image, WALLPAPER_DIR/WALL_FAVORITES_DIR defaults); refactored `wall-next` to
+  source it and added `--favorites` (order-independent) with realpath-fallback matching
+  (one batched `realpath --` call); added `util-scripts/wall-fav`. Binds added:
+  SUPER+SHIFT+F, SUPER+CTRL+SHIFT+N/B.
+- 2026-09-25: tests — extended `tests/test-wall-next.sh` to 21/21 (was 13; +favorites flag,
+  missing/empty favorites dir, order-independent flag parsing, realpath continuation both
+  directions); new `tests/test-wall-fav.sh` 10/10 (add, name-collision across collections,
+  remove, current-is-a-favorites-link, outside-$WALLPAPER_DIR basename fallback, colour/
+  daemon-down errors, non-symlink-at-target-name refusal). `bash -n` and `luac -p` clean.
+- 2026-09-25: CLAUDE.md wall-next paragraph extended in place (not a new paragraph).
+- 2026-09-25: live on eDP-1 with WALL_FAVORITES_DIR=mktemp: added 3 favorites (Groot,
+  Jurassic-dino, Kratos-gow-red) stepping wall-next between wall-fav calls; ls -l showed
+  the expected `aesthetic__images__<name>` symlinks; `wall-next --favorites next/prev`
+  cycled and wrapped correctly within just those 3; wall-fav toggled Groot back off
+  ("Removed favorite: aesthetic__images__Groot.jpg"); original wallpaper restored via
+  `awww img -o eDP-1`; mktemp dir removed. Noted: a concurrent process on this same
+  machine was independently driving wall-next during the run (own current-image reads
+  briefly diverged, e.g. an unplanned Luffy favorite got added mid-sequence and was
+  cleaned up) — hermetic tests are unaffected, but the live run wasn't perfectly isolated.
+  `hyprctl reload` ok, `configerrors` clean, `hyprctl binds -j` shows F/modmask 65,
+  N/modmask 69, B/modmask 69 as expected, alongside the pre-existing SUPER+SHIFT+N/B.
+
 ## ACTIVE: Hyprland wallpapers — awww + per-monitor next/prev (2026-09-25)
 
 ### State

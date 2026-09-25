@@ -4,73 +4,90 @@
 # with an awww transition.
 #
 # Usage:
-#   wall-next [next|prev]   (default: next)
+#   wall-next [--favorites] [next|prev]   (default: next; flag and direction
+#                                          may be given in either order)
 #
-# Bound in hyprland.lua to SUPER+SHIFT+N (next) / SUPER+SHIFT+B (prev).
+# Bound in hyprland.lua to SUPER+SHIFT+N (next) / SUPER+SHIFT+B (prev), and
+# SUPER+CTRL+SHIFT+N / SUPER+CTRL+SHIFT+B for `--favorites` next/prev.
 #
-# Image list = every jpg/jpeg/png/webp/gif file (case-insensitive) under
-# $WALLPAPER_DIR, `.git` dirs pruned, sorted with LC_ALL=C for a stable order
-# across runs regardless of locale. awww is the only state (no state file
-# here): the focused monitor's current image comes from `awww query -j`. If
-# it isn't set yet, or isn't one of ours, next starts at the first image and
-# prev starts at the last.
+# Image list = every jpg/jpeg/png/webp/gif file (case-insensitive) under the
+# target dir ($WALLPAPER_DIR, or $WALL_FAVORITES_DIR with --favorites),
+# `.git` dirs pruned, sorted with LC_ALL=C for a stable order across runs
+# regardless of locale. awww is the only state (no state file here): the
+# focused monitor's current image comes from `awww query -j`. If it isn't
+# set yet, or isn't in the target list by exact path, one batched `realpath`
+# call is used to match by resolved path instead — this is what lets you
+# switch between the full cycle and the favorites cycle (a symlink into
+# $WALLPAPER_DIR) and continue from the same picture rather than restarting.
+# If it still isn't found, next starts at the first image and prev starts at
+# the last.
 
 set -uo pipefail
 
-WALLPAPER_DIR="${WALLPAPER_DIR:-$HOME/Pictures/walls}"
+SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+# shellcheck source=util-scripts/wall-lib.sh
+source "$SCRIPT_DIR/wall-lib.sh"
+
 WALL_TRANSITION="${WALL_TRANSITION:-grow}"
 WALL_TRANSITION_DURATION="${WALL_TRANSITION_DURATION:-1}"
 IMAGE_EXTENSIONS=(jpg jpeg png webp gif)
 
-notify() {
-    command -v notify-send >/dev/null 2>&1 && notify-send "wall-next" "$1"
-    echo "wall-next: $1" >&2
-}
-
-fail() {
-    notify "$1"
-    exit 1
-}
-
-# Print every image under $WALLPAPER_DIR, one per line, LC_ALL=C sorted.
+# Print every image under <dir>, one per line, LC_ALL=C sorted.
 list_images() {
-    local ext find_expr=()
+    local dir="$1" ext find_expr=()
     for ext in "${IMAGE_EXTENSIONS[@]}"; do
         [ ${#find_expr[@]} -eq 0 ] || find_expr+=(-o)
         find_expr+=(-iname "*.$ext")
     done
-    find -L "$WALLPAPER_DIR" -name ".git" -prune -o -type f \( "${find_expr[@]}" \) -print \
+    find -L "$dir" -name ".git" -prune -o -type f \( "${find_expr[@]}" \) -print \
         | LC_ALL=C sort
 }
 
 main() {
-    local direction="${1:-next}"
-    case "$direction" in
-        next|prev) ;;
-        *) fail "usage: wall-next [next|prev]" ;;
-    esac
+    local direction="next" favorites=0 arg
+    for arg in "$@"; do
+        case "$arg" in
+            next|prev) direction="$arg" ;;
+            --favorites) favorites=1 ;;
+            *) fail "usage: wall-next [--favorites] [next|prev]" ;;
+        esac
+    done
 
     command -v awww >/dev/null 2>&1 || fail "awww not found"
     command -v jq >/dev/null 2>&1 || fail "jq not found"
     command -v hyprctl >/dev/null 2>&1 || fail "hyprctl not found"
 
     local monitor
-    monitor=$(hyprctl monitors -j | jq -er '.[] | select(.focused) | .name') \
-        || fail "no focused monitor found"
+    monitor=$(focused_monitor) || fail "no focused monitor found"
+
+    local dir="$WALLPAPER_DIR"
+    [ "$favorites" -eq 1 ] && dir="$WALL_FAVORITES_DIR"
+
+    if [ "$favorites" -eq 1 ] && [ ! -d "$dir" ]; then
+        fail "no favorites yet — SUPER+SHIFT+F to add"
+    fi
 
     local images=()
     while IFS= read -r line; do
         images+=("$line")
-    done < <(list_images)
-    [ ${#images[@]} -gt 0 ] || fail "no wallpapers found under $WALLPAPER_DIR"
+    done < <(list_images "$dir")
 
-    local query
-    query=$(awww query -j 2>&1) || fail "awww-daemon is not running ($query)"
+    if [ ${#images[@]} -eq 0 ]; then
+        if [ "$favorites" -eq 1 ]; then
+            fail "no favorites yet — SUPER+SHIFT+F to add"
+        else
+            fail "no wallpapers found under $dir"
+        fi
+    fi
 
-    local current
-    current=$(printf '%s' "$query" \
-        | jq -er --arg m "$monitor" '.[""][]? | select(.name == $m) | .displaying.image // empty') \
-        || current=""
+    local current rc
+    current=$(current_image "$monitor")
+    rc=$?
+    if [ "$rc" -eq 2 ]; then
+        fail "awww-daemon is not running ($current)"
+    elif [ "$rc" -ne 0 ]; then
+        current=""
+    fi
 
     local count=${#images[@]}
     local idx=-1 i
@@ -80,6 +97,25 @@ main() {
             break
         fi
     done
+
+    if [ "$idx" -eq -1 ] && [ -n "$current" ]; then
+        local current_real
+        current_real=$(realpath -- "$current" 2>/dev/null) || current_real=""
+        if [ -n "$current_real" ]; then
+            local real_images=()
+            while IFS= read -r line; do
+                real_images+=("$line")
+            done < <(realpath -- "${images[@]}" 2>/dev/null)
+            if [ "${#real_images[@]}" -eq "${#images[@]}" ]; then
+                for i in "${!real_images[@]}"; do
+                    if [ "${real_images[$i]}" = "$current_real" ]; then
+                        idx=$i
+                        break
+                    fi
+                done
+            fi
+        fi
+    fi
 
     local target_idx
     if [ "$idx" -eq -1 ]; then

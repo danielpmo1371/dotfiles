@@ -115,11 +115,14 @@ esac
 EOF
 chmod +x "$WORK/bin/awww"
 
-run_wall_next() {  # run_wall_next <next|prev>
+FAVS="$WORK/favorites"
+
+run_wall_next() {  # run_wall_next <arg>...
     PATH="$WORK/bin:$PATH" \
         WALLPAPER_DIR="$WALLS" \
+        WALL_FAVORITES_DIR="${WALL_FAVORITES_DIR:-$FAVS}" \
         FAKE_AWWW_STATE_DIR="$STATE_DIR" \
-        "$WALL_NEXT" "$1"
+        "$WALL_NEXT" "$@"
 }
 
 current_for() {  # current_for <monitor>
@@ -252,6 +255,93 @@ if grep -q -- "-o HDMI-A-1" "$STATE_DIR/img-calls.log" && [ -z "$(current_for eD
     pass "awww img -o targets the focused monitor (HDMI-A-1), not eDP-1"
 else
     fail "expected -o HDMI-A-1 in img-calls.log, got: $(cat "$STATE_DIR/img-calls.log" 2>/dev/null)"
+fi
+
+echo -e "${BLUE}wall-next --favorites${NC}"
+
+# 12. --favorites with a missing favorites dir -> error, non-zero exit.
+reset_state
+if run_wall_next --favorites next >/dev/null 2>&1; then
+    fail "missing favorites dir did not error"
+else
+    pass "missing favorites dir -> non-zero exit"
+fi
+
+# --- Fake favorites dir: symlinks (with image extensions, like the real
+# favorite_name() output) into $WALLS, sorted fav1 < fav2 < fav3.
+mkdir -p "$FAVS"
+ln -s "${EXPECTED_ORDER[1]}" "$FAVS/fav1.png"   # -> aaa/first.png
+ln -s "${EXPECTED_ORDER[2]}" "$FAVS/fav2.jpg"   # -> bbb/second.jpg
+ln -s "${EXPECTED_ORDER[3]}" "$FAVS/fav3.webp"  # -> ccc space/third image.webp
+
+# 13. --favorites with an empty (but existing) favorites dir -> error.
+EMPTY_FAVS="$WORK/empty-favorites"
+mkdir -p "$EMPTY_FAVS"
+if WALL_FAVORITES_DIR="$EMPTY_FAVS" run_wall_next --favorites next >/dev/null 2>&1; then
+    fail "empty favorites dir did not error"
+else
+    pass "empty favorites dir -> non-zero exit"
+fi
+
+# 14. --favorites, no current image -> next starts at the first favorite.
+reset_state
+run_wall_next --favorites next >/dev/null 2>&1
+if [ "$(current_for eDP-1)" = "$FAVS/fav1.png" ]; then
+    pass "--favorites: no current image -> next starts at the first favorite"
+else
+    fail "expected $FAVS/fav1.png, got '$(current_for eDP-1)'"
+fi
+
+# 15. direction before the flag is accepted too (order-independent parsing).
+run_wall_next next --favorites >/dev/null 2>&1
+if [ "$(current_for eDP-1)" = "$FAVS/fav2.jpg" ]; then
+    pass "'next --favorites' (flag after direction) advances within favorites"
+else
+    fail "expected $FAVS/fav2.jpg, got '$(current_for eDP-1)'"
+fi
+
+run_wall_next --favorites next >/dev/null 2>&1
+if [ "$(current_for eDP-1)" = "$FAVS/fav3.webp" ]; then
+    pass "--favorites next cycles through all three favorites"
+else
+    fail "expected $FAVS/fav3.webp, got '$(current_for eDP-1)'"
+fi
+
+# 16. --favorites prev wraps from the last favorite... to itself is trivial;
+# assert a full wrap: prev, prev, prev returns to fav3 (3-item cycle).
+run_wall_next --favorites prev >/dev/null 2>&1
+run_wall_next --favorites prev >/dev/null 2>&1
+run_wall_next --favorites prev >/dev/null 2>&1
+if [ "$(current_for eDP-1)" = "$FAVS/fav3.webp" ]; then
+    pass "--favorites prev wraps correctly around the 3-item cycle"
+else
+    fail "expected $FAVS/fav3.webp, got '$(current_for eDP-1)'"
+fi
+
+echo -e "${BLUE}realpath continuation (favorites <-> full cycle)${NC}"
+
+# 17. current is a favorites symlink (exact path not in the full list) ->
+# full-cycle next falls back to realpath and continues from the right spot.
+# fav1 resolves to EXPECTED_ORDER[1] (index 1); next should land on index 2.
+reset_state
+printf '%s' "$FAVS/fav1.png" > "$STATE_DIR/current-eDP-1"
+run_wall_next next >/dev/null 2>&1
+if [ "$(current_for eDP-1)" = "${EXPECTED_ORDER[2]}" ]; then
+    pass "full cycle continues from a favorites symlink via realpath fallback"
+else
+    fail "expected ${EXPECTED_ORDER[2]}, got '$(current_for eDP-1)'"
+fi
+
+# 18. current is a real (non-symlink) full-cycle image -> --favorites next
+# falls back to realpath and continues from the matching favorite.
+# EXPECTED_ORDER[1] (aaa/first.png) is fav1's target; next should land on fav2.
+reset_state
+printf '%s' "${EXPECTED_ORDER[1]}" > "$STATE_DIR/current-eDP-1"
+run_wall_next --favorites next >/dev/null 2>&1
+if [ "$(current_for eDP-1)" = "$FAVS/fav2.jpg" ]; then
+    pass "favorites cycle continues from a full-cycle path via realpath fallback"
+else
+    fail "expected $FAVS/fav2.jpg, got '$(current_for eDP-1)'"
 fi
 
 echo ""

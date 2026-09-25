@@ -1,0 +1,76 @@
+#!/bin/bash
+# wall-fav
+# Toggle the FOCUSED Hyprland monitor's current wallpaper as a favorite.
+#
+# Usage:
+#   wall-fav
+#
+# Bound in hyprland.lua to SUPER+SHIFT+F.
+#
+# Favorites live as symlinks in $WALL_FAVORITES_DIR (default
+# ~/Pictures/wall-favorites), OUTSIDE $WALLPAPER_DIR, so `wall-next`'s full
+# cycle never lists a favorite twice and `wall-next --favorites` can cycle
+# just this dir. The link name is the current image's path relative to
+# $WALLPAPER_DIR with "/" replaced by "__" (collections reuse basenames, so
+# a flat basename-only name would collide); an image outside $WALLPAPER_DIR
+# falls back to its basename. Toggling removes the symlink only — never the
+# target image, and never a non-symlink file that happens to sit at that name.
+
+set -uo pipefail
+
+SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+# shellcheck source=util-scripts/wall-lib.sh
+source "$SCRIPT_DIR/wall-lib.sh"
+
+# favorite_name <realpath-of-current-image> — the favorites symlink name for it.
+favorite_name() {
+    local real="$1" wallpaper_real rel
+    wallpaper_real=$(realpath -- "$WALLPAPER_DIR" 2>/dev/null) || wallpaper_real=""
+    if [ -n "$wallpaper_real" ] && [ "${real#"$wallpaper_real"/}" != "$real" ]; then
+        rel="${real#"$wallpaper_real"/}"
+        printf '%s' "${rel//\//__}"
+    else
+        basename -- "$real"
+    fi
+}
+
+main() {
+    command -v awww >/dev/null 2>&1 || fail "awww not found"
+    command -v jq >/dev/null 2>&1 || fail "jq not found"
+    command -v hyprctl >/dev/null 2>&1 || fail "hyprctl not found"
+
+    local monitor
+    monitor=$(focused_monitor) || fail "no focused monitor found"
+
+    local current rc
+    current=$(current_image "$monitor")
+    rc=$?
+    if [ "$rc" -eq 2 ]; then
+        fail "awww-daemon is not running ($current)"
+    elif [ "$rc" -ne 0 ]; then
+        current=""
+    fi
+    [ -n "$current" ] || fail "no wallpaper image set on $monitor (colour background or unset)"
+
+    local real
+    real=$(realpath -- "$current" 2>/dev/null) || fail "current wallpaper path does not exist: $current"
+
+    local name link
+    name=$(favorite_name "$real")
+    link="$WALL_FAVORITES_DIR/$name"
+
+    if [ -L "$link" ]; then
+        rm -- "$link" || fail "failed to remove favorite: $name"
+        notify "Removed favorite: $name"
+    elif [ -e "$link" ]; then
+        fail "a non-symlink file already exists at $link — refusing to touch it"
+    else
+        mkdir -p "$WALL_FAVORITES_DIR" || fail "failed to create $WALL_FAVORITES_DIR"
+        ln -s -- "$real" "$link" || fail "failed to create favorite: $name"
+        notify "Added favorite: $name"
+    fi
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi

@@ -282,6 +282,11 @@ hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(browser))
 -- Cycle the focused monitor's wallpaper (awww); exec env may lack PATH, so absolute path.
 hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/wall-next next"))
 hl.bind(mainMod .. " + SHIFT + B", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/wall-next prev"))
+-- Toggle the focused monitor's current wallpaper as a favorite (awww); same absolute-path reasoning as above.
+hl.bind(mainMod .. " + SHIFT + F", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/wall-fav"))
+-- Cycle within favorites only (CTRL = the key labelled Alt, due to ctrl:swap_lalt_lctl).
+hl.bind(mainMod .. " + CTRL + SHIFT + N", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/wall-next --favorites next"))
+hl.bind(mainMod .. " + CTRL + SHIFT + B", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/wall-next --favorites prev"))
 hl.bind(mainMod .. " + space", function()
     hl.plugin.hyprexpo.expo("toggle")
 end)
