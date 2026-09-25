@@ -19,3 +19,6 @@ config/nushell/history.txt
 *.swp
 *.swo
 *~
+
+# Rollback copy rewritten by installers/memory-hooks.sh on every run
+config/claude/settings.json.bak
