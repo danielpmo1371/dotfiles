@@ -138,6 +138,26 @@ ensure_settings_local() {
     fi
 }
 
+# Run an installer that delivers hooks referenced by settings.json.
+# settings.json registers these hooks unconditionally, so they are dependencies
+# of --claude rather than optional extras. A failure is warned about and never
+# fatal: a broken hook dependency must not abort the whole --claude run.
+run_hook_dependency() {
+    local script_name="$1"
+    local description="$2"
+    local installer="$DOTFILES_ROOT/installers/$script_name"
+
+    if [[ ! -x "$installer" ]]; then
+        log_warn "$script_name not found or not executable: $installer"
+        return 0
+    fi
+
+    log_info "Installing $description (dependency)..."
+    if ! "$installer"; then
+        log_warn "$description installer reported failures"
+    fi
+}
+
 install_claude_config() {
     log_header "Claude Code Settings"
 
@@ -149,20 +169,15 @@ install_claude_config() {
     # Generate/update settings.local.json for MCP memory service
     ensure_settings_local
 
-    # Install AZDO pipeline guard hooks that the pipeline-runner agent,
-    # pipe-deploy command, and pipeline-ops skill depend on.
-    # The hooks/ directory itself is not a whole symlink (it's shared with
-    # memory-hooks and logging-hooks), so the per-file symlinks must be
-    # created by a dedicated installer.
-    local pipeline_hooks_installer="$DOTFILES_ROOT/installers/claude-azdo-pipeline-hooks.sh"
-    if [[ -x "$pipeline_hooks_installer" ]]; then
-        log_info "Installing Claude AZDO pipeline guard hooks (dependency)..."
-        if ! "$pipeline_hooks_installer"; then
-            log_warn "Claude AZDO pipeline hooks installer reported failures"
-        fi
-    else
-        log_warn "claude-azdo-pipeline-hooks.sh not found or not executable: $pipeline_hooks_installer"
-    fi
+    # Install the hooks that settings.json references. The hooks/ directory is
+    # not a whole symlink (each installer owns a different part of it), so each
+    # one needs its own run:
+    #   - claude-azdo-pipeline-hooks.sh: the loose *.sh guards and notification.sh
+    #   - logging-hooks.sh:              the hooks/logging/ directory symlink
+    #   - memory-hooks.sh:               hooks/memory/ + hooks/utilities/ (needs network)
+    run_hook_dependency "claude-azdo-pipeline-hooks.sh" "Claude guard and notification hooks"
+    run_hook_dependency "logging-hooks.sh" "Claude session logging hooks"
+    run_hook_dependency "memory-hooks.sh" "Claude MCP memory hooks"
 
     echo ""
     log_info "Claude settings installation complete"
@@ -174,6 +189,11 @@ install_claude_config() {
     echo "  - ~/.claude.json (user-level MCP config)"
     echo "  - ~/.claude/hooks/pipeline-guard.sh (AZDO pipeline guard)"
     echo "  - ~/.claude/hooks/pipeline-trigger-guard.sh (AZDO pipeline guard)"
+    echo "  - ~/.claude/hooks/pipeline-registry-write-guard.sh (AZDO pipeline guard)"
+    echo "  - ~/.claude/hooks/destructive-ops-guard.sh (No-Delete Rule guard)"
+    echo "  - ~/.claude/hooks/notification.sh (desktop notifications)"
+    echo "  - ~/.claude/hooks/logging/ (session logging hooks)"
+    echo "  - ~/.claude/hooks/memory/, ~/.claude/hooks/utilities/ (MCP memory hooks)"
     echo ""
     echo "Local items (not synced):"
     echo "  - settings.local.json (per-machine permissions)"

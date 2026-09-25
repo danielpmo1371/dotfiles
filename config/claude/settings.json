@@ -69,7 +69,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.config/.claude/notification.sh"
+            "command": "$HOME/.claude/hooks/notification.sh",
+            "timeout": 5
           }
         ]
       }
@@ -133,6 +134,11 @@
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/pipeline-trigger-guard.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/destructive-ops-guard.sh",
             "timeout": 5
           }
         ]

@@ -138,6 +138,7 @@ tests/validate-symlinks.sh                # Check all expected symlinks
 tests/test-docker.sh <distro|all>         # Full e2e install in Docker (arch, ubuntu, debian, fedora)
 tests/test-pipeline-validator.sh          # Hermetic safety tests for the pipeline validator
 tests/test-pipeline-hooks.sh              # Hermetic safety tests for the guard hooks
+tests/test-memory-hooks-merge.sh         # Hermetic tests for the settings.json hook merge
 ```
 
 ## Directory Structure

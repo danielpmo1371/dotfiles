@@ -7,10 +7,15 @@
 #   - pipeline-registry-write-guard.sh (matches Edit|Write|NotebookEdit|Bash;
 #                                       blocks AI mutations of pipeline-registry.json)
 #
-# Both hooks are referenced by:
+# The pipeline hooks are referenced by:
 #   - agents/pipeline-runner.md
 #   - commands/pipe-deploy.md
 #   - skills/pipeline-ops/SKILL.md
+#
+# It also installs the loose (non-subdirectory) hooks that settings.json
+# references but no other installer delivers:
+#   - destructive-ops-guard.sh (PreToolUse/Bash; enforces the No-Delete Rule)
+#   - notification.sh          (Notification; desktop notification side effect)
 #
 # This installer creates per-file symlinks inside ~/.claude/hooks/. The hooks/
 # directory itself is not whole-symlinked because memory-hooks.sh and
@@ -38,10 +43,12 @@ HOOKS_SOURCE_DIR="$DOTFILES_ROOT/config/claude/hooks"
 HOOKS_TARGET_DIR="$HOME/.claude/hooks"
 SCRIPTS_TARGET_DIR="$HOME/.claude/scripts"
 
-PIPELINE_HOOK_FILES=(
+CLAUDE_HOOK_FILES=(
     "pipeline-guard.sh"
     "pipeline-trigger-guard.sh"
     "pipeline-registry-write-guard.sh"
+    "destructive-ops-guard.sh"
+    "notification.sh"
 )
 
 PIPELINE_HOOK_PREREQS=(
@@ -58,11 +65,11 @@ parse_args() {
     fi
 }
 
-link_pipeline_hooks() {
-    log_info "Linking AZDO pipeline guard hooks to $HOOKS_TARGET_DIR"
+link_claude_hooks() {
+    log_info "Linking Claude guard and notification hooks to $HOOKS_TARGET_DIR"
 
     if $DRY_RUN; then
-        for hook in "${PIPELINE_HOOK_FILES[@]}"; do
+        for hook in "${CLAUDE_HOOK_FILES[@]}"; do
             log_info "[DRY-RUN] Would link $HOOKS_SOURCE_DIR/$hook -> $HOOKS_TARGET_DIR/$hook"
         done
         return 0
@@ -70,7 +77,7 @@ link_pipeline_hooks() {
 
     ensure_dir "$HOOKS_TARGET_DIR"
 
-    for hook in "${PIPELINE_HOOK_FILES[@]}"; do
+    for hook in "${CLAUDE_HOOK_FILES[@]}"; do
         local source="$HOOKS_SOURCE_DIR/$hook"
         local target="$HOOKS_TARGET_DIR/$hook"
 
@@ -112,7 +119,7 @@ verify_installation() {
 
     local errors=0
 
-    for hook in "${PIPELINE_HOOK_FILES[@]}"; do
+    for hook in "${CLAUDE_HOOK_FILES[@]}"; do
         local target="$HOOKS_TARGET_DIR/$hook"
         if $DRY_RUN; then
             log_success "[DRY-RUN] Would verify $target"
@@ -131,7 +138,7 @@ verify_installation() {
         return 1
     fi
 
-    log_success "AZDO pipeline hooks installation verified"
+    log_success "Claude hooks installation verified"
     return 0
 }
 
@@ -139,7 +146,7 @@ main() {
     log_header "Claude AZDO Pipeline Hooks"
     parse_args "$@"
 
-    link_pipeline_hooks
+    link_claude_hooks
     check_prerequisites
     verify_installation
 

@@ -110,12 +110,16 @@ Settings symlinked from `config/claude/` to `~/.claude/`:
 - `hooks/pipeline-guard.sh` - PreToolUse hook intercepting direct MCP pipeline calls
 - `hooks/pipeline-trigger-guard.sh` - PreToolUse Bash hook blocking direct curl/az/gh trigger attempts
 - `hooks/pipeline-registry-write-guard.sh` - PreToolUse hook blocking AI mutations of pipeline-registry.json (the stage allow/block authority; humans edit + commit it)
+- `hooks/destructive-ops-guard.sh` - PreToolUse Bash hook enforcing the No-Delete Rule (cloud/infra deletes, `terraform destroy`, `rm` outside a git work tree)
+- `hooks/notification.sh` - Notification hook surfacing Claude Code notifications on the desktop (notify-send / osascript)
 - `commands/pipe-deploy.md` - `/pipe-deploy` command for CI/CD orchestration
+- `commands/wrap-up.md` - `/wrap-up` command: audits the CURRENT session's conversation for unverified claims and abandoned threads, reports, gates on approval, then lands it (verify → commit → handoff block in `workflow_state.md` + a session memory). Distinct from `/recap` (reconstructs tmux *scrollback*) and `/review-before-commit` (reviews the *diff*) — `/wrap-up` reviews the *conversation thread*. `disable-model-invocation: true`, so it is user-invoked only.
 - `agents/pipeline-runner.md` - Autonomous pipeline trigger/monitor/recovery agent
 - `skills/pipeline-ops/` - Auto-discoverable skill matching "deploy", "run pipeline" etc.
-- `commands/wrap-up.md` - `/wrap-up` command: audits the CURRENT session's conversation for unverified claims and abandoned threads, reports, gates on approval, then lands it (verify → commit → handoff block in `workflow_state.md` + a session memory). Distinct from `/recap` (reconstructs tmux *scrollback*) and `/review-before-commit` (reviews the *diff*) — `/wrap-up` reviews the *conversation thread*. `disable-model-invocation: true`, so it is user-invoked only.
 
-The three `pipeline-*-guard.sh` files are not delivered by the whole-dir symlinks (because `~/.claude/hooks/` is shared with `memory-hooks` and `logging-hooks`). They are installed by `installers/claude-azdo-pipeline-hooks.sh`, which is auto-invoked by `installers/claude.sh` (i.e. by `./install.sh --claude`) and can also be run standalone via `./install.sh --claude-azdo-pipeline-hooks`. Their `PreToolUse` registration in `settings.json` is delivered through the existing `settings.json` whole-file symlink.
+The loose `hooks/*.sh` files (the three `pipeline-*-guard.sh`, `destructive-ops-guard.sh` and `notification.sh`) are not delivered by the whole-dir symlinks (because `~/.claude/hooks/` is shared with `memory-hooks` and `logging-hooks`). They are installed by `installers/claude-azdo-pipeline-hooks.sh`, which is auto-invoked by `installers/claude.sh` (i.e. by `./install.sh --claude`) and can also be run standalone via `./install.sh --claude-azdo-pipeline-hooks`. Their registration in `settings.json` is delivered through the existing `settings.json` whole-file symlink.
+
+Because `settings.json` references them unconditionally, `installers/logging-hooks.sh` and `installers/memory-hooks.sh` are auto-invoked by `installers/claude.sh` too, so `hooks/logging/`, `hooks/memory/` and `hooks/utilities/` are never missing. Both can still be run standalone (`--logging-hooks`, `--memory-hooks`). Their `settings.json` merge is append-and-dedupe, per event and per matcher: it only ever adds entries, keeps existing hooks in their registered order (hook order is load-bearing for the guards, so no sorting), and is idempotent. `tests/test-memory-hooks-merge.sh` pins that behaviour.
 
 Local files (not synced): `settings.local.json`, `.credentials.json`
 
@@ -161,6 +165,7 @@ Test scripts in `tests/` that teammates (or manual runs) can use:
 - `tests/validate-symlinks.sh` - Checks all expected symlinks exist and point correctly
 - `tests/test-pipeline-validator.sh` - Hermetic safety tests for the pipeline validator (blocklist layering, registry stage lists, registry integrity fail-closed, terraform plan-only)
 - `tests/test-pipeline-hooks.sh` - Hermetic safety tests for the three PreToolUse guard hooks (MCP trigger, Bash trigger, registry write protection)
+- `tests/test-memory-hooks-merge.sh` - Hermetic tests for the settings.json hook merge in `installers/memory-hooks.sh` (append-only, order-preserving, idempotent)
 
 ## Learning from Mistakes
 
