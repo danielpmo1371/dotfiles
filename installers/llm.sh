@@ -7,12 +7,16 @@
 # The API key is read from the keychain (secret GROQ_API_KEY) and exported as
 # LLM_GROQ_KEY by config/shell/secrets.sh, so no plaintext key file is created.
 #
+# `q` renders answers with glow (markdown -> ANSI); without it the function
+# degrades to bat's markdown highlighting, so glow is installed but not required.
+#
 # Dependencies: python3 (pipx preferred, falls back to pip --user)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_ROOT="$(dirname "$SCRIPT_DIR")"
 
 source "$DOTFILES_ROOT/lib/install-common.sh"
+source "$DOTFILES_ROOT/lib/install-packages.sh"
 
 install_llm() {
     log_header "LLM CLI (llm + llm-groq)"
@@ -41,6 +45,14 @@ install_llm() {
     # Install the Groq plugin (idempotent: llm reports if already present)
     log_info "Installing llm-groq plugin..."
     llm install llm-groq || { log_error "Failed to install llm-groq"; return 1; }
+
+    # Markdown renderer for `q`'s answers. Optional by design: install_package
+    # falls back to Homebrew on distros whose native repos lack glow, and `q`
+    # falls back to bat when it is missing either way — so a failure here is a
+    # cosmetic downgrade, never a broken quick-query.
+    if ! install_package "glow" "glow" "glow" "glow"; then
+        log_warn "glow unavailable — 'q' will fall back to bat (markdown markers stay visible)"
+    fi
 
     # Populate the Groq model list if a key is available
     local groq_key="${LLM_GROQ_KEY:-}"
