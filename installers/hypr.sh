@@ -23,6 +23,10 @@ install_hypr() {
     # Symlink config directory to ~/.config/hypr
     link_config_dirs "hypr"
 
+    # Launcher entries (wofi drun). Per-file links: ~/.local/share/applications
+    # is shared with entries other apps install there.
+    link_target_files "applications" "$HOME/.local/share/applications" "wayle.desktop"
+
     # Keybinding dependencies (launcher, screenshots). Config-only installer:
     # warn, don't install — package installation stays in tools.sh territory.
     local dep missing=()
