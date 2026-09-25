@@ -43,7 +43,7 @@ local browser     = "google-chrome-stable"
 -- hl.on("hyprland.start", function ()
 --   hl.exec_cmd(terminal)
 --   hl.exec_cmd("nm-applet")
-hl.exec_cmd("wayle & hyprpaper & zen-browser")
+hl.exec_cmd("wayle & hyprpaper")
 -- end)
 
 
@@ -127,6 +127,17 @@ hl.config({
 
     animations = {
         enabled = true,
+    },
+
+    plugin = {
+      hyprexpo = {
+        columns          = 3,
+        rows             = 2,
+        gaps_in          = 5,
+        gaps_out         = 0,
+        workspace_method = "center current",
+        fill_gaps        = 0,
+      },
     },
 })
 
@@ -267,6 +278,26 @@ hl.bind(mainMod .. " + S", hl.dsp.exec_cmd("zen-browser"))
 hl.bind(mainMod .. " + space", function()
     hl.plugin.hyprexpo.expo("toggle")
 end)
+hl.bind(mainMod .. " + space", "submap", "expo")
+submaps = {
+  expo = {
+    -- binde for repeating navigation actions
+    binde = {
+        { "", "l", "workspace", "e+1" },
+        { "", "h", "workspace", "e-1" },
+        { "", "j", "workspace", "e+3" }, -- Adjust based on grid columns
+        { "", "k", "workspace", "e-3" },
+    },
+    -- Reset keys to escape the submap safely
+    bind = {
+        { "", "catchall", "hyprexpo:expo_toggle", "" },
+        { "", "catchall", "submap", "reset" },
+        { "", "escape", "hyprexpo:expo_toggle", "" },
+        { "", "escape", "submap", "reset" },
+    },
+
+  }
+}
 -- hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
 -- hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))    -- dwindle only
 
