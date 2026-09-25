@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Wayle
+GenericName=Desktop Shell
+Comment=Start the Wayle desktop shell (bar, notifications, wallpaper)
+Exec=wayle panel start
+Icon=wayle-settings
+Terminal=false
+Categories=Utility;
+Keywords=wayle;shell;bar;panel;wayland;
