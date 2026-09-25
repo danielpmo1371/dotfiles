@@ -1,5 +1,0 @@
-{
-  "title": "Claude Sessions",
-  "command": "~/repos/dotfiles/util-scripts/tmux-claude-picker.sh --json",
-  "emptyText": "No Claude processes running"
-}

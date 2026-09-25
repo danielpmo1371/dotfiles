@@ -15,7 +15,6 @@ CONFIG_DIRS=(
     "nvim"
     "fastfetch"
     "ripgrep"
-    "tmux-palette"
 )
 
 install_config_dirs() {
