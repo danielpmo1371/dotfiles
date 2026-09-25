@@ -1,33 +1,22 @@
 #!/usr/bin/env bash
 #
-# Claude AZDO Pipeline Hooks Installer
-# Installs the PreToolUse guard hooks that gate Azure DevOps pipeline runs:
-#   - pipeline-guard.sh               (matches mcp__azure-devops__pipelines_run_pipeline)
-#   - pipeline-trigger-guard.sh       (matches Bash; blocks direct curl/az/gh triggers)
-#   - pipeline-registry-write-guard.sh (matches Edit|Write|NotebookEdit|Bash;
-#                                       blocks AI mutations of pipeline-registry.json)
+# Claude Hooks Installer
+# General-purpose installer for the loose (non-subdirectory) config/claude/hooks/*.sh
+# files that settings.json references and that are NOT pipeline-specific:
+#   - destructive-ops-guard.sh (PreToolUse/Bash; enforces the No-Delete Rule)
+#   - notification.sh          (Notification; desktop notification side effect)
 #
-# The pipeline hooks are referenced by:
-#   - agents/pipeline-runner.md
-#   - commands/pipe-deploy.md
-#   - skills/pipeline-ops/SKILL.md
-#
-# The general (non-pipeline) loose hooks are owned by claude-hooks.sh.
+# The Azure DevOps pipeline guard hooks are owned by claude-azdo-pipeline-hooks.sh.
 #
 # This installer creates per-file symlinks inside ~/.claude/hooks/. The hooks/
 # directory itself is not whole-symlinked because memory-hooks.sh and
 # logging-hooks.sh also populate it with their own subdirectories.
 #
-# Settings registration (the PreToolUse entries) lives in config/claude/settings.json
+# Settings registration (the hook entries) lives in config/claude/settings.json
 # which is whole-symlinked by claude.sh, so this installer does NOT modify
 # settings.json.
 #
-# Prerequisites: ~/.claude/scripts/pipeline-validator.sh and pipeline-registry.sh
-# (delivered automatically by --claude via the whole-dir scripts symlink).
-# Their absence produces a warning, not a failure, so this installer can run
-# before --claude has been executed without aborting.
-#
-# Usage: ./claude-azdo-pipeline-hooks.sh [--dry-run]
+# Usage: ./claude-hooks.sh [--dry-run]
 
 set -euo pipefail
 
@@ -38,17 +27,10 @@ source "$DOTFILES_ROOT/lib/install-common.sh"
 
 HOOKS_SOURCE_DIR="$DOTFILES_ROOT/config/claude/hooks"
 HOOKS_TARGET_DIR="$HOME/.claude/hooks"
-SCRIPTS_TARGET_DIR="$HOME/.claude/scripts"
 
 CLAUDE_HOOK_FILES=(
-    "pipeline-guard.sh"
-    "pipeline-trigger-guard.sh"
-    "pipeline-registry-write-guard.sh"
-)
-
-PIPELINE_HOOK_PREREQS=(
-    "pipeline-validator.sh"
-    "pipeline-registry.sh"
+    "destructive-ops-guard.sh"
+    "notification.sh"
 )
 
 DRY_RUN=false
@@ -61,7 +43,7 @@ parse_args() {
 }
 
 link_claude_hooks() {
-    log_info "Linking Claude AZDO pipeline guard hooks to $HOOKS_TARGET_DIR"
+    log_info "Linking Claude general hooks to $HOOKS_TARGET_DIR"
 
     if $DRY_RUN; then
         for hook in "${CLAUDE_HOOK_FILES[@]}"; do
@@ -90,25 +72,6 @@ link_claude_hooks() {
     done
 }
 
-check_prerequisites() {
-    log_info "Checking prerequisite scripts in $SCRIPTS_TARGET_DIR"
-
-    local missing=0
-    for prereq in "${PIPELINE_HOOK_PREREQS[@]}"; do
-        if [[ -e "$SCRIPTS_TARGET_DIR/$prereq" ]]; then
-            log_success "Found prereq: $prereq"
-        else
-            log_warn "Missing prereq: $SCRIPTS_TARGET_DIR/$prereq"
-            ((missing++)) || true
-        fi
-    done
-
-    if (( missing > 0 )); then
-        log_warn "$missing prerequisite script(s) missing — hooks will be linked but may fail at runtime."
-        log_warn "Run './install.sh --claude' to install them via the scripts whole-dir symlink."
-    fi
-}
-
 verify_installation() {
     log_info "Verifying installation"
 
@@ -133,16 +96,15 @@ verify_installation() {
         return 1
     fi
 
-    log_success "Claude AZDO pipeline hooks installation verified"
+    log_success "Claude general hooks installation verified"
     return 0
 }
 
 main() {
-    log_header "Claude AZDO Pipeline Hooks"
+    log_header "Claude General Hooks"
     parse_args "$@"
 
     link_claude_hooks
-    check_prerequisites
     verify_installation
 
     if ! $DRY_RUN; then

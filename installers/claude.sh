@@ -172,10 +172,12 @@ install_claude_config() {
     # Install the hooks that settings.json references. The hooks/ directory is
     # not a whole symlink (each installer owns a different part of it), so each
     # one needs its own run:
-    #   - claude-azdo-pipeline-hooks.sh: the loose *.sh guards and notification.sh
+    #   - claude-azdo-pipeline-hooks.sh: the loose pipeline-*.sh guards
+    #   - claude-hooks.sh:               the loose general hooks (No-Delete guard, notification.sh)
     #   - logging-hooks.sh:              the hooks/logging/ directory symlink
     #   - memory-hooks.sh:               hooks/memory/ + hooks/utilities/ (needs network)
-    run_hook_dependency "claude-azdo-pipeline-hooks.sh" "Claude guard and notification hooks"
+    run_hook_dependency "claude-azdo-pipeline-hooks.sh" "Claude AZDO pipeline guard hooks"
+    run_hook_dependency "claude-hooks.sh" "Claude general hooks (No-Delete guard, notifications)"
     run_hook_dependency "logging-hooks.sh" "Claude session logging hooks"
     run_hook_dependency "memory-hooks.sh" "Claude MCP memory hooks"
 

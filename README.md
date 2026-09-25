@@ -69,7 +69,7 @@ run non-interactively.
 
 Phase 1 runs, in order: brew (macOS) → tools → casks → secrets → fonts → tmux →
 bash → zsh → terminals → config-dirs → mcp → memory-hooks → logging-hooks →
-pipeline-hooks. Phase 2 installs the Claude Code CLI and symlinks its config.
+pipeline-hooks → claude-hooks. Phase 2 installs the Claude Code CLI and symlinks its config.
 
 ### Individual components
 
@@ -89,12 +89,13 @@ pipeline-hooks. Phase 2 installs the Claude Code CLI and symlinks its config.
 ### Claude Code & AI
 
 ```bash
-./install.sh --claude       # Claude Code CLI + settings (also installs pipeline hooks)
+./install.sh --claude       # Claude Code CLI + settings (also installs pipeline + general hooks)
 ./install.sh --mcp          # Sync config/mcp/servers.json into ~/.claude.json
 ./install.sh --llm          # llm CLI + Groq plugin — powers the `q` quick-query
 ./install.sh --memory-hooks # Persistent-memory hooks for Claude Code
 ./install.sh --logging-hooks # Session logging hooks
 ./install.sh --claude-azdo-pipeline-hooks  # Azure DevOps pipeline guard hooks
+./install.sh --claude-hooks # General Claude hooks: No-Delete guard, notifications
 ```
 
 ### Backup & restore

@@ -233,6 +233,7 @@ select_components() {
         "memory-hooks:MCP memory service hooks:off" \
         "logging-hooks:Session logging hooks:off" \
         "claude-azdo-pipeline-hooks:Claude AZDO pipeline guard hooks:off" \
+        "claude-hooks:Claude general hooks (No-Delete guard, notifications):off" \
         "services:claude-rc Remote Control service:off") || result=""
 
     # Parse space-separated result into array
@@ -366,6 +367,10 @@ get_component_targets() {
         claude-azdo-pipeline-hooks)
             echo "symlink:$root/config/claude/hooks/pipeline-guard.sh:$HOME/.claude/hooks/pipeline-guard.sh"
             echo "symlink:$root/config/claude/hooks/pipeline-trigger-guard.sh:$HOME/.claude/hooks/pipeline-trigger-guard.sh"
+            ;;
+        claude-hooks)
+            echo "symlink:$root/config/claude/hooks/destructive-ops-guard.sh:$HOME/.claude/hooks/destructive-ops-guard.sh"
+            echo "symlink:$root/config/claude/hooks/notification.sh:$HOME/.claude/hooks/notification.sh"
             ;;
         fonts)
             echo "download:::Nerd Fonts (MesloLGS NF)"
@@ -539,6 +544,7 @@ run_dialog_installation() {
             memory-hooks) run_installer "memory-hooks.sh" "main" ;;
             logging-hooks) run_installer "logging-hooks.sh" "main" ;;
             claude-azdo-pipeline-hooks) run_installer "claude-azdo-pipeline-hooks.sh" "main" ;;
+            claude-hooks) run_installer "claude-hooks.sh" "main" ;;
             services)     run_installer "services.sh" "install_services" ;;
             *)            continue ;;
         esac
@@ -619,6 +625,7 @@ show_help() {
     echo "  --memory-hooks Install MCP memory hooks"
     echo "  --logging-hooks Install session logging hooks"
     echo "  --claude-azdo-pipeline-hooks  Install Claude AZDO pipeline guard hooks"
+    echo "  --claude-hooks Install Claude general hooks (No-Delete guard, notifications)"
     echo "  --services     Install claude-rc Remote Control service (systemd/launchd)"
     echo ""
     echo "Backup & Restore:"
@@ -714,6 +721,7 @@ install_dotfiles_core() {
     _run_step "memory-hooks"   "memory-hooks.sh"              "main"
     _run_step "logging-hooks"  "logging-hooks.sh"            "main"
     _run_step "pipeline-hooks" "claude-azdo-pipeline-hooks.sh" "main"
+    _run_step "claude-hooks"   "claude-hooks.sh"               "main"
 
     local end; end=$(date +%s)
     echo ""
@@ -912,6 +920,14 @@ main() {
                     log_warn "Claude AZDO pipeline hooks installation failed, continuing..."
                     ((failures++))
                     failed_components+="  - claude-azdo-pipeline-hooks\n"
+                }
+                ;;
+            --claude-hooks)
+                # Install Claude general hooks (No-Delete guard, notifications)
+                run_installer "claude-hooks.sh" "main" || {
+                    log_warn "Claude general hooks installation failed, continuing..."
+                    ((failures++))
+                    failed_components+="  - claude-hooks\n"
                 }
                 ;;
             --services)
