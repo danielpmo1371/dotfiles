@@ -52,6 +52,11 @@ if [[ -f "$SECRETS_LIB" ]]; then
     export PIPELINE_GUARD_TERRAFORM_APPLY_STAGE="$(secret PIPELINE_GUARD_TERRAFORM_APPLY_STAGE 2>/dev/null)"
     # export CLAUDE_CODE_OAUTH_TOKEN="$(secret CLAUDE_CODE_OAUTH_TOKEN 2>/dev/null)"
 
+    # mcp-memory-service requires X-API-Key on every route. Read by the ${VAR}
+    # header in config/mcp/servers.json and by the memory hooks' MemoryClient
+    # (see config/claude/hooks/patches/).
+    export MEMORY_MCP_API_KEY="$(secret MEMORY_MCP_API_KEY 2>/dev/null)"
+
     # Groq key for the `llm` quick-query (q function). The llm-groq model classes
     # declare key_env_var="GROQ_API_KEY" (the var llm reads on the prompt path), while
     # an older helper path reads LLM_GROQ_KEY — so export both to cover every code path.

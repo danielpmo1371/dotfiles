@@ -187,6 +187,34 @@ NODE
   log_success "All hook dependencies resolve"
 }
 
+# Re-apply the dotfiles patches to the freshly downloaded upstream files.
+#
+# download_hooks replaces every vendored file with the upstream copy, so a
+# local change made directly in those files would be lost on the next run.
+# Each change lives as a patch in hooks/patches/ instead and is applied here.
+# A patch that no longer applies (e.g. after a MEMORY_SERVICE_TAG bump) fails
+# the install rather than silently shipping the hooks without it.
+apply_hook_patches() {
+  local patches_dir="$DOTFILES_ROOT/config/claude/hooks/patches"
+  local patch_file
+
+  for patch_file in "$patches_dir"/*.patch; do
+    [[ -e "$patch_file" ]] || continue
+
+    if $DRY_RUN; then
+      log_info "[DRY-RUN] Would apply patch: $(basename "$patch_file")"
+      continue
+    fi
+
+    if ! git -C "$DOTFILES_ROOT" apply "$patch_file"; then
+      log_error "Patch $(basename "$patch_file") does not apply to the downloaded hooks"
+      log_error "Refresh it against $MEMORY_SERVICE_TAG or drop it if upstream now covers it"
+      return 1
+    fi
+    log_success "Applied patch $(basename "$patch_file")"
+  done
+}
+
 create_config() {
   log_info "Creating hooks config.json..."
 
@@ -210,7 +238,7 @@ create_config() {
     },
     "defaultTags": ["claude-code", "auto-generated"],
     "maxMemoriesPerSession": 8,
-    "enableSessionConsolidation": true,
+    "enableSessionConsolidation": false,
     "injectAfterCompacting": false
   },
   "autoCapture": {
@@ -530,6 +558,7 @@ main() {
   # hooks for two days.
   download_hooks || return 1
   verify_hook_requires || return 1
+  apply_hook_patches || return 1
 
   create_config
   link_hooks_to_home

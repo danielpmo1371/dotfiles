@@ -16,7 +16,7 @@
     },
     "defaultTags": ["claude-code", "auto-generated"],
     "maxMemoriesPerSession": 8,
-    "enableSessionConsolidation": true,
+    "enableSessionConsolidation": false,
     "injectAfterCompacting": false
   },
   "autoCapture": {

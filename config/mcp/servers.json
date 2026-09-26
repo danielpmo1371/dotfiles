@@ -1,7 +1,10 @@
 {
   "memory": {
     "type": "http",
-    "url": "http://memory-mcp.hl.nuvemlabs.co.nz:8000/mcp"
+    "url": "http://memory-mcp.hl.nuvemlabs.co.nz:8000/mcp",
+    "headers": {
+      "X-API-Key": "${MEMORY_MCP_API_KEY}"
+    }
   },
   "browser-network": {
     "type": "sse",

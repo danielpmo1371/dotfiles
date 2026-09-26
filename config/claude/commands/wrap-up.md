@@ -212,9 +212,9 @@ each item complete as you finish it.
 
 4. **Store the handoff as a memory** (best-effort) so it resurfaces in this repo.
 
-   - Probe first: `mcp__memory__check_database_health`. The Memory MCP is a LAN
+   - Probe first: `mcp__memory__memory_health`. The Memory MCP is a LAN
      endpoint, so off-LAN it is simply unreachable — that is the normal case,
-     not an edge case. If healthy, `mcp__memory__store_memory` with tags
+     not an edge case. If healthy, `mcp__memory__memory_store` with tags
      `session-handoff`, the repo name, and the topic.
    - If unreachable, fall back to the harness auto-memory directory for this
      project: `~/.claude/projects/<slug>/memory/`, where `<slug>` is the

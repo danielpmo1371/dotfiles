@@ -17,13 +17,13 @@ Parse the user's input as `/memory <operation> [args]`. If no operation is given
 
 | Operation | MCP Tool | Description |
 |-----------|----------|-------------|
-| `search <query>` | `mcp__memory__retrieve_memory` | Semantic similarity search |
-| `store <content>` | `mcp__memory__store_memory` | Save new information |
-| `recall <time-expr>` | `mcp__memory__recall_memory` | Time-based recall ("last week", "yesterday") |
-| `tags <tag1,tag2>` | `mcp__memory__search_by_tag` | Find memories by tags |
-| `list [page]` | `mcp__memory__list_memories` | Browse all memories with pagination |
-| `health` | `mcp__memory__check_database_health` | Check memory service status |
-| `delete <hash>` | `mcp__memory__delete_memory` | Remove a specific memory |
+| `search <query>` | `mcp__memory__memory_search` | Semantic similarity search |
+| `store <content>` | `mcp__memory__memory_store` | Save new information |
+| `recall <time-expr>` | `mcp__memory__memory_search` (`time_expr`) | Time-based recall ("last week", "yesterday") |
+| `tags <tag1,tag2>` | `mcp__memory__memory_list` (`tags`) | Find memories by tags |
+| `list [page]` | `mcp__memory__memory_list` | Browse all memories with pagination |
+| `health` | `mcp__memory__memory_health` | Check memory service status |
+| `delete <hash>` | `mcp__memory__memory_delete` | Remove a specific memory |
 
 ## Argument Parsing
 
@@ -31,23 +31,23 @@ Parse the user's input as `/memory <operation> [args]`. If no operation is given
 - `/memory search docker setup` -> `search` for "docker setup"
 - `/memory store Remember to update DNS after migration` -> `store` the content
 - `/memory recall last week` -> `recall` with time expression "last week"
-- `/memory tags project,infrastructure` -> `search_by_tag` with tags ["project", "infrastructure"]
-- `/memory list` -> `list_memories` page 1
-- `/memory list 3` -> `list_memories` page 3
-- `/memory health` -> `check_database_health`
-- `/memory delete abc123` -> `delete_memory` with hash "abc123"
+- `/memory tags project,infrastructure` -> `memory_list` with tags ["project", "infrastructure"]
+- `/memory list` -> `memory_list` page 1
+- `/memory list 3` -> `memory_list` page 3
+- `/memory health` -> `memory_health`
+- `/memory delete abc123` -> `memory_delete` with content_hash "abc123"
 
 ## Operation Details
 
 ### search
 
-Use `mcp__memory__retrieve_memory` with the query text. Set `limit` to 10 and `similarity_threshold` to 0.6 for broad results.
+Use `mcp__memory__memory_search` with the query text and `limit` 10.
 
-If no results found, try `mcp__memory__recall_memory` as a fallback with the same query text.
+If no results found and the query contains a time expression ("last week", "yesterday"), retry `mcp__memory__memory_search` with that expression as `time_expr`.
 
 ### store
 
-Use `mcp__memory__store_memory` with the content. Auto-generate tags from the content:
+Use `mcp__memory__memory_store` with the content, passing tags as `metadata.tags`. Auto-generate tags from the content:
 - Extract project names (e.g., "dotfiles", "archer", "homelab")
 - Extract topic keywords (e.g., "infrastructure", "debugging", "config")
 - Add a type tag based on content nature: "fact", "decision", "note", "reminder", "lesson"
@@ -58,28 +58,28 @@ Example tag generation:
 
 ### recall
 
-Use `mcp__memory__recall_memory` with the time expression as the query. Common expressions:
+Use `mcp__memory__memory_search` with the time expression as `time_expr` (no `query` needed). Common expressions:
 - "last hour", "today", "yesterday", "last week", "last month"
 - "2 days ago", "this morning"
 
 ### tags
 
-Split comma-separated tags and use `mcp__memory__search_by_tag`. Default operation is "AND" (all tags must match). If prefixed with "any:", use "OR" operation.
+Split comma-separated tags and use `mcp__memory__memory_list` with `tags`. Default is `"tag_match": "all"` (AND, all tags must match). If prefixed with "any:", use `"tag_match": "any"` (OR).
 
 - `/memory tags project,dns` -> AND search for both tags
 - `/memory tags any:wishlist,reminder` -> OR search for either tag
 
 ### list
 
-Use `mcp__memory__list_memories` with `page_size` of 10. Accept an optional page number argument (default 1).
+Use `mcp__memory__memory_list` with `page_size` of 10. Accept an optional page number argument (default 1).
 
 ### health
 
-Use `mcp__memory__check_database_health`. Report the service status, memory count, and any issues.
+Use `mcp__memory__memory_health`. Report the service status, memory count, and any issues.
 
 ### delete
 
-**Always confirm before deleting.** Show the memory content and ask the user to confirm. Use `mcp__memory__delete_memory` with the content hash only after confirmation.
+**Always confirm before deleting.** Show the memory content and ask the user to confirm. Use `mcp__memory__memory_delete` with `content_hash` only after confirmation.
 
 ## Output Format
 

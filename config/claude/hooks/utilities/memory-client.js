@@ -18,7 +18,12 @@ class MemoryClient {
         this.protocol = config.protocol || 'auto';
         this.preferredProtocol = config.preferredProtocol || 'mcp';
         this.fallbackEnabled = config.fallbackEnabled !== false;
-        this.httpConfig = config.http || {};
+        // dotfiles patch: the API key comes from MEMORY_MCP_API_KEY so the
+        // tracked config.json never holds it (config/claude/hooks/patches/).
+        this.httpConfig = {
+            ...(config.http || {}),
+            apiKey: process.env.MEMORY_MCP_API_KEY || config.http?.apiKey
+        };
         this.mcpConfig = config.mcp || {};
         this.allowSelfSignedCerts = config.allowSelfSignedCerts === true;
 

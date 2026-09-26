@@ -337,7 +337,7 @@ For Level 4 (Architecture):
 
 **Load Memory Tool**:
 ```
-Use ToolSearch to load: "select:mcp__memory__store_memory"
+Use ToolSearch to load: "select:mcp__memory__memory_store"
 ```
 
 **Store Format**:

@@ -454,7 +454,7 @@ $DOTFILES_REPO/
 
 ```javascript
 // Use ToolSearch to load memory tool
-await toolSearch.search("select:mcp__memory__store_memory");
+await toolSearch.search("select:mcp__memory__memory_store");
 ```
 
 ### Storage Format
