@@ -48,6 +48,7 @@ local browser     = "google-chrome-stable"
 hl.on("hyprland.start", function ()
     hl.exec_cmd("wayle panel start") -- bare `wayle` only prints help
     hl.exec_cmd("awww-daemon") -- restores the last image per output from its own cache
+    hl.exec_cmd("hyprpm reload -n") -- loads enabled hyprpm plugins (hyprexpo); -n: notify only on failure
 end)
 
 
@@ -278,6 +279,7 @@ hl.bind(mainMod .. " + M", hl.dsp.exit())
 hl.bind(mainMod .. " + F", hl.dsp.exec_cmd(fileManager))
 hl.bind(mainMod .. " + P", hl.dsp.exec_cmd(menu))
 hl.bind(mainMod .. " + W", hl.dsp.exec_cmd("zen-browser"))
+hl.bind(mainMod .. " + SHIFT + W", hl.dsp.exec_cmd("wayle panel toggle")) -- show/hide the Wayle bar on all monitors
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(browser))
 -- Cycle the focused monitor's wallpaper (awww); exec env may lack PATH, so absolute path.
 hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/wall-next next"))
