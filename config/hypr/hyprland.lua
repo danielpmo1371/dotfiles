@@ -48,7 +48,7 @@ local browser     = "google-chrome-stable"
 hl.on("hyprland.start", function ()
     hl.exec_cmd("wayle panel start") -- bare `wayle` only prints help
     hl.exec_cmd("awww-daemon") -- restores the last image per output from its own cache
-    hl.exec_cmd("hyprpm reload -n") -- loads enabled hyprpm plugins (hyprexpo); -n: notify only on failure
+    hl.exec_cmd("hyprpm reload -n") -- loads enabled hyprpm plugins (hyprexpo); -n adds a success notification
 end)
 
 
@@ -133,18 +133,24 @@ hl.config({
     animations = {
         enabled = true,
     },
-
-    plugin = {
-      hyprexpo = {
-        columns          = 3,
-        rows             = 2,
-        gaps_in          = 5,
-        gaps_out         = 0,
-        workspace_method = "center current",
-        fill_gaps        = 0,
-      },
-    },
 })
+
+-- Plugin keys are unknown until hyprpm loads the plugin; loading it reloads the
+-- config, which applies this block. The guard avoids the startup error bar.
+if hl.plugin.hyprexpo ~= nil then
+    hl.config({
+        plugin = {
+          hyprexpo = {
+            columns          = 3,
+            rows             = 2,
+            gaps_in          = 5,
+            gaps_out         = 0,
+            workspace_method = "center current",
+            fill_gaps        = 0,
+          },
+        },
+    })
+end
 
 -- Default curves and animations, see https://wiki.hypr.land/Configuring/Advanced-and-Cool/Animations/
 hl.curve("easeOutQuint",   { type = "bezier", points = { {0.23, 1},    {0.32, 1}    } })
