@@ -1,0 +1,231 @@
+#compdef tmutil
+
+# Completion for tmutil(8), the macOS Time Machine utility.
+#
+# Notes:
+# - Verb list and per-verb syntax follow `tmutil help`; option descriptions
+#   follow tmutil(8). Options that appear in the usage text but are not
+#   described in the manual (compare -h/-l, restore -v) are offered with an
+#   "undocumented" description rather than an invented one.
+# - Destination IDs are read live from `tmutil destinationinfo`; local
+#   snapshot dates from `tmutil listlocalsnapshotdates`. Both degrade to a
+#   plain message when the command prints nothing.
+
+# Complete backup destination IDs (described by their volume name)
+(( $+functions[_tmutil_destinations] )) ||
+_tmutil_destinations() {
+  local line name
+  local -a dests
+
+  for line in ${(f)"$(_call_program destinations tmutil destinationinfo 2>/dev/null)"}; do
+    case $line in
+      Name[[:space:]]#:*)
+        name=${line##Name[[:space:]]#:[[:space:]]#}
+        ;;
+      ID[[:space:]]#:*)
+        dests+=( "${line##ID[[:space:]]#:[[:space:]]#}:${name//:/\\:}" )
+        name=
+        ;;
+    esac
+  done
+
+  if (( $#dests )); then
+    _describe -t destinations 'backup destination' dests "$@"
+  else
+    _message -e destinations 'backup destination ID'
+  fi
+}
+
+# Complete local snapshot dates (YYYY-MM-DD-HHMMSS)
+(( $+functions[_tmutil_snapshot_dates] )) ||
+_tmutil_snapshot_dates() {
+  local -a expl dates
+
+  dates=( ${(f)"$(_call_program snapshot-dates tmutil listlocalsnapshotdates 2>/dev/null)"} )
+  # Keep only lines that look like a snapshot date; drop the header line
+  dates=( ${(M)dates:#[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]} )
+
+  if (( $#dates )); then
+    _wanted snapshot-dates expl 'snapshot date' compadd "$@" -a dates
+  else
+    _message -e snapshot-dates 'snapshot date (YYYY-MM-DD-HHMMSS)'
+  fi
+}
+
+# Complete tmutil verbs
+(( $+functions[_tmutil_verbs] )) ||
+_tmutil_verbs() {
+  local -a verbs
+
+  verbs=(
+    'addexclusion:configure an exclusion so an item is not backed up'
+    'associatedisk:bind a volume store directory to a local disk'
+    'calculatedrift:analyze the amount of change between backups in a machine directory'
+    'compare:perform a backup diff'
+    'delete:delete backups with the specified timestamp from a backup volume'
+    'deleteinprogress:delete all in-progress backups for a machine directory'
+    'deletelocalsnapshots:delete local snapshots for a date or a disk'
+    'destinationinfo:print information about configured destinations'
+    'disable:turn off automatic backups'
+    'enable:turn on automatic backups'
+    'help:show usage for a verb'
+    'inheritbackup:claim a machine directory or sparsebundle for this machine'
+    'isexcluded:determine if items are excluded from backups'
+    "latestbackup:list this computer's latest completed backup"
+    "listbackups:list all of this computer's completed backups"
+    'listlocalsnapshotdates:list the creation dates of local snapshots'
+    'listlocalsnapshots:list local snapshots of a volume'
+    'localsnapshot:create new local snapshots of all APFS volumes in the backup'
+    'machinedirectory:print the path to the current machine directory'
+    'removedestination:remove a destination from the Time Machine configuration'
+    'removeexclusion:configure an item to be backed up again'
+    'restore:restore an item from a backup to a location'
+    'setdestination:configure a volume or network share as a backup destination'
+    'setquota:set the quota for a destination in gigabytes'
+    'startbackup:begin a backup if one is not already running'
+    'stopbackup:cancel a backup currently in progress'
+    'thinlocalsnapshots:thin local snapshots for a volume'
+    'uniquesize:determine the unique size of a path in a backup'
+    'verifychecksums:verify checksums of data within a backup'
+    'version:print the tmutil version'
+  )
+
+  _describe -t commands 'tmutil verb' verbs "$@"
+}
+
+_tmutil() {
+  local curcontext="$curcontext" state state_descr line ret=1
+  local -A opt_args
+
+  _arguments -C \
+    '1: :->verb' \
+    '*:: :->args' && ret=0
+
+  case $state in
+    verb)
+      _tmutil_verbs && ret=0
+      ;;
+    args)
+      curcontext="${curcontext%:*:*}:tmutil-$words[1]:"
+      case $words[1] in
+        addexclusion|removeexclusion)
+          _arguments \
+            '(-v)-p[configure fixed-path exclusions]' \
+            '(-p)-v[configure volume exclusions]' \
+            '*:item:_files' && ret=0
+          ;;
+        associatedisk)
+          _arguments \
+            '-a[associate all volume stores in the machine directory that match the identity of the given one]' \
+            '1:mount point:_files -/' \
+            '2:volume store directory:_files -/' && ret=0
+          ;;
+        calculatedrift|deleteinprogress)
+          _arguments '1:machine directory:_files -/' && ret=0
+          ;;
+        compare)
+          _arguments \
+            '-a[compare all supported metadata]' \
+            '-n[no metadata comparison]' \
+            '-@[compare extended attributes]' \
+            '-c[compare creation times]' \
+            '-d[compare file data forks]' \
+            '-e[compare ACLs]' \
+            '-f[compare file flags]' \
+            '-g[compare GIDs]' \
+            '-h[undocumented in tmutil(8)]' \
+            '-l[undocumented in tmutil(8)]' \
+            '-m[compare file modes]' \
+            '-s[compare sizes]' \
+            '-t[compare modification times]' \
+            '-u[compare UIDs]' \
+            '-D[limit traversal depth]:depth' \
+            "-E[don't take exclusions into account when comparing items inside volumes]" \
+            '*-I[ignore paths with a path component equal to name]:path component name' \
+            '-U[ignore logical volume identity (volume UUIDs) when comparing a local volume or volume store to a volume store]' \
+            '-X[print output in XML property list format]' \
+            '1:backup path or first path:_files' \
+            '2:second path:_files' && ret=0
+          ;;
+        delete)
+          _arguments \
+            '-d[backup volume mounted at the specified mount point]:backup mount point:_files -/' \
+            '*-t[timestamp of a backup to delete]:timestamp' \
+            '-p[specific path to delete (HFS backup disks only)]:path:_files' && ret=0
+          ;;
+        deletelocalsnapshots)
+          _arguments \
+            '1: : _alternative "mount-points:mount point:_files -/" "snapshot-dates:snapshot date:_tmutil_snapshot_dates"' && ret=0
+          ;;
+        destinationinfo)
+          _arguments '-X[print output in XML property list format]' && ret=0
+          ;;
+        help)
+          _arguments '1:verb:_tmutil_verbs' && ret=0
+          ;;
+        inheritbackup)
+          _arguments '1:machine directory or sparsebundle:_files -/' && ret=0
+          ;;
+        isexcluded)
+          _arguments \
+            '-X[print output in XML property list format]' \
+            '*:item:_files' && ret=0
+          ;;
+        latestbackup|listbackups)
+          _arguments \
+            '-m[mount the backups and list their mounted paths]' \
+            '-t[show only the backup timestamp rather than the full name or path]' \
+            '-d[destination volume to list backups from]:backup mount point:_files -/' && ret=0
+          ;;
+        listlocalsnapshotdates|listlocalsnapshots)
+          _arguments '1:mount point:_files -/' && ret=0
+          ;;
+        removedestination)
+          _arguments '1:destination:_tmutil_destinations' && ret=0
+          ;;
+        restore)
+          _arguments \
+            '-v[undocumented in tmutil(8)]' \
+            '*:source path or destination:_files' && ret=0
+          ;;
+        setdestination)
+          _arguments \
+            '-a[add to the list of destinations instead of replacing it]' \
+            '-p[enter the network share password at a non-echoing interactive prompt]' \
+            '1: : _alternative "mount-points:mount point:_files -/" "urls:share URL:_message -e urls \"share URL (protocol\://user\[\:pass\]@host/share)\""' && ret=0
+          ;;
+        setquota)
+          _arguments \
+            '1:destination:_tmutil_destinations' \
+            '2:quota in gigabytes' && ret=0
+          ;;
+        startbackup)
+          _arguments \
+            '(-a --auto)'{-a,--auto}'[run the backup in a mode similar to system-scheduled backups]' \
+            '(-b --block)'{-b,--block}'[wait until the backup is finished before exiting]' \
+            '(-r --rotation)'{-r,--rotation}'[allow automatic destination rotation during the backup]' \
+            '(-d --destination)'{-d,--destination}'[perform the backup to the specified destination]:destination:_tmutil_destinations' && ret=0
+          ;;
+        thinlocalsnapshots)
+          _arguments \
+            '1:mount point:_files -/' \
+            '2:purge amount in bytes' \
+            '3:urgency:(1 2 3 4)' && ret=0
+          ;;
+        uniquesize|verifychecksums)
+          _arguments '*:path:_files' && ret=0
+          ;;
+        disable|enable|localsnapshot|machinedirectory|stopbackup|version)
+          _message 'no more arguments' && ret=0
+          ;;
+        *)
+          _default && ret=0
+          ;;
+      esac
+      ;;
+  esac
+
+  return ret
+}
+
+_tmutil "$@"

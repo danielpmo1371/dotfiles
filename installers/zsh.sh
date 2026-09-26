@@ -15,6 +15,24 @@ ZSH_FILES=(
     "p10k.zsh:.p10k.zsh"
 )
 
+# Run the custom completions installer. The completion files are part of the
+# zsh config, so they are a dependency of --zsh rather than an optional extra.
+# A failure is warned about and never fatal, matching claude.sh's
+# run_hook_dependency: a broken completion must not abort the whole --zsh run.
+run_zsh_completions_dependency() {
+    local installer="$DOTFILES_ROOT/installers/zsh-completions.sh"
+
+    if [[ ! -x "$installer" ]]; then
+        log_warn "zsh-completions.sh not found or not executable: $installer"
+        return 0
+    fi
+
+    log_info "Installing custom zsh completions (dependency)..."
+    if ! "$installer"; then
+        log_warn "Zsh completions installer reported failures"
+    fi
+}
+
 install_zsh_config() {
     log_header "Zsh Configuration"
 
@@ -33,6 +51,10 @@ install_zsh_config() {
     fi
 
     link_home_files "zsh" "${ZSH_FILES[@]}"
+
+    # Custom completions live in a shared fpath dir, so they get their own
+    # per-file installer (see installers/zsh-completions.sh)
+    run_zsh_completions_dependency
 
     # Install Zap plugin manager if not present (only if zsh and curl are available)
     if [[ "$zsh_available" == "true" ]] && [[ "$curl_available" == "true" ]]; then
@@ -57,6 +79,7 @@ install_zsh_config() {
     echo "Files installed:"
     echo "  - .zshrc (main config)"
     echo "  - .p10k.zsh (Powerlevel10k theme customizations)"
+    echo "  - ~/.local/share/zsh/completions/_* (custom completions, per-file symlinks)"
     echo ""
     echo "Plugins (via Zap): powerlevel10k, zsh-autosuggestions, zsh-syntax-highlighting"
     echo ""

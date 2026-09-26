@@ -20,6 +20,7 @@
 #   6. tmux.sh       - Tmux + TPM + plugins - requires: git, terminal config
 #   7. bash.sh       - Bash configuration - no dependencies
 #   8. zsh.sh        - Zsh configuration + Zap - requires: git, zsh, curl
+#   8b. zsh-completions.sh - Custom zsh completions (auto-run by zsh.sh) - no dependencies
 #   9. config-dirs.sh - Symlink config directories (nvim) - no dependencies
 #   10. claude.sh     - Claude Code CLI + settings - requires: node, npm
 #  11. mcp.sh        - MCP configuration - requires: jq, node, npm
@@ -335,6 +336,11 @@ get_component_targets() {
         zsh)
             echo "symlink:$root/config/zsh/zshrc:$HOME/.zshrc"
             echo "symlink:$root/config/zsh/p10k.zsh:$HOME/.p10k.zsh"
+            # zsh.sh auto-invokes zsh-completions.sh
+            echo "symlink:$root/config/zsh/completions/_tmutil:$HOME/.local/share/zsh/completions/_tmutil"
+            ;;
+        zsh-completions)
+            echo "symlink:$root/config/zsh/completions/_tmutil:$HOME/.local/share/zsh/completions/_tmutil"
             ;;
         tmux)
             echo "symlink:$root/config/tmux/tmux.conf:$HOME/.tmux.conf"
@@ -616,6 +622,7 @@ show_help() {
     echo "  --tmux         Install tmux and plugins"
     echo "  --bash         Install bash configuration"
     echo "  --zsh          Install zsh configuration"
+    echo "  --zsh-completions  Install custom zsh completions (auto-run by --zsh)"
     echo "  --terminals    Install terminal emulators config"
     echo "  --hypr         Install Hyprland compositor config (Linux only)"
     echo "  --fonts        Install Nerd Fonts for Powerlevel10k"
@@ -834,6 +841,13 @@ main() {
                     log_warn "Zsh config installation failed, continuing..."
                     ((failures++))
                     failed_components+="  - zsh\n"
+                }
+                ;;
+            --zsh-completions)
+                run_installer "zsh-completions.sh" "install_zsh_completions" || {
+                    log_warn "Zsh completions installation failed, continuing..."
+                    ((failures++))
+                    failed_components+="  - zsh-completions\n"
                 }
                 ;;
             # --nushell removed (heavy/niche). Left commented on purpose.
