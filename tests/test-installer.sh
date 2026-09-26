@@ -170,7 +170,13 @@ test_zsh() {
     assert_command_exists zsh
     assert_symlink_exists "$HOME/.zshrc" "zshrc"
     assert_symlink_exists "$HOME/.p10k.zsh" "p10k config"
+    assert_symlink_exists "$HOME/.local/share/zsh/completions/_tmutil" "tmutil completion"
     assert_dir_exists "$HOME/.local/share/zap" "zap plugin manager"
+}
+
+test_zsh_completions() {
+    echo -e "\n${BLUE}=== Testing: zsh-completions ===${NC}"
+    assert_symlink_exists "$HOME/.local/share/zsh/completions/_tmutil" "tmutil completion"
 }
 
 test_config_dirs() {
@@ -278,6 +284,7 @@ case "$component" in
     tmux)        test_tmux ;;
     bash)        test_bash ;;
     zsh)         test_zsh ;;
+    zsh-completions) test_zsh_completions ;;
     config-dirs) test_config_dirs ;;
     claude)      test_claude ;;
     mcp)         test_mcp ;;

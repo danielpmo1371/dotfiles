@@ -25,6 +25,7 @@ Personal dotfiles repository with modular installation system. Supports macOS an
 ./install.sh --tmux         # Tmux + TPM + plugins (requires: git)
 ./install.sh --bash         # Bash configuration
 ./install.sh --zsh          # Zsh configuration (requires: git, zsh, curl)
+./install.sh --zsh-completions  # Custom zsh completions (config/zsh/completions/_*), auto-run by --zsh
 ./install.sh --terminals    # Terminal emulators (Ghostty, etc.)
 ./install.sh --hypr         # Hyprland compositor config (Linux only; binds, XKB ctrl/alt swap)
 ./install.sh --fonts        # Nerd Fonts for Powerlevel10k (requires: curl)
@@ -72,6 +73,8 @@ config/              # Configuration files organized by tool
 - Claude files use `link_target_files()` to `~/.claude/`
 
 **Shell Config**: Modular design where `~/.zshrc` and `~/.bashrc` source shared files from `config/shell/` (env.sh, path.sh, aliases.sh, git.sh, tmux.sh).
+
+**Custom zsh completions**: Completion functions live in `config/zsh/completions/` (one `_<cmd>` file per command). `installers/zsh-completions.sh` (auto-invoked by `installers/zsh.sh`, standalone via `./install.sh --zsh-completions`) symlinks them per file into `~/.local/share/zsh/completions/`, the directory `zshrc` prepends to `fpath`. That directory is never whole-symlinked because it also holds generated completions (e.g. `_bat`). Because `zshrc` runs `compinit -C` unless `~/.zcompdump` is older than 24h, the installer backdates the dump's mtime so the next shell start does a full `compinit` and picks up new files. To add one: drop `_<cmd>` in `config/zsh/completions/` and run `./install.sh --zsh-completions`.
 
 **Quick AI query (`q`)**: The `q` function (`config/shell/aliases.sh`) is a one-shot query over the `llm` CLI, optimized for low time-to-first-token (defaults to Groq's `openai/gpt-oss-20b`). Provider is a one-var switch: `AI_PROVIDER` in `env.sh` (`groq|gemini|openai|claude`) maps to a model id in the function; `AI_MODEL` pins a specific id. The Groq key lives in the keychain (`secret_set GROQ_API_KEY ...`) and is exported as `LLM_GROQ_KEY` by `secrets.sh`. Answers are rendered as markdown by `glow` (`Q_RENDER=pretty`, the default) so bold, bullets and code blocks display as formatting rather than literal `*`/backtick markers; `Q_RENDER=raw` restores the streaming `bat` path (lowest time-to-first-token, markers visible). Renderers are optional — the chain degrades glow → bat → cat, and piped output is always raw markdown. Installed via `./install.sh --llm` (standalone, not part of `--all` since it needs an API key), which also installs glow.
 
