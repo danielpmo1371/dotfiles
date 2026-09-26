@@ -8,7 +8,12 @@
   WorkingDirectory=%h/repos
   # Interactive login shell (-i) so ~/.zshrc runs and exports PATH, secrets, AI_PROVIDER, etc.
   # A plain -l shell only reads ~/.zprofile/~/.zlogin, which don't exist here.
-  ExecStart=/bin/zsh -lic 'exec %h/.local/bin/claude remote-control --name %H-repos'
+  # Bridge debug log (reconnects after suspend/resume, session errors); stdout
+  # can't serve this, it's the TUI. %S = ~/.local/state, created by StateDirectory.
+  # The previous run's log is kept as debug.log.1 so a restart keeps the evidence.
+  StateDirectory=claude-rc
+  ExecStartPre=-/bin/mv -f %S/claude-rc/debug.log %S/claude-rc/debug.log.1
+  ExecStart=/bin/zsh -lic 'exec %h/.local/bin/claude remote-control --name %H-repos --debug-file %S/claude-rc/debug.log'
   Restart=on-failure
   RestartSec=10
   # stdout is the TUI redrawing every second (~500k journal lines/day); errors go to stderr
