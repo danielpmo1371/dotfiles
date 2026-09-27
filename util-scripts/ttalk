@@ -6,6 +6,14 @@
 # back to the system engines when Piper, the model or an audio player is missing.
 # Exits 0 even with no TTS engine available — callers (Claude sessions,
 # scripts) must never fail because audio is missing.
+#
+# Playback is serialized machine-wide: several Claude sessions (tmux panes,
+# sub-agents, parallel tool calls) finishing together used to speak over each
+# other until none was intelligible. Each message now waits for a lock and
+# plays alone. Piper synthesis runs before the lock so queued messages still
+# play back-to-back. A message that cannot get the lock within TTALK_WAIT
+# seconds is dropped — a notification that late is stale, and dropping bounds
+# the queue.
 
 set -u
 
@@ -14,8 +22,61 @@ set -u
 # and non-login contexts (Hyprland binds, cron), still get the Piper voice.
 PIPER_VOICE="${PIPER_VOICE:-${XDG_DATA_HOME:-$HOME/.local/share}/piper/voices/en_GB-cori-high.onnx}"
 
+# Lock shared by every ttalk process of this user. XDG_RUNTIME_DIR is per-user
+# and tmpfs (cleared at logout); TMPDIR is the per-user fallback on macOS.
+TTALK_LOCK="${TTALK_LOCK:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/ttalk.lock}"
+# Seconds a message waits for the speaker before it is dropped as stale.
+TTALK_WAIT="${TTALK_WAIT:-120}"
+# Poll interval (seconds) of the mkdir lock used where flock is unavailable.
+readonly MKDIR_LOCK_POLL=0.2
+# Exit status for "speaker busy past TTALK_WAIT" (EX_TEMPFAIL, sysexits.h). It
+# must differ from an engine failure so a timed-out message is dropped rather
+# than retried on the next engine.
+readonly LOCK_TIMEOUT=75
+
 msg="$*"
 [[ -z "$msg" ]] && { echo "usage: ttalk <message>" >&2; exit 1; }
+
+# Run "$@" while holding the speaker lock; returns LOCK_TIMEOUT without
+# running it when the lock is not acquired within TTALK_WAIT seconds.
+with_speaker_lock() {
+    if command -v flock >/dev/null 2>&1; then
+        # The kernel releases a flock when its holder dies, so a crashed or
+        # killed ttalk can never wedge the queue.
+        (
+            flock -w "$TTALK_WAIT" 9 || exit "$LOCK_TIMEOUT"
+            "$@"
+        ) 9>"$TTALK_LOCK"
+    else
+        with_mkdir_lock "$@"
+    fi
+}
+
+# Portable fallback (macOS ships no flock): mkdir is atomic. The holder's pid
+# is recorded so a lock left behind by a killed process is reclaimed. It must
+# be this subshell's pid, not $$ (the parent script, already exited); the
+# child sh reports it as PPID because BASHPID needs bash 4 and macOS ships 3.2.
+# Known limit: two waiters reclaiming the same stale lock at once can both
+# proceed, so after a killed ttalk one pair of messages may overlap once;
+# flock (Linux) has no such window.
+with_mkdir_lock() {
+    local dir="$TTALK_LOCK.d" holder status
+    local deadline=$((SECONDS + TTALK_WAIT))
+    until mkdir "$dir" 2>/dev/null; do
+        holder=$(cat "$dir/pid" 2>/dev/null)
+        if [[ -n "$holder" ]] && ! kill -0 "$holder" 2>/dev/null; then
+            rm -rf "$dir"
+            continue
+        fi
+        (( SECONDS >= deadline )) && return "$LOCK_TIMEOUT"
+        sleep "$MKDIR_LOCK_POLL"
+    done
+    sh -c 'echo "$PPID"' >"$dir/pid"
+    "$@"
+    status=$?
+    rm -rf "$dir"
+    return "$status"
+}
 
 play_wav() {
     if command -v pw-play >/dev/null 2>&1; then
@@ -32,22 +93,35 @@ speak_piper() {
     [[ -f "${PIPER_VOICE:-}" ]] || return 1
     local wav status
     wav=$(mktemp "${TMPDIR:-/tmp}/ttalk.XXXXXX") || return 1
-    printf '%s' "$msg" | piper-tts -m "$PIPER_VOICE" -f "$wav" && play_wav "$wav"
-    status=$?
+    if printf '%s' "$msg" | piper-tts -m "$PIPER_VOICE" -f "$wav"; then
+        with_speaker_lock play_wav "$wav"
+        status=$?
+    else
+        status=1
+    fi
     rm -f "$wav"
     return "$status"
 }
 
-speak() {
-    if speak_piper; then
-        return
-    elif command -v say >/dev/null 2>&1; then        # macOS
+# System engines synthesize and play in one step, so the lock covers both.
+speak_system() {
+    if command -v say >/dev/null 2>&1; then          # macOS
         say "$msg"
     elif command -v espeak-ng >/dev/null 2>&1; then  # Linux
         espeak-ng "$msg"
     elif command -v spd-say >/dev/null 2>&1; then    # Linux (speech-dispatcher)
-        spd-say "$msg"
+        # -w waits until spoken; without it the lock would be released while
+        # speech-dispatcher is still talking.
+        spd-say -w "$msg"
     fi
+}
+
+speak() {
+    speak_piper
+    case $? in
+        0|"$LOCK_TIMEOUT") return ;;
+    esac
+    with_speaker_lock speak_system
 }
 
 # Background so the caller isn't blocked for the duration of the speech.
