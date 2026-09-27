@@ -35,6 +35,36 @@ if [[ -n "${TMUX:-}" && ( "${DISPLAY_PROMPT_MARKER:-}" == "true" || "${DISPLAY_P
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
+#   Never leave the pane title empty (tmux-resurrect safety)
+# ─────────────────────────────────────────────────────────────────────────────
+# Claude Code clears the pane title when it exits. tmux-resurrect parses its
+# tab-separated pane lines with `IFS=$'\t' read`, which collapses the empty
+# title field, shifting every later field left: the saved cwd becomes "0"/"1"
+# and restored panes open in $HOME. Restore the tmux default title (short
+# hostname) at each prompt, only when empty, so `prefix T` titles are kept.
+if [[ -n "${TMUX:-}" && -n "${TMUX_PANE:-}" ]]; then
+    __tmux_fill_empty_title() {
+        tmux if-shell -F -t "$TMUX_PANE" '#{pane_title}' '' \
+            "select-pane -t '$TMUX_PANE' -T '${__tmux_default_title}'" 2>/dev/null
+    }
+
+    if [[ -n "$ZSH_VERSION" ]]; then
+        __tmux_default_title="${HOST%%.*}"
+        if [[ ! " ${precmd_functions[*]} " =~ " __tmux_fill_empty_title " ]]; then
+            precmd_functions+=(__tmux_fill_empty_title)
+        fi
+    fi
+
+    if [[ -n "$BASH_VERSION" ]]; then
+        __tmux_default_title="${HOSTNAME%%.*}"
+        case ";${PROMPT_COMMAND:-};" in
+            *";__tmux_fill_empty_title;"*) ;;
+            *) PROMPT_COMMAND="__tmux_fill_empty_title;${PROMPT_COMMAND:-}" ;;
+        esac
+    fi
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
 #   Tmux aliases
 # ─────────────────────────────────────────────────────────────────────────────
 alias ta='tmux attach -t'
