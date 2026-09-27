@@ -211,3 +211,9 @@ Append new lessons at the bottom of this section, dated. Each lesson follows the
   5. **Verify from the server, not the DOM you just wrote**: reopen a fresh window/handle and read back the persisted values; cross-check an aggregate (e.g. a running total). Aligns with the Verification Integrity Rules — prove it, don't assert it.
   6. **Stale windows overwrite**: a leftover popup you didn't capture can't be closed by you and, if saved, overwrites good data with its stale state. Surface it to the user to close manually; never assume the tree is clean.
   7. The in-page guard blocks any JS return value containing a URL/query string — return only booleans/plain values when inspecting.
+
+### Shared-device side effects need a lock in the tool (2026-09-27)
+
+- **Rule**: A tool that writes to a shared resource (speaker, file, port, device) from a background job must serialize itself. Never rely on callers to take turns.
+- **Why**: 2026-09-27 — 3-4 Claude sessions finished together, each ran `ttalk` per the Communication rule, and all spoke at once, unintelligibly. Independent sessions can't see each other, so no prompt rule could have prevented it. Fixed in `ttalk` with a flock-based speaker lock (dotfiles 3ad4555).
+- **How to apply**: Before backgrounding (`&`) any side effect, ask "what if N of these run at once?", counting every pane, sub-agent and teammate. Implement serialize/coalesce/drop inside the tool, and add a test that fires parallel callers and asserts no overlap. Calling `ttalk` concurrently is now safe (it queues), so keep one call per completion; don't add waits or checks around it.

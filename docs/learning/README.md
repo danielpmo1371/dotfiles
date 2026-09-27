@@ -79,6 +79,24 @@ When things go wrong, we don't just fix them—we **learn from them** and **prev
 
 ---
 
+### 2026-09-27: Concurrent ttalk Notifications Overlapped
+
+**What Happened**: Three or four Claude sessions finished together and each ran `ttalk`; all spoke at once and none was intelligible.
+
+**Why It Matters**: The notification's purpose (knowing which work finished without looking) was lost. Separate sessions can't coordinate, so caller-side rules can't fix it.
+
+**Documents**:
+- `incident-2026-09-27-ttalk-overlap.md` - Root cause analysis
+
+**Outcome**:
+- `util-scripts/ttalk` serializes playback behind a per-user lock (flock; mkdir fallback on macOS), drops messages still waiting after `TTALK_WAIT` (3ad4555)
+- `tests/test-ttalk-serialize.sh` pins no-overlap, timeout drop, stale-lock reclaim
+- Project + global CLAUDE.md updated
+
+**Key Lesson**: A background job on a shared device needs its own lock. Instructions to independent callers can't serialize them.
+
+---
+
 ## Learning Process
 
 Each incident follows this template:
@@ -113,6 +131,7 @@ Each incident follows this template:
 - `judgment-error-analysis.md` - Deep dive into root causes and failure modes (external dep edit)
 - `incident-2026-03-11-skill-forge-not-used.md` - Root cause analysis (skill creation without validation)
 - `incident-2026-03-11-terraform-destroys-missed.md` - Root cause analysis (terraform plan verification)
+- `incident-2026-09-27-ttalk-overlap.md` - Root cause analysis (concurrent ttalk overlap)
 
 ### Summaries
 - `LEARNING-SUMMARY-2026-03-11.md` - Executive summary (external dep edit)
