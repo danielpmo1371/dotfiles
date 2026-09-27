@@ -113,6 +113,94 @@ Revert commit; re-enable `hyprpaper` autostart line. Wallpapers dir is standalon
 - 2026-09-25: all 7 clones OK, 3184 images, ~15 GB on disk (du incl. .git packs; larger than repo sizes quoted).
 
 ## ACTIVE: tmux shortcut — fork this pane's claude session into a new pane (2026-09-25)
+## ACTIVE: move nvim popup from Ctrl+a to Ctrl+1 (2026-09-27)
+
+### State
+- **Status**: COMPLETE (verified up to the wire; physical Ctrl+1 press pending Daniel reattaching)
+- **Branch**: main
+
+### Goal
+`Ctrl+a` (tmux root binding -> nvim popup) collides with Claude Code's own
+Ctrl+a. Move the popup to `Ctrl+1`; Ctrl+a falls through to the app again.
+
+### Facts established
+- Binding lives at `config/tmux/tmux.conf` `bind -n C-a display-popup ... "nvim"`.
+  The comment above it says "(Ctrl+q)" — stale.
+- `Ctrl+1` has NO byte in the legacy keyboard protocol (it sends plain `1`).
+  tmux can only see it as `C-1` via extended keys (xterm modifyOtherKeys).
+- tmux 3.7c: `bind -n C-1` parses (verified on a scratch server). `extended-keys`
+  is `off`; `terminal-features` for `xterm*` lacks `extkeys`; the live client
+  (termtype "ghostty 1.3.1", TERM xterm-256color) reports features without
+  `extkeys`, so tmux never asks Ghostty for extended keys today.
+- man tmux: tmux requests extended keys from the outer terminal when the
+  terminal has the `extkeys` feature; `extended-keys on` only lets inner apps
+  opt in (safe; `always` would force mode 1 on everyone).
+- Ghostty `super+a=text:\x01` stays: Cmd+a -> ^A now reaches the app, which is
+  exactly the de-collision wanted. `super+1` already maps to ^Q (claude popup);
+  untouched.
+
+### Plan
+1. tmux.conf server options block: `set -s extended-keys on` and
+   `set -as terminal-features 'xterm-256color:extkeys'` with a comment.
+2. tmux.conf popups: `bind -n C-a` -> `bind -n C-1`; fix the stale comment.
+3. `tmux source-file ~/.tmux.conf`; verify options, `list-keys` shows `C-1` and
+   no root `C-a`; check `#{client_termfeatures}` (may need reattach).
+4. Commit only these hunks (tmux.conf carries an unrelated plugin hunk).
+5. Physical keypress check is the user's: reattach, press Ctrl+1.
+
+### Log
+- 18:45 Edited tmux.conf (2 hunks). Sourced live server; `unbind -n C-a` applied live (source-file does not unbind). Options: extended-keys on, terminal-features[3]=xterm-256color:extkeys; root table has C-1, no C-a.
+- 18:48 Live client still reports features without extkeys: features are fixed at attach -> Daniel must reattach (or open a new Ghostty window).
+- 18:52 tmux 3.7c source (tty.c/tty-features.c/tty-keys.c): extkeys => Eneks=\E[>4;2m; sent from tty_update_features() when extended-keys!=off, after DA/XDA reply or 5s timeout. Ghostty is not in tmux's XTVERSION table (iTerm2/tmux/XTerm/mintty/foot/WezTerm only) -> explicit terminal-features entry is required. CSI 27;5;49~ and CSI 49;5u both decode to codepoint 49 | KEYC_CTRL == C-1.
+- 18:53 pty test: scratch client with TERM=xterm-256color gets features ...,extkeys,...; waiting past 5s timeout to capture Eneks on the wire.
+- 18:56 Wire proof: typescript shows ESC[>4;2m on attach and ESC[>4m on detach. Committed the two hunks only (plugin hunk left unstaged). Status: COMPLETE.
+
+## ACTIVE: custom zsh completions installer + _tmutil (2026-09-27)
+
+### State
+- **Status**: COMPLETE (verified) — commits `3373098`, `fa43525`
+- **Branch**: main
+
+### Goal
+`tmutil <Tab>` completes verbs/options in zsh, delivered from the dotfiles repo
+by an installer, so any custom completion is one file drop away.
+
+### Facts established
+- No `_tmutil` exists anywhere: not in zsh 5.9 upstream, not in
+  zsh-users/zsh-completions (has `_diskutil` only), not from Apple.
+- `config/zsh/zshrc:88` already prepends `~/.local/share/zsh/completions` to fpath.
+- That dir is a REAL dir holding an untracked, generated `_bat`. Symlinking the
+  whole dir would back it up and drop `_bat` from fpath -> per-file symlinks instead
+  (same reason `~/.claude/hooks/` gets per-file links).
+- zshrc runs `compinit -C` unless `~/.zcompdump` is >24h old, so a new `_tmutil`
+  is invisible until the dump regenerates. Forcing the dump's mtime to the epoch
+  (touch, not rm) makes the next shell take the full `compinit` path.
+
+### Plan
+1. `config/zsh/completions/_tmutil` — `#compdef tmutil`, `_arguments -C` with
+   verb state; every verb from `tmutil` usage (29 verbs) with its flags, `_files`
+   for paths, `_directories` for mount points/machine dirs, `startbackup -d`
+   completes destination ids from `tmutil destinationinfo -X`.
+2. `installers/zsh-completions.sh` (`install_zsh_completions`): ensure_dir
+   `~/.local/share/zsh/completions`; for each `config/zsh/completions/_*`
+   `create_symlink_with_backup`; if `~/.zcompdump` exists, `touch -t 197001010000`
+   it so zshrc regenerates the cache on next start; print hint.
+3. `installers/zsh.sh`: auto-invoke `zsh-completions.sh` after linking (mirrors
+   claude.sh -> hooks installers). `install.sh`: `--zsh-completions` flag, usage
+   line, `get_component_targets zsh` gains the `_tmutil` symlink.
+4. Tests/docs: `tests/test-installer.sh test_zsh` + `tests/validate-symlinks.sh`
+   assert the `_tmutil` link; CLAUDE.md gets the component line and a
+   "Custom zsh completions" note.
+5. Verify: `./install.sh --zsh-completions`, then in a fresh `zsh -i`:
+   `_comps[tmutil]` == `_tmutil`, and `tmutil <Tab>` lists verbs (capture via
+   `zsh -ic` + `_complete_debug` or `compadd` dump). Run both test scripts.
+6. Commit atomically: (a) completion + installer, (b) tests/docs.
+
+### Log
+- 2026-09-27: diagnosed (no `_tmutil` anywhere; fpath/compinit fine). Plan written.
+- 2026-09-27: built via 2 agents (completion, installer wiring); fixed `((linked++))` errexit trap; ran `--zsh-completions` for real: `_tmutil` linked, `_bat` kept, zcompdump backdated then regenerated on first shell (`_comps[tmutil]=_tmutil`). test-installer zsh/zsh-completions + validate-symlinks green. Committed 3373098 + fa43525.
+
+## DONE: tmux shortcut — fork this pane's claude session into a new pane (2026-09-25)
 
 ### State
 - **Status**: COMPLETE (verified) — commit `249c079`
@@ -1264,6 +1352,45 @@ State.Status = DONE
 - Verified on isolated sockets and a scratch session on the live server (hook run via bash eval like resurrect's execute_hook). Live config reloaded.
 - Not committed with this change: issue-15 "New packages" plugin hunk in the same file (left unstaged).
 
+---
+
+## In Progress: conversation-history skill has no body (2026-09-17)
+
+### State
+- **Status**: COMPLETE (committed 14:20)
+- **Branch**: main
+
+### Root cause (Phase 1 complete)
+- `config/claude/skills/conversation-history/SKILL.md` is 4 lines: frontmatter only, no instructions. Committed that way in `aa064c0` (2026-03-11, "claude skill added convo history"); never had a body. Installed copy (`~/.claude/skills/...` symlink) is identical, so it's a source defect, not an install drift.
+- Frontmatter `name: conversation-search` mismatches the dir name `conversation-history` (every other skill in the repo matches). The Skill tool lists by dir name, so this is a hygiene bug, not the failure cause.
+- Effect: the skill triggers correctly, then the model has to improvise (as in the extract: `cat SKILL.md` → "no instructions" → ad-hoc agent).
+
+### Evidence gathered on data sources (for the body)
+- `~/.claude/projects/<cwd-slug>/<sessionId>.jsonl`: per-session transcript. Record `type` in {user, assistant, system, ai-title, summary, ...}. `user`/`assistant` carry `timestamp` (UTC ISO), `cwd`, `gitBranch`, `sessionId`, `message.content` (string or content-block array). `ai-title.aiTitle` gives the session title.
+- `~/.claude/history.jsonl` (4.6k lines): global prompt index — `{display, timestamp(ms epoch), project, sessionId}`. Cheapest way to find *which* sessions touched a date/keyword, then drill into the transcript.
+- Timestamps are UTC; Daniel is NZ (UTC+12/+13) — date filters must convert. `autotask-timesheet/SKILL.md` already encodes this rule; reuse it.
+
+### Plan
+1. Rewrite `config/claude/skills/conversation-history/SKILL.md` (body, keep description; fix `name:` to `conversation-history`):
+   - Step 1 resolve scope: dates ("Monday" → absolute NZ date → UTC window) and/or keywords; project filter defaults to all projects unless the ask is about "this repo".
+   - Step 2 locate sessions: filter `~/.claude/history.jsonl` by timestamp window / keyword (`jq`), collect `sessionId`+`project`; map to `~/.claude/projects/*/<sessionId>.jsonl`.
+   - Step 3 extract: per session, `jq` user prompts + assistant text (skip tool_use/tool_result blobs), plus `ai-title`; cap output; hand to one read-only `general-purpose` agent when >N sessions so main context stays lean.
+   - Step 4 report: per-day (or per-topic) bullets with session title, repo, outcome; cite `sessionId` so `claude --resume <id>` works.
+   - Guardrails: read-only; never print secrets found in transcripts; note gaps (compacted/summarised sessions).
+2. Add `config/claude/skills/conversation-history/REFERENCE.md` with the `jq` recipes (record shapes above) so SKILL.md stays short.
+3. Run `/skill-forge` on the result (mandatory per CLAUDE.md), apply P1/P2.
+4. Verify: fresh session, prompt "what did we do Monday and Tuesday" → skill loads, follows steps, returns per-day summary without improvising. Also `find ~/.claude/skills/conversation-history/` resolves to repo (symlink, already confirmed).
+5. Commit: `conversation-history: add missing skill body, fix name mismatch`.
+
+### Log
+- 2026-09-17 root cause confirmed (see above). No files changed yet.
+
+## Done: fzf preview paging via cmd+d/cmd+u (2026-09-17)
+- `config/shell/env.sh`: `FZF_DEFAULT_OPTS` += `--bind ctrl-d:preview-half-page-down,ctrl-u:preview-half-page-up`. Ghostty already forwards cmd+d/cmd+u as ^D/^U; tmux passes them through outside copy-mode. Validated with fzf 0.74.3 (`--filter` parse OK). Overrides fzf default ctrl-u (clear query) / ctrl-d (eof). Uncommitted.
+- `config/shell/aliases.sh`: new `fzf-vi()` (vi-style modal fzf: esc→NORMAL j/k/g/G/q, i|a|/→INSERT, other alnum swallowed via per-char `ignore` binds + start:unbind / esc:rebind). `gl` now uses it. Verified via detached tmux: mode prompt switch, j/k/G/g cursor moves, q→exit 130, swallowed keys, and real `gl` selecting fzf rank #2. bash -n / zsh -n clean. Uncommitted.
+
+---
+
 ## Plan — `q` markdown rendering (literal `*` in Groq answers) — 2026-09-18
 
 ### Problem (evidence, not assumption)
@@ -2062,3 +2189,54 @@ Status = NEEDS_PLAN_APPROVAL
 ### Log
 - 647bcef docs: q default model is gpt-oss-20b (housekeeping before this work).
 - Enable link `default.target.wants/claude-rc.service` made relative (`../claude-rc.service`); verified is-enabled, enable no-op, default.target dep, service not restarted. Commit: see git log.
+## ACTIVE: cross-platform `rm` → trash (2026-09-25)
+
+### State
+- **Status**: COMPLETE (committed 14:20)
+- **Branch**: main
+
+### Problem
+`rm()` in config/shell/aliases.sh:35 does `mv "$@" ~/bin/`. Consequences seen today:
+a corrupt plist "deleted" with rm landed in ~/bin (backed up, on PATH) and killed
+the next Time Machine run; ~/bin holds 153 "deleted" items; `rm -rf x` becomes
+`mv -rf x ~/bin/` which is wrong.
+
+### Plan
+1. **aliases.sh** — replace `rm()`:
+   - no args → "rm: missing operand" on stderr, return 1.
+   - strip leading rm flags (`-r -R -f -i -v -d -rf -fr ...`, `--`); trash
+     handles directories, so flags are accepted and ignored.
+   - dispatch, first match wins:
+     a. `trash-put` on PATH (Arch/Debian trash-cli, freedesktop spec) → `trash-put -- "$@"`.
+     b. `trash` on PATH (macOS 14+ /usr/bin/trash, brew trash) → `trash "$@"` with
+        dash-leading names prefixed `./`.
+     c. fallback: mv into `~/.Trash` (darwin) or `~/.local/share/Trash/files`
+        (linux), mkdir -p, collision suffix `.<epoch>`.
+   - real rm remains reachable as `command rm` / `\rm`; comment says so.
+2. **installers/tools.sh** — in the non-darwin branch add
+   `specs+=("trash-put|trash|trash-cli|trash-cli")`. macOS ships /usr/bin/trash,
+   no install needed there.
+3. **tests/test-rm-trash.sh** — hermetic (fake HOME, fake PATH), runs under bash
+   and zsh like tests/test-cres-fallback.sh. Cases: trash-put preferred; trash
+   used when trash-put absent; fallback dir per OSTYPE; flags stripped; `--`
+   honoured; dash-leading filename; directory; no-arg error; multiple files.
+4. **Arch e2e** — run the test inside the Arch docker image via tests/test-docker.sh
+   (test-dotfiles skill) to prove trash-cli path and fallback path on Linux.
+5. Commit: aliases.sh + tools.sh + test in one commit (Daniel's staged-diff
+   rules: only these hunks; aliases.sh already has unrelated uncommitted edits →
+   stage by hunk).
+
+### Out of scope
+- Cleaning ~/bin (153 items) — user's call.
+- Removing `~/bin` from PATH.
+
+### Log
+- 13:55 Plan written, awaiting approval.
+- 13:58 Approved. Dispatching implementation agent (no git mutations; lead commits).
+- 14:10 Impl agent done. Lead verified: git log untouched, only rm block + tools.sh line + new test changed. 90/90 bash+zsh on macOS.
+- 14:11 cres test's 2 FAILs reproduce against HEAD's aliases.sh → pre-existing, not ours.
+- 14:13 Docker unavailable locally (no OrbStack/Docker Desktop app), no Arch host reachable. Linux run done on pang (Ubuntu, bash only): 45/45.
+- 14:14 Real trash-cli (venv in scratchpad) end-to-end on macOS: trash-put dispatch, .trashinfo written, symlink moved as link, trash-restore OK, missing-file rc propagated.
+- 14:15 Review agent running.
+- 14:17 Review: 0 blockers, 5 should-fix → all applied by impl agent. Lead re-verified: 126/126 local bash+zsh, 63/63 on pang, real trash-cli OK in both shells.
+- 14:20 Committed (rm hunk + tools.sh + test only). Status: COMPLETE.

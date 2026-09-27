@@ -149,7 +149,36 @@ alias gs='git status'
 alias cm='git cm'
 alias psh='git push'
 alias lg='git log --pretty'
-alias flg="git log --oneline | fzf --ansi --preview 'git show --color=always {1}' | awk '{print \$1}' | xargs git show"
+# fzf with vi-style modal input. INSERT (default) is plain fzf typing. `esc` enters
+# NORMAL: j/k move, g/G first/last, i/a/`/` back to INSERT, q aborts; every other
+# alphanumeric key is swallowed so the query is not edited by accident. ctrl-d/ctrl-u
+# (cmd+d/cmd+u under Ghostty) page the preview in both modes via FZF_DEFAULT_OPTS.
+fzf-vi() {
+    local normal_prompt='[N] > ' insert_prompt='> '
+    local keys=() binds=() k
+    for k in {a..z} {A..Z} {0..9} space /; do keys+=("$k"); done
+    local keylist; keylist=$(IFS=,; printf '%s' "${keys[*]}")
+    local to_insert="unbind($keylist)+change-prompt($insert_prompt)"
+    for k in "${keys[@]}"; do
+        case "$k" in
+            j) binds+=("j:down") ;;
+            k) binds+=("k:up") ;;
+            g) binds+=("g:first") ;;
+            G) binds+=("G:last") ;;
+            q) binds+=("q:abort") ;;
+            i|a|/) binds+=("$k:$to_insert") ;;
+            *) binds+=("$k:ignore") ;;
+        esac
+    done
+    local bindlist; bindlist=$(IFS=,; printf '%s' "${binds[*]}")
+    fzf --prompt "$insert_prompt" \
+        --bind "$bindlist" \
+        --bind "start:unbind($keylist)" \
+        --bind "esc:rebind($keylist)+change-prompt($normal_prompt)" \
+        "$@"
+}
+
+alias gl="git log --oneline | fzf-vi --ansi --preview 'git show --color=always {1}' | awk '{print \$1}' | xargs git show"
 
 # Git show with syntax highlighting (uses delta > bat > git native)
 gshow() {
@@ -471,6 +500,59 @@ if [[ "$OSTYPE" == darwin* ]]; then
         else
             caffeinate -is "$@"
         fi
+    }
+
+    # tmprogress — Time Machine backup progress bar drawn by pv.
+    # The bar follows Time Machine's own `Percent` (what the UI shows), fed to
+    # pv as one byte per 0.01% since pv only counts bytes. The line above shows
+    # the phase, that percentage, the raw bytes copied and TM's own ETA. The two
+    # percentages differ on purpose: Percent is TM's blend of files and bytes,
+    # so it runs ahead of bytes% while many small files are copied and the
+    # bytes figure catches up on large ones. Ends when tmutil reports Running = 0.
+    tmprogress() {
+        local poll_secs=5 units=10000 gib=1073741824 sent=0
+        local phase running total bytes eta pct
+        command -v pv >/dev/null || { echo "tmprogress: pv not installed (./install.sh --tools)" >&2; return 1; }
+        # One awk pass over `tmutil status` -> "phase running totalBytes bytes eta pct(0.01% units)"
+        local fields='
+            { gsub(/;/, "") }
+            /BackupPhase/ { p = $3 }
+            /Running/ { r = $3 }
+            /totalBytes/ && !/_raw/ { t = $3 }
+            /^ *bytes/ { b = $3 }
+            /TimeRemaining/ { e = $3 }
+            /^ *Percent/ { pc = $3 }
+            END { print (p ? p : "Idle"), r + 0, t + 0, b + 0, int(e), int(pc * 10000) }'
+        read -r phase running total bytes eta pct <<< "$(tmutil status | awk -F'[ ="]+' "$fields")"
+        (( running )) || { echo "Time Machine: not running" >&2; return 0; }
+        cat >&2 <<'HELP'
+tmprogress: bar and TM% follow Time Machine's own Percent (same as the UI), a
+blend of files and bytes. bytes% is raw data copied; it lags TM% through many
+small files and catches up on large ones. Remaining is TM's estimate, not pv's.
+
+HELP
+        {
+            local done_units remaining copied
+            while (( running )); do
+                done_units=$pct
+                (( done_units < 0 )) && done_units=0
+                (( done_units > units )) && done_units=$units
+                (( done_units > sent )) && { head -c $(( done_units - sent )) /dev/zero; sent=$done_units; }
+                if (( total > 0 )); then
+                    copied=$(printf '%d.%d/%d.%d GiB (%d.%d%%)' \
+                        $(( bytes / gib )) $(( bytes * 10 / gib % 10 )) \
+                        $(( total / gib )) $(( total * 10 / gib % 10 )) \
+                        $(( bytes * 100 / total )) $(( bytes * 1000 / total % 10 )))
+                else
+                    copied='size not known yet'
+                fi
+                remaining=$( (( eta > 0 )) && printf '%dh %02dm remaining' $(( eta / 3600 )) $(( eta % 3600 / 60 )) || printf 'ETA unknown' )
+                printf '\033[A\r%s | TM %d.%02d%% | bytes %s | %s\033[K\n' \
+                    "$phase" $(( done_units / 100 )) $(( done_units % 100 )) "$copied" "$remaining" >&2
+                sleep "$poll_secs"
+                read -r phase running total bytes eta pct <<< "$(tmutil status | awk -F'[ ="]+' "$fields")"
+            done
+        } | pv -s "$units" -pte >/dev/null
     }
 fi
 

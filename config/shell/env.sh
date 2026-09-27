@@ -25,7 +25,10 @@ export RIPGREP_CONFIG_PATH="$XDG_CONFIG_HOME/ripgrep/config"
 #   FZF
 # ─────────────────────────────────────────────────────────────────────────────
 export FZF_COMPLETION_TRIGGER='**'
-export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border'
+# ctrl-d/ctrl-u page the *preview* pane (Ghostty forwards cmd+d/cmd+u as ^D/^U,
+# see config/ghostty/config). Overrides fzf's default ctrl-u (clear query) and
+# ctrl-d (delete-char/eof); use ctrl-w / esc for those.
+export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border --bind ctrl-d:preview-half-page-down,ctrl-u:preview-half-page-up'
 
 # ─────────────────────────────────────────────────────────────────────────────
 #   AI Tools (non-secret settings)

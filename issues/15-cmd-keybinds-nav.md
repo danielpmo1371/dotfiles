@@ -27,6 +27,14 @@ free grab. Check what actually depends on them before overwriting:
 - `super+m` → `text:\x0D` (^M, **Enter**)
 
 `super+i` and `super+m` are the risky two: they currently deliver Tab and Enter.
-Decide whether tabs/sessions mean Ghostty tabs or tmux windows/sessions — if
-tmux, the binding should send the tmux prefix sequence rather than a Ghostty
-action, and the tmux side (`config/tmux/tmux.conf`) needs matching bindings.
+
+**Constraint on the fix** — see `docs/terminal-agnostic-config.md`. "Tab" and
+"session" here must mean **tmux windows and sessions**, not Ghostty tabs. Ghostty's
+only job is forwarding `super+<key>` to a control code; the navigation itself is
+bound in `config/tmux/tmux.conf`. Binding these to Ghostty tab actions would make
+the workflow exist only under Ghostty and require reimplementing it in every other
+terminal.
+
+Item 1 (`cmd+d` → `scroll_page_down`) is a genuine emulator-layer setting:
+scrollback is owned by the emulator when not inside tmux, and `ctrl+d` is already
+bound the same way at line 92.
