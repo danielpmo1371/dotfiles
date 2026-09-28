@@ -20,7 +20,7 @@
     <array>
         <string>/bin/zsh</string>
         <string>-lic</string>
-        <string>exec &gt;/dev/null 2&gt;&gt;"$HOME/Library/Logs/claude-rc.log"; cd "$HOME/repos" &amp;&amp; exec "$HOME/.local/bin/claude" remote-control --name "$(hostname -s)-repos"</string>
+        <string>exec &gt;/dev/null 2&gt;&gt;"$HOME/Library/Logs/claude-rc.log"; cd "$HOME/repos" &amp;&amp; exec "$HOME/.local/bin/claude" remote-control --permission-mode bypassPermissions --name "$(hostname -s)-repos"</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
