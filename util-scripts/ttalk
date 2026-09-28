@@ -14,8 +14,53 @@
 # play back-to-back. A message that cannot get the lock within TTALK_WAIT
 # seconds is dropped — a notification that late is stale, and dropping bounds
 # the queue.
+#
+# `ttalk --disable` / `ttalk --enable` mute or unmute every ttalk of this user
+# (a JSON state file under XDG_STATE_HOME); a muted call exits 0 silently.
 
 set -u
+
+TTALK_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/ttalk"
+TTALK_STATE_FILE="$TTALK_STATE_DIR/state.json"
+
+# Append one line to today's log in the state dir (best effort).
+log_state() {
+    { printf '%s - %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" \
+        >> "$TTALK_STATE_DIR/$(date +%Y-%m-%d).log"; } 2>/dev/null
+}
+
+# Args: true|false
+set_enabled() {
+    mkdir -p "$TTALK_STATE_DIR" \
+        && printf '{"isEnabled": %s}\n' "$1" > "$TTALK_STATE_FILE" \
+        || { echo "ttalk: could not write $TTALK_STATE_FILE" >&2; exit 1; }
+}
+
+# Anything but isEnabled == true mutes. An unparsable file leaves ttalk
+# enabled: a lost notification is worse than an extra one. Without jq
+# (older macOS) only the literal false that set_enabled writes mutes.
+is_muted() {
+    if command -v jq >/dev/null 2>&1; then
+        jq -e '.isEnabled != true' "$TTALK_STATE_FILE" >/dev/null 2>&1
+    else
+        grep -Eq '"isEnabled"[[:space:]]*:[[:space:]]*false' "$TTALK_STATE_FILE" 2>/dev/null
+    fi
+}
+
+case "${1:-}" in
+    --enable)  set_enabled true;  echo "ttalk enabled for this user.";  exit 0 ;;
+    --disable) set_enabled false; echo "ttalk disabled for this user."; exit 0 ;;
+esac
+
+# A missing state file means enabled; it is created so the toggle is visible.
+if [[ ! -f "$TTALK_STATE_FILE" ]]; then
+    mkdir -p "$TTALK_STATE_DIR" 2>/dev/null \
+        && printf '{"isEnabled": true}\n' > "$TTALK_STATE_FILE" 2>/dev/null \
+        && log_state "No state file found. Created default state.json (enabled)."
+elif is_muted; then
+    log_state "ttalk disabled by state file; message not spoken."
+    exit 0
+fi
 
 # Default voice; export PIPER_VOICE (e.g. in env.sh) to override. Kept here
 # rather than only in env.sh so shells/sessions started before an env change,
@@ -35,7 +80,7 @@ readonly MKDIR_LOCK_POLL=0.2
 readonly LOCK_TIMEOUT=75
 
 msg="$*"
-[[ -z "$msg" ]] && { echo "usage: ttalk <message>" >&2; exit 1; }
+[[ -z "$msg" ]] && { echo "usage: ttalk <message> | ttalk --enable | ttalk --disable" >&2; exit 1; }
 
 # Run "$@" while holding the speaker lock; returns LOCK_TIMEOUT without
 # running it when the lock is not acquired within TTALK_WAIT seconds.

@@ -8,6 +8,7 @@
 # calls never overlap and all get spoken; a message that can't get the lock
 # within TTALK_WAIT is dropped, not retried on another engine; the mkdir
 # fallback (macOS has no flock) serializes too and reclaims a stale lock.
+# Also pins the --disable/--enable mute toggle (state file under HOME).
 #
 # Hermetic: PATH holds only a stub dir (fake piper-tts / pw-play / espeak-ng
 # that log to files) plus a dir of symlinks to the few real tools ttalk needs.
@@ -146,6 +147,33 @@ start=$SECONDS
 run_ttalk "$dir" 60 quick
 check "ttalk returns before playback ends" "fast" "$( (( SECONDS - start < 2 )) && echo fast || echo slow)"
 wait_for_ends "$dir" 1
+
+echo "--disable mutes and --enable unmutes"
+dir="$ROOT/toggle"
+setup_case "$dir" yes "$PLAY_SECONDS"
+ln -s "$(command -v jq)" "$dir/sysbin/jq"
+run_ttalk "$dir" 5 --disable >/dev/null
+check "--disable writes the state file" '{"isEnabled": false}' "$(cat "$dir/.local/state/ttalk/state.json")"
+run_ttalk "$dir" 5 muted
+sleep 1   # past a PLAY_SECONDS playback, had one started
+check "muted message not spoken" "" "$(cat "$dir/play.log")"
+run_ttalk "$dir" 5 --enable >/dev/null
+run_ttalk "$dir" 5 unmuted
+wait_for_ends "$dir" 1
+check "message spoken after --enable" "S unmuted|E unmuted" "$(paste -sd'|' "$dir/play.log")"
+
+echo "--disable still mutes without jq (grep fallback)"
+dir="$ROOT/toggle-nojq"
+setup_case "$dir" yes "$PLAY_SECONDS"
+ln -s "$(command -v grep)" "$dir/sysbin/grep"
+run_ttalk "$dir" 5 --disable >/dev/null
+run_ttalk "$dir" 5 muted
+sleep 1   # past a PLAY_SECONDS playback, had one started
+check "muted message not spoken" "" "$(cat "$dir/play.log")"
+run_ttalk "$dir" 5 --enable >/dev/null
+run_ttalk "$dir" 5 unmuted
+wait_for_ends "$dir" 1
+check "message spoken after --enable" "S unmuted|E unmuted" "$(paste -sd'|' "$dir/play.log")"
 
 echo
 echo "Results: $PASS passed, $FAIL failed"
