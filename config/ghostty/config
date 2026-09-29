@@ -104,10 +104,6 @@ keybind = shift+end=scroll_to_bottom
 keybind = ctrl+shift+home=scroll_to_top
 keybind = ctrl+shift+end=scroll_to_bottom
 
-# Alternative vim-style scrolling
-keybind = ctrl+u=scroll_page_up
-keybind = ctrl+d=scroll_page_down
-
 # Configure Option key as Meta for tmux prefix
 macos-option-as-alt = true
 
