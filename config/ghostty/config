@@ -92,13 +92,17 @@ window-padding-y = 20,20
 keybind = shift+page_up=scroll_page_up
 keybind = shift+page_down=scroll_page_down
 
-# Line scrolling for precise control
-#keybind = shift+up=scroll_line_up
-#keybind = shift+down=scroll_line_down
+# Line scrolling, same keys as kitty's defaults (kitty_mod+up/down). Emulator-only
+# because the emulator's own scrollback (no tmux) is invisible to tmux/the shell.
+# Not shift+up/down: tmux binds S-Up/S-Down to switch-client.
+keybind = ctrl+shift+up=scroll_page_lines:-1
+keybind = ctrl+shift+down=scroll_page_lines:1
 
-# Jump to top/bottom of scrollback
+# Jump to top/bottom of scrollback (ctrl+shift variants match kitty's defaults)
 keybind = shift+home=scroll_to_top
 keybind = shift+end=scroll_to_bottom
+keybind = ctrl+shift+home=scroll_to_top
+keybind = ctrl+shift+end=scroll_to_bottom
 
 # Alternative vim-style scrolling
 keybind = ctrl+u=scroll_page_up
