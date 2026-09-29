@@ -62,6 +62,21 @@ zle -N edit-command-line
 bindkey '^x^x' edit-command-line   # Ctrl-X Ctrl-X (avoids tmux prefix C-e)
 bindkey -M vicmd 'v' edit-command-line  # also: `v` in vi normal mode
 
+# Scrollback keys (the emulator/tmux scroll with them) reach the shell whenever
+# nothing above it takes them, e.g. S-PgDn outside copy mode. Unbound, vi mode
+# reads the sequence's ESC as a mode switch and runs the rest as commands
+# (`~` flips case, letters get eaten), so swallow each one whole.
+_scroll_key_noop() { : }
+zle -N _scroll_key_noop
+() {
+    local seq
+    #          S-PgUp    S-PgDn    C-S-Up    C-S-Down  S-Home    S-End     C-S-Home  C-S-End
+    for seq in '^[[5;2~' '^[[6;2~' '^[[1;6A' '^[[1;6B' '^[[1;2H' '^[[1;2F' '^[[1;6H' '^[[1;6F'; do
+        bindkey -M viins "$seq" _scroll_key_noop
+        bindkey -M vicmd "$seq" _scroll_key_noop
+    done
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 #   Command routing: * prefix routes to q (llm + groq)
 # ─────────────────────────────────────────────────────────────────────────────

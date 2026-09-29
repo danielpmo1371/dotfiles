@@ -87,22 +87,21 @@ macos-icon-screen-color = 000000
 window-padding-x = 20,20
 window-padding-y = 20,20   
 
-# Scrolling keybinds
-# Page scrolling (standard terminal keybinds)
-keybind = shift+page_up=scroll_page_up
-keybind = shift+page_down=scroll_page_down
-
-# Line scrolling, same keys as kitty's defaults (kitty_mod+up/down). Emulator-only
-# because the emulator's own scrollback (no tmux) is invisible to tmux/the shell.
-# Not shift+up/down: tmux binds S-Up/S-Down to switch-client.
-keybind = ctrl+shift+up=scroll_page_lines:-1
-keybind = ctrl+shift+down=scroll_page_lines:1
-
-# Jump to top/bottom of scrollback (ctrl+shift variants match kitty's defaults)
-keybind = shift+home=scroll_to_top
-keybind = shift+end=scroll_to_bottom
-keybind = ctrl+shift+home=scroll_to_top
-keybind = ctrl+shift+end=scroll_to_bottom
+# Scrollback keys are unbound so they reach tmux, which scrolls its own history
+# with them (see tmux.conf) and passes them to alternate-screen apps (nvim, less).
+# Ghostty's scroll_* actions always consume the key, even on the alternate screen
+# where they do nothing, and `performable:` doesn't change that in 1.3.1
+# (ghostty-org/ghostty#6765). Trade-off: a plain Ghostty shell without tmux has
+# mouse-wheel scrollback only. shift+page_up/page_down/home/end are Ghostty
+# defaults, hence the explicit unbinds. kitty passes them through natively.
+keybind = shift+page_up=unbind
+keybind = shift+page_down=unbind
+keybind = shift+home=unbind
+keybind = shift+end=unbind
+keybind = ctrl+shift+up=unbind
+keybind = ctrl+shift+down=unbind
+keybind = ctrl+shift+home=unbind
+keybind = ctrl+shift+end=unbind
 
 # Configure Option key as Meta for tmux prefix
 macos-option-as-alt = true
