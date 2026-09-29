@@ -19,6 +19,7 @@
 # (a JSON state file under XDG_STATE_HOME); a muted call exits 0 silently.
 # `ttalk --volume N` stores the playback volume (0-100, percent of the system
 # volume) in the same file; `ttalk --volume` prints it (default: DEFAULT_VOLUME).
+# TTALK_LENGTH_SCALE / TTALK_SENTENCE_SILENCE tune Piper's pace and pauses.
 
 set -u
 
@@ -26,6 +27,10 @@ TTALK_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/ttalk"
 TTALK_STATE_FILE="$TTALK_STATE_DIR/state.json"
 # Playback volume (percent of the system volume) until `ttalk --volume` sets one.
 readonly DEFAULT_VOLUME=40
+# Piper pacing: phoneme length multiplier (>1 speaks slower; voice default 1.0)
+# and seconds of silence after each sentence (Piper default 0.2).
+TTALK_LENGTH_SCALE="${TTALK_LENGTH_SCALE:-1.25}"
+TTALK_SENTENCE_SILENCE="${TTALK_SENTENCE_SILENCE:-0.6}"
 
 # Append one line to today's log in the state dir (best effort).
 log_state() {
@@ -187,7 +192,8 @@ speak_piper() {
     [[ -f "${PIPER_VOICE:-}" ]] || return 1
     local wav status
     wav=$(mktemp "${TMPDIR:-/tmp}/ttalk.XXXXXX") || return 1
-    if printf '%s' "$msg" | piper-tts -m "$PIPER_VOICE" -f "$wav"; then
+    if printf '%s' "$msg" | piper-tts -m "$PIPER_VOICE" -f "$wav" \
+        --length_scale "$TTALK_LENGTH_SCALE" --sentence_silence "$TTALK_SENTENCE_SILENCE"; then
         with_speaker_lock play_wav "$wav"
         status=$?
     else
