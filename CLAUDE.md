@@ -27,7 +27,7 @@ Personal dotfiles repository with modular installation system. Supports macOS an
 ./install.sh --zsh          # Zsh configuration (requires: git, zsh, curl)
 ./install.sh --zsh-completions  # Custom zsh completions (config/zsh/completions/_*), auto-run by --zsh
 ./install.sh --terminals    # Terminal emulators (Ghostty, etc.)
-./install.sh --hypr         # Hyprland compositor config (Linux only; binds, XKB ctrl/alt swap)
+./install.sh --hypr         # Hyprland compositor config (Linux only; binds, XKB ctrl/alt swap, kanshi monitor layouts)
 ./install.sh --fonts        # Nerd Fonts for Powerlevel10k (requires: curl)
 ./install.sh --config-dirs  # Symlink nvim to ~/.config/
 ./install.sh --claude       # Claude Code CLI and settings (requires: node, npm)

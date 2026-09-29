@@ -1,0 +1,19 @@
+# kanshi: output layouts per set of connected monitors, applied at runtime
+# over wlr-output-management, so every hotplug (dock/undock) re-applies them.
+# A profile matches only when exactly its outputs are connected; with no match
+# kanshi leaves the outputs alone and Hyprland's catch-all monitor rule
+# (position/scale auto, hyprland.lua) applies.
+# Positions are in logical pixels: physical size / scale.
+
+# Desk: the Samsung above the laptop, laptop centred under it, so the pointer
+# moves down from one to the other. The laptop is 1920 logical px wide at
+# scale 2 (3840 physical); x = (2560 - 1920) / 2 centres it, y = the Samsung's
+# height.
+profile desk {
+    output "Samsung Electric Company LC32G5xT HNTT800034" mode 2560x1440@144Hz position 0,0 scale 1
+    output eDP-1 position 320,1440 scale 2
+}
+
+profile laptop {
+    output eDP-1 position 0,0 scale 2
+}

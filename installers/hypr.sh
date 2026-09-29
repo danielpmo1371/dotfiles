@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Hyprland (Wayland compositor) configuration installer — Linux only
-# Symlinks config/hypr/ to ~/.config/hypr
+# Symlinks config/hypr/ to ~/.config/hypr and config/kanshi/ (monitor layouts) to ~/.config/kanshi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -20,17 +20,17 @@ install_hypr() {
         log_warn "Hyprland (hyprctl) not found — linking config anyway (takes effect once Hyprland is installed)"
     fi
 
-    # Symlink config directory to ~/.config/hypr
-    link_config_dirs "hypr"
+    # Symlink config directories to ~/.config/hypr and ~/.config/kanshi
+    link_config_dirs "hypr" "kanshi"
 
     # Launcher entries (wofi drun). Per-file links: ~/.local/share/applications
     # is shared with entries other apps install there.
     link_target_files "applications" "$HOME/.local/share/applications" "wayle.desktop"
 
-    # Keybinding dependencies (launcher, screenshots). Config-only installer:
+    # Keybinding and autostart dependencies (launcher, screenshots, monitor layouts). Config-only installer:
     # warn, don't install — package installation stays in tools.sh territory.
     local dep missing=()
-    for dep in wofi grim slurp wl-copy awww jq notify-send; do
+    for dep in wofi grim slurp wl-copy awww kanshi jq notify-send; do
         command -v "$dep" &>/dev/null || missing+=("$dep")
     done
     if [ ${#missing[@]} -gt 0 ]; then

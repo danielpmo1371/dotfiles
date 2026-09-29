@@ -19,6 +19,11 @@ hl.monitor({
     scale    = "auto",
 })
 
+-- Per-setup layouts (e.g. Samsung above the laptop) live in kanshi
+-- (config/kanshi/config), which re-applies them on every hotplug. This rule is
+-- only the fallback for monitor sets no kanshi profile matches; don't add
+-- per-output rules here, `hyprctl reload` would re-apply them over kanshi's.
+
 
 ---------------------
 ---- MY PROGRAMS ----
@@ -48,6 +53,7 @@ local browser     = "google-chrome-stable"
 hl.on("hyprland.start", function ()
     hl.exec_cmd("wayle panel start") -- bare `wayle` only prints help
     hl.exec_cmd("awww-daemon") -- restores the last image per output from its own cache
+    hl.exec_cmd("kanshi") -- per-setup monitor layouts (config/kanshi/config), re-applied on hotplug
     hl.exec_cmd("hyprpm reload -n") -- loads enabled hyprpm plugins (hyprexpo); -n adds a success notification
 end)
 
