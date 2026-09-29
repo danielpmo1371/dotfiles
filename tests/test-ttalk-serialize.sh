@@ -8,7 +8,8 @@
 # calls never overlap and all get spoken; a message that can't get the lock
 # within TTALK_WAIT is dropped, not retried on another engine; the mkdir
 # fallback (macOS has no flock) serializes too and reclaims a stale lock.
-# Also pins the --disable/--enable mute toggle (state file under HOME).
+# Also pins the --disable/--enable mute toggle and the --volume setting
+# (state file under HOME).
 #
 # Hermetic: PATH holds only a stub dir (fake piper-tts / pw-play / espeak-ng
 # that log to files) plus a dir of symlinks to the few real tools ttalk needs.
@@ -54,10 +55,12 @@ out=""
 while [[ $# -gt 0 ]]; do [[ "$1" == -f ]] && out="$2"; shift; done
 cat > "$out"
 EOF
-    # pw-play: log start and end around a sleep, so overlap is visible.
+    # pw-play: log start and end around a sleep, so overlap is visible. The
+    # wav is the last argument; the --volume value goes to volume.log.
     cat > "$dir/bin/pw-play" <<EOF
 #!/usr/bin/env bash
-m=\$(cat "\$1")
+[[ "\$1" == --volume ]] && echo "\$2" >> '$dir/volume.log'
+m=\$(cat "\${@: -1}")
 echo "S \$m" >> '$dir/play.log'
 sleep $play
 echo "E \$m" >> '$dir/play.log'
@@ -153,7 +156,7 @@ dir="$ROOT/toggle"
 setup_case "$dir" yes "$PLAY_SECONDS"
 ln -s "$(command -v jq)" "$dir/sysbin/jq"
 run_ttalk "$dir" 5 --disable >/dev/null
-check "--disable writes the state file" '{"isEnabled": false}' "$(cat "$dir/.local/state/ttalk/state.json")"
+check "--disable writes the state file" '{"isEnabled": false, "volume": 40}' "$(cat "$dir/.local/state/ttalk/state.json")"
 run_ttalk "$dir" 5 muted
 sleep 1   # past a PLAY_SECONDS playback, had one started
 check "muted message not spoken" "" "$(cat "$dir/play.log")"
@@ -174,6 +177,46 @@ run_ttalk "$dir" 5 --enable >/dev/null
 run_ttalk "$dir" 5 unmuted
 wait_for_ends "$dir" 1
 check "message spoken after --enable" "S unmuted|E unmuted" "$(paste -sd'|' "$dir/play.log")"
+
+echo "volume defaults to 40% and --volume changes it"
+dir="$ROOT/volume"
+setup_case "$dir" yes "$PLAY_SECONDS"
+ln -s "$(command -v jq)" "$dir/sysbin/jq"
+run_ttalk "$dir" 5 first
+wait_for_ends "$dir" 1
+check "default volume passed to pw-play" "0.40" "$(cat "$dir/volume.log")"
+check "missing state file created with default volume" '{"isEnabled": true, "volume": 40}' "$(cat "$dir/.local/state/ttalk/state.json")"
+check "--volume prints the current volume" "ttalk volume: 40%" "$(run_ttalk "$dir" 5 --volume)"
+run_ttalk "$dir" 5 --volume 75 >/dev/null
+check "--volume 75 reported back" "ttalk volume: 75%" "$(run_ttalk "$dir" 5 --volume)"
+: > "$dir/volume.log"
+run_ttalk "$dir" 5 second
+wait_for_ends "$dir" 2
+check "new volume passed to pw-play" "0.75" "$(cat "$dir/volume.log")"
+run_ttalk "$dir" 5 --volume 100% >/dev/null
+check "a trailing % is accepted" "ttalk volume: 100%" "$(run_ttalk "$dir" 5 --volume)"
+for bad_value in 101 -5 abc 4.5; do
+    run_ttalk "$dir" 5 --volume "$bad_value" 2>/dev/null
+    check "--volume $bad_value rejected" "1 ttalk volume: 100%" "$? $(run_ttalk "$dir" 5 --volume)"
+done
+run_ttalk "$dir" 5 --volume 5 >/dev/null
+check "single-digit volume formatted for pw-play" "0.05" "$(: > "$dir/volume.log"; run_ttalk "$dir" 5 third; wait_for_ends "$dir" 3; cat "$dir/volume.log")"
+run_ttalk "$dir" 5 --disable >/dev/null
+check "--disable keeps the volume" '{"isEnabled": false, "volume": 5}' "$(cat "$dir/.local/state/ttalk/state.json")"
+run_ttalk "$dir" 5 --volume 60 >/dev/null
+check "--volume keeps ttalk disabled" '{"isEnabled": false, "volume": 60}' "$(cat "$dir/.local/state/ttalk/state.json")"
+printf '{"isEnabled": true, "volume": "loud"}\n' > "$dir/.local/state/ttalk/state.json"
+check "invalid stored volume falls back to the default" "ttalk volume: 40%" "$(run_ttalk "$dir" 5 --volume)"
+
+echo "--volume works without jq (grep fallback)"
+dir="$ROOT/volume-nojq"
+setup_case "$dir" yes "$PLAY_SECONDS"
+ln -s "$(command -v grep)" "$dir/sysbin/grep"
+run_ttalk "$dir" 5 --volume 30 >/dev/null
+check "--volume 30 reported back" "ttalk volume: 30%" "$(run_ttalk "$dir" 5 --volume)"
+run_ttalk "$dir" 5 quiet
+wait_for_ends "$dir" 1
+check "stored volume passed to pw-play" "0.30" "$(cat "$dir/volume.log")"
 
 echo
 echo "Results: $PASS passed, $FAIL failed"

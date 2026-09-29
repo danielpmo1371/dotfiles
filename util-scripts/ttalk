@@ -17,11 +17,15 @@
 #
 # `ttalk --disable` / `ttalk --enable` mute or unmute every ttalk of this user
 # (a JSON state file under XDG_STATE_HOME); a muted call exits 0 silently.
+# `ttalk --volume N` stores the playback volume (0-100, percent of the system
+# volume) in the same file; `ttalk --volume` prints it (default: DEFAULT_VOLUME).
 
 set -u
 
 TTALK_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/ttalk"
 TTALK_STATE_FILE="$TTALK_STATE_DIR/state.json"
+# Playback volume (percent of the system volume) until `ttalk --volume` sets one.
+readonly DEFAULT_VOLUME=40
 
 # Append one line to today's log in the state dir (best effort).
 log_state() {
@@ -29,16 +33,34 @@ log_state() {
         >> "$TTALK_STATE_DIR/$(date +%Y-%m-%d).log"; } 2>/dev/null
 }
 
-# Args: true|false
-set_enabled() {
+# Args: true|false volume
+write_state() {
     mkdir -p "$TTALK_STATE_DIR" \
-        && printf '{"isEnabled": %s}\n' "$1" > "$TTALK_STATE_FILE" \
+        && printf '{"isEnabled": %s, "volume": %s}\n' "$1" "$2" > "$TTALK_STATE_FILE" \
         || { echo "ttalk: could not write $TTALK_STATE_FILE" >&2; exit 1; }
+}
+
+# An integer percentage 0-100 (leading zeros allowed).
+is_volume() {
+    [[ "$1" =~ ^[0-9]+$ ]] && (( 10#$1 <= 100 ))
+}
+
+# Prints the stored volume, or DEFAULT_VOLUME when missing or invalid, so a
+# hand-edited file can never make ttalk fail or go silent.
+read_volume() {
+    local v
+    if command -v jq >/dev/null 2>&1; then
+        v=$(jq -r '.volume // empty' "$TTALK_STATE_FILE" 2>/dev/null)
+    else
+        v=$({ grep -Eo '"volume"[[:space:]]*:[[:space:]]*[0-9]+' "$TTALK_STATE_FILE" \
+            | grep -Eo '[0-9]+$'; } 2>/dev/null)
+    fi
+    if is_volume "${v:-}"; then echo "$((10#$v))"; else echo "$DEFAULT_VOLUME"; fi
 }
 
 # Anything but isEnabled == true mutes. An unparsable file leaves ttalk
 # enabled: a lost notification is worse than an extra one. Without jq
-# (older macOS) only the literal false that set_enabled writes mutes.
+# (older macOS) only the literal false that write_state writes mutes.
 is_muted() {
     if command -v jq >/dev/null 2>&1; then
         jq -e '.isEnabled != true' "$TTALK_STATE_FILE" >/dev/null 2>&1
@@ -47,15 +69,33 @@ is_muted() {
     fi
 }
 
+usage() {
+    echo "usage: ttalk <message> | ttalk --enable | ttalk --disable | ttalk --volume [0-100]" >&2
+    exit 1
+}
+
 case "${1:-}" in
-    --enable)  set_enabled true;  echo "ttalk enabled for this user.";  exit 0 ;;
-    --disable) set_enabled false; echo "ttalk disabled for this user."; exit 0 ;;
+    --enable)  write_state true "$(read_volume)";  echo "ttalk enabled for this user.";  exit 0 ;;
+    --disable) write_state false "$(read_volume)"; echo "ttalk disabled for this user."; exit 0 ;;
+    --volume)
+        if [[ $# -eq 1 ]]; then
+            echo "ttalk volume: $(read_volume)%"
+            exit 0
+        fi
+        [[ $# -eq 2 ]] || usage
+        new_volume="${2%\%}"
+        is_volume "$new_volume" || { echo "ttalk: volume must be an integer from 0 to 100" >&2; exit 1; }
+        if is_muted; then enabled=false; else enabled=true; fi
+        write_state "$enabled" "$((10#$new_volume))"
+        echo "ttalk volume set to $((10#$new_volume))%."
+        exit 0
+        ;;
 esac
 
-# A missing state file means enabled; it is created so the toggle is visible.
+# A missing state file means enabled; it is created so the settings are visible.
 if [[ ! -f "$TTALK_STATE_FILE" ]]; then
     mkdir -p "$TTALK_STATE_DIR" 2>/dev/null \
-        && printf '{"isEnabled": true}\n' > "$TTALK_STATE_FILE" 2>/dev/null \
+        && printf '{"isEnabled": true, "volume": %s}\n' "$DEFAULT_VOLUME" > "$TTALK_STATE_FILE" 2>/dev/null \
         && log_state "No state file found. Created default state.json (enabled)."
 elif is_muted; then
     log_state "ttalk disabled by state file; message not spoken."
@@ -80,7 +120,8 @@ readonly MKDIR_LOCK_POLL=0.2
 readonly LOCK_TIMEOUT=75
 
 msg="$*"
-[[ -z "$msg" ]] && { echo "usage: ttalk <message> | ttalk --enable | ttalk --disable" >&2; exit 1; }
+[[ -z "$msg" ]] && usage
+volume=$(read_volume)
 
 # Run "$@" while holding the speaker lock; returns LOCK_TIMEOUT without
 # running it when the lock is not acquired within TTALK_WAIT seconds.
@@ -123,11 +164,19 @@ with_mkdir_lock() {
     return "$status"
 }
 
+# volume as 0.00-1.00, for players whose scale is a linear fraction.
+volume_fraction() {
+    printf '%d.%02d' $((volume / 100)) $((volume % 100))
+}
+
+# Each player's own volume scale, derived from the 0-100 percentage.
 play_wav() {
     if command -v pw-play >/dev/null 2>&1; then
-        pw-play "$1"
+        # Linear stream volume 0.0-1.0.
+        pw-play --volume "$(volume_fraction)" "$1"
     elif command -v paplay >/dev/null 2>&1; then
-        paplay "$1"
+        # Linear volume 0-65536.
+        paplay --volume=$((volume * 65536 / 100)) "$1"
     else
         return 1
     fi
@@ -151,13 +200,16 @@ speak_piper() {
 # System engines synthesize and play in one step, so the lock covers both.
 speak_system() {
     if command -v say >/dev/null 2>&1; then          # macOS
-        say "$msg"
+        # Embedded volume command, 0.0-1.0.
+        say "[[volm $(volume_fraction)]] $msg"
     elif command -v espeak-ng >/dev/null 2>&1; then  # Linux
-        espeak-ng "$msg"
+        # Amplitude 0-200, 100 = normal, so 100% keeps the engine default.
+        espeak-ng -a "$volume" "$msg"
     elif command -v spd-say >/dev/null 2>&1; then    # Linux (speech-dispatcher)
         # -w waits until spoken; without it the lock would be released while
         # speech-dispatcher is still talking.
-        spd-say -w "$msg"
+        # -i is -100..100 and speech-dispatcher's default volume is 100.
+        spd-say -w -i $((volume * 2 - 100)) "$msg"
     fi
 }
 
