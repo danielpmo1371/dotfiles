@@ -106,6 +106,7 @@ fi
 [[ -f "$DOTFILES_DIR/config/shell/aliases.sh" ]] && source "$DOTFILES_DIR/config/shell/aliases.sh"
 [[ -f "$DOTFILES_DIR/config/shell/git.sh" ]] && source "$DOTFILES_DIR/config/shell/git.sh"
 [[ -f "$DOTFILES_DIR/config/shell/tmux.sh" ]] && source "$DOTFILES_DIR/config/shell/tmux.sh"
+[[ -f "$DOTFILES_DIR/config/shell/clipboard.sh" ]] && source "$DOTFILES_DIR/config/shell/clipboard.sh"
 [[ -f "$DOTFILES_DIR/config/shell/mcp.sh" ]] && source "$DOTFILES_DIR/config/shell/mcp.sh"
 [[ -f "$DOTFILES_DIR/config/shell/secrets.sh" ]] && source "$DOTFILES_DIR/config/shell/secrets.sh"
 
