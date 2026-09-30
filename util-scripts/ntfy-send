@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# ntfy-send — push a notification to the phone via ntfy (https://ntfy.sh).
+# The spoken counterpart is ttalk; this one reaches you away from the desk.
+#
+# The topic URL (https://<server>/<topic>) is the only address: anyone who
+# knows it can read and post, so it is a secret. It comes from NTFY_TOPIC_URL
+# (exported by config/shell/secrets.sh), or straight from the keychain when the
+# caller's environment lacks it (Hyprland binds, systemd timers). NTFY_TOKEN,
+# when set, is sent as a Bearer token for servers with access control.
+#
+# Unlike ttalk, failures are reported (stderr + non-zero exit) so a caller can
+# tell a lost alert from a sent one; callers that must not fail add `|| true`.
+# The topic URL is never printed.
+
+set -u
+
+readonly SECRETS_LIB="${HOME}/.local/lib/secrets/secrets.sh"
+# Seconds before giving up on the server; a notification must never hang its caller.
+NTFY_TIMEOUT="${NTFY_TIMEOUT:-10}"
+
+usage() {
+    cat >&2 <<'EOF'
+usage: ntfy-send [-t TITLE] [-p PRIORITY] [-g TAGS] MESSAGE
+  -t TITLE      notification title
+  -p PRIORITY   1-5 or min|low|default|high|max|urgent
+  -g TAGS       comma-separated tags/emoji shortcodes (e.g. warning,robot)
+env: NTFY_TOPIC_URL (else keychain), NTFY_TOKEN (optional), NTFY_TIMEOUT
+EOF
+    exit 2
+}
+
+title="" priority="" tags=""
+while getopts ":t:p:g:h" opt; do
+    case "$opt" in
+        t) title="$OPTARG" ;;
+        p) priority="$OPTARG" ;;
+        g) tags="$OPTARG" ;;
+        *) usage ;;
+    esac
+done
+shift $((OPTIND - 1))
+[[ $# -eq 1 && -n "$1" ]] || usage
+message="$1"
+
+topic_url="${NTFY_TOPIC_URL:-}"
+if [[ -z "$topic_url" && -f "$SECRETS_LIB" ]]; then
+    # shellcheck source=/dev/null
+    SECRETS_SERVICE="dotfiles" source "$SECRETS_LIB"
+    topic_url="$(SECRETS_SERVICE="dotfiles" secret NTFY_TOPIC_URL 2>/dev/null)"
+fi
+if [[ -z "$topic_url" ]]; then
+    echo "ntfy-send: no topic — run: secret_set NTFY_TOPIC_URL https://ntfy.sh/<topic>" >&2
+    exit 1
+fi
+
+args=(--silent --show-error --fail-with-body --max-time "$NTFY_TIMEOUT" --output /dev/null)
+[[ -n "$title" ]]            && args+=(-H "Title: $title")
+[[ -n "$priority" ]]         && args+=(-H "Priority: $priority")
+[[ -n "$tags" ]]             && args+=(-H "Tags: $tags")
+[[ -n "${NTFY_TOKEN:-}" ]]   && args+=(-H "Authorization: Bearer $NTFY_TOKEN")
+
+if ! curl "${args[@]}" --data-binary "$message" "$topic_url"; then
+    echo "ntfy-send: delivery failed" >&2
+    exit 1
+fi

@@ -65,4 +65,7 @@ if [[ -f "$SECRETS_LIB" ]]; then
     export GROQ_API_KEY="$__groq_key"
     export LLM_GROQ_KEY="$__groq_key"
     unset __groq_key
+    # ntfy topic URL for util-scripts/ntfy-send (phone notifications). The URL is
+    # the only access control on ntfy.sh, so it lives in the keychain, not the repo.
+    export NTFY_TOPIC_URL="$(secret NTFY_TOPIC_URL 2>/dev/null)"
 fi
