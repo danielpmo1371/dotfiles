@@ -29,6 +29,17 @@ if [[ -f "$SECRETS_LIB" ]]; then
         source "$DOTFILES_DIR/lib/secrets.sh"
     fi
 
+    # A locked libsecret keyring makes every `secret-tool lookup` below wait on
+    # an unlock prompt (gcr-prompter); if the prompt can't be shown, shell
+    # startup hangs forever. Ask the Locked property instead (never prompts)
+    # and skip loading secrets unless the default collection is unlocked.
+    if [[ "$__SECRETS_BACKEND" == "libsecret" ]] && ! timeout 2 busctl --user get-property \
+            org.freedesktop.secrets /org/freedesktop/secrets/aliases/default \
+            org.freedesktop.Secret.Collection Locked 2>/dev/null | grep -q 'b false'; then
+        echo "[secrets] keyring locked or unavailable — secrets not loaded (unlock it, then: exec \$SHELL)" >&2
+        return 0
+    fi
+
     # Auto-migrate from ~/.accessTokens on first shell load
     __secrets_auto_migrate
 
