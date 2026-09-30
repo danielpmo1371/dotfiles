@@ -1,0 +1,111 @@
+#!/bin/bash
+# clip-pick
+# Pick an entry from the cliphist clipboard history and deliver it.
+#
+# Usage:
+#   clip-pick [--picker wofi|fzf] [--print | --tmux-pane <pane-id>]
+#
+#   (default)            copy the picked entry to the clipboard (wl-copy)
+#   --print              write the picked entry to stdout instead (shell widgets)
+#   --tmux-pane <id>     copy it AND paste it into that tmux pane
+#
+# Picker defaults to $CLIP_PICKER (default: wofi). Bound in hyprland.lua to
+# SUPER+SHIFT+V (wofi), in tmux.conf to prefix+y (fzf popup), and by
+# config/shell/clipboard.sh to Ctrl-X Ctrl-V (fzf, inserts at the cursor).
+#
+# History is recorded by the `wl-paste --watch cliphist store` watchers that
+# hyprland.lua starts. --print and --tmux-pane insert text into a command
+# line/pane, so they hide binary (image) entries from the picker; the default
+# copy mode keeps them, since wl-copy restores images byte-for-byte.
+# Cancelling the picker is not an error: exits 0 and delivers nothing.
+
+set -uo pipefail
+
+CLIP_PICKER="${CLIP_PICKER:-wofi}"
+CLIP_TMUX_BUFFER="${CLIP_TMUX_BUFFER:-clip-pick}"
+CLIP_TAG="${CLIP_TAG:-clip-pick}"
+# `cliphist list` renders images/binary entries as "<id>\t[[ binary data ... ]]".
+BINARY_ENTRY_PATTERN=$'^[0-9]+\t\\[\\[ binary data '
+
+notify() {
+    command -v notify-send >/dev/null 2>&1 && notify-send "$CLIP_TAG" "$1"
+    echo "$CLIP_TAG: $1" >&2
+}
+
+fail() {
+    notify "$1"
+    exit 1
+}
+
+usage() {
+    fail "usage: clip-pick [--picker wofi|fzf] [--print | --tmux-pane <pane-id>]"
+}
+
+# run_picker — read `cliphist list` lines on stdin, print the chosen line.
+run_picker() {
+    case "$CLIP_PICKER" in
+        wofi) wofi --show dmenu --prompt "clipboard" ;;
+        # Show only the preview column; fzf still prints the whole id-tab line.
+        fzf) fzf --no-sort --delimiter $'\t' --with-nth 2 --prompt "clipboard> " ;;
+    esac
+}
+
+main() {
+    local mode="copy" pane=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --picker) [ $# -ge 2 ] || usage; CLIP_PICKER="$2"; shift ;;
+            --print) mode="print" ;;
+            --tmux-pane) [ $# -ge 2 ] || usage; mode="tmux"; pane="$2"; shift ;;
+            *) usage ;;
+        esac
+        shift
+    done
+
+    case "$CLIP_PICKER" in
+        wofi|fzf) ;;
+        *) fail "unknown picker: $CLIP_PICKER (wofi|fzf)" ;;
+    esac
+
+    local dep deps=(cliphist "$CLIP_PICKER")
+    [ "$mode" = "print" ] || deps+=(wl-copy)
+    [ "$mode" = "tmux" ] && deps+=(tmux)
+    for dep in "${deps[@]}"; do
+        command -v "$dep" >/dev/null 2>&1 || fail "$dep not found"
+    done
+
+    local history
+    history=$(cliphist list) || fail "cliphist list failed"
+    if [ "$mode" != "copy" ]; then
+        history=$(grep -Ev "$BINARY_ENTRY_PATTERN" <<<"$history")
+    fi
+    [ -n "$history" ] || fail "clipboard history is empty"
+
+    local choice
+    choice=$(run_picker <<<"$history") || exit 0
+    [ -n "$choice" ] || exit 0
+
+    if [ "$mode" = "print" ]; then
+        cliphist decode <<<"$choice" || fail "cliphist decode failed"
+        return
+    fi
+
+    # Decode once to a file: wl-copy and tmux both need the exact bytes, and
+    # command substitution would strip trailing newlines.
+    local entry
+    entry=$(mktemp) || fail "mktemp failed"
+    trap 'rm -f "$entry"' EXIT
+    cliphist decode <<<"$choice" >"$entry" || fail "cliphist decode failed"
+
+    wl-copy <"$entry" || fail "wl-copy failed"
+
+    if [ "$mode" = "tmux" ]; then
+        tmux load-buffer -b "$CLIP_TMUX_BUFFER" "$entry" \
+            && tmux paste-buffer -p -d -b "$CLIP_TMUX_BUFFER" -t "$pane" \
+            || fail "tmux paste into $pane failed"
+    fi
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi
