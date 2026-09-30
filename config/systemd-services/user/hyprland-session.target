@@ -1,0 +1,11 @@
+[Unit]
+Description=Hyprland session (started by hyprland.lua on login)
+Documentation=man:systemd.special(7)
+# graphical-session.target refuses manual starts; binding a compositor target
+# to it is the documented way to bring it up. Units that need a logged-in
+# desktop (display for prompts, keyring unlocked by PAM) use
+# WantedBy=graphical-session.target instead of default.target, which linger
+# starts at boot, before anyone logs in.
+BindsTo=graphical-session.target
+Wants=graphical-session-pre.target
+After=graphical-session-pre.target

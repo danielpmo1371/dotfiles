@@ -52,6 +52,9 @@ hl.on("hyprland.start", function ()
     -- Polkit agent: shows auth prompts (password or fingerprint via fprintd), e.g. Bitwarden "Unlock with system authentication".
     -- hyprpolkitagent, not polkit-kde-agent: the KDE one crashes (KCrash) outside Plasma.
     hl.exec_cmd("systemctl --user start hyprpolkitagent")
+    -- Brings up graphical-session.target, which starts the units that must wait
+    -- for login (claude-rc: needs the keyring unlocked and a display for prompts).
+    hl.exec_cmd("systemctl --user start hyprland-session.target")
     -- Clipboard history for clip-pick (SUPER+SHIFT+V); one watcher per MIME class, per the cliphist README.
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
     hl.exec_cmd("wl-paste --type image --watch cliphist store")

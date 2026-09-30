@@ -15,6 +15,9 @@ CLAUDE_RC_WORKDIR="$HOME/repos"
 
 # Linux (systemd user unit)
 CLAUDE_RC_UNIT="claude-rc.service"
+# Started by hyprland.lua on login; brings up graphical-session.target, which
+# claude-rc is WantedBy (not default.target, which linger starts at boot).
+CLAUDE_RC_SESSION_TARGET="hyprland-session.target"
 CLAUDE_RC_SYSTEMD_SOURCE="$DOTFILES_ROOT/config/systemd-services"
 CLAUDE_RC_SYSTEMD_TARGET="$HOME/.config/systemd"
 
@@ -24,12 +27,15 @@ CLAUDE_RC_PLIST_SOURCE="$DOTFILES_ROOT/config/launchd/$CLAUDE_RC_LABEL.plist"
 CLAUDE_RC_LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
 CLAUDE_RC_MAC_LOG="$HOME/Library/Logs/claude-rc.log"
 
-# Link only the claude-rc unit into an existing user unit dir that this repo
-# does not own (a real directory, or a symlink pointing somewhere else).
+# Link only the claude-rc unit (and the session target it starts from) into an
+# existing user unit dir that this repo does not own (a real directory, or a
+# symlink pointing somewhere else).
 _link_claude_rc_unit_only() {
-    local user_dir="$CLAUDE_RC_SYSTEMD_TARGET/user"
+    local user_dir="$CLAUDE_RC_SYSTEMD_TARGET/user" unit
     ensure_dir "$user_dir"
-    create_symlink_with_backup "$CLAUDE_RC_SYSTEMD_SOURCE/user/$CLAUDE_RC_UNIT" "$user_dir/$CLAUDE_RC_UNIT"
+    for unit in "$CLAUDE_RC_UNIT" "$CLAUDE_RC_SESSION_TARGET"; do
+        create_symlink_with_backup "$CLAUDE_RC_SYSTEMD_SOURCE/user/$unit" "$user_dir/$unit" || return 1
+    done
 }
 
 _install_claude_rc_linux() {
@@ -66,6 +72,7 @@ _install_claude_rc_linux() {
     }
     log_success "$CLAUDE_RC_UNIT enabled and running"
     log_info "Errors are logged to the journal: journalctl --user -u $CLAUDE_RC_UNIT"
+    log_info "Starts on login via $CLAUDE_RC_SESSION_TARGET (hyprland.lua), not at boot"
 
     # Linger keeps the user manager (and this service) alive without a login.
     local user="${USER:-$(id -un)}"
