@@ -31,11 +31,15 @@ if [[ -f "$SECRETS_LIB" ]]; then
 
     # A locked libsecret keyring makes every `secret-tool lookup` below wait on
     # an unlock prompt (gcr-prompter); if the prompt can't be shown, shell
-    # startup hangs forever. Ask the Locked property instead (never prompts)
-    # and skip loading secrets unless the default collection is unlocked.
-    if [[ "$__SECRETS_BACKEND" == "libsecret" ]] && ! timeout 2 busctl --user get-property \
-            org.freedesktop.secrets /org/freedesktop/secrets/aliases/default \
-            org.freedesktop.Secret.Collection Locked 2>/dev/null | grep -q 'b false'; then
+    # startup hangs forever. SearchItems never prompts and returns our items as
+    # (unlocked, locked) path arrays; skip loading unless the locked array is
+    # empty (reply ends in " 0"). This checks the items we are about to read;
+    # a Locked check on the `default` alias still let boot-time shells through
+    # to hang.
+    if [[ "$__SECRETS_BACKEND" == "libsecret" ]] && ! timeout 2 busctl --user call \
+            org.freedesktop.secrets /org/freedesktop/secrets \
+            org.freedesktop.Secret.Service SearchItems 'a{ss}' 1 service "$SECRETS_SERVICE" \
+            2>/dev/null | grep -qE '^aoao .* 0$'; then
         echo "[secrets] keyring locked or unavailable — secrets not loaded (unlock it, then: exec \$SHELL)" >&2
         return 0
     fi
