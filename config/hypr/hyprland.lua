@@ -49,6 +49,12 @@ hl.on("hyprland.start", function ()
     hl.exec_cmd("wayle panel start") -- bare `wayle` only prints help
     hl.exec_cmd("awww-daemon") -- restores the last image per output from its own cache
     hl.exec_cmd("hyprpm reload -n") -- loads enabled hyprpm plugins (hyprexpo); -n adds a success notification
+    -- Polkit agent: shows auth prompts (password or fingerprint via fprintd), e.g. Bitwarden "Unlock with system authentication".
+    -- hyprpolkitagent, not polkit-kde-agent: the KDE one crashes (KCrash) outside Plasma.
+    hl.exec_cmd("systemctl --user start hyprpolkitagent")
+    -- Clipboard history for clip-pick (SUPER+SHIFT+V); one watcher per MIME class, per the cliphist README.
+    hl.exec_cmd("wl-paste --type text --watch cliphist store")
+    hl.exec_cmd("wl-paste --type image --watch cliphist store")
 end)
 
 
@@ -112,7 +118,7 @@ hl.config({
         rounding_power = 2,
 
         -- Change transparency of focused and unfocused windows
-        active_opacity   = 0.9,
+        active_opacity   = 0.92,
         inactive_opacity = 0.7,
 
         shadow = {
@@ -251,8 +257,13 @@ hl.config({
 
         sensitivity = 0, -- -1.0 - 1.0, 0 means no modification.
 
+        -- Mouse wheel scrolls content like the touchpad does (touchpad has
+        -- its own natural_scroll below).
+        natural_scroll = true,
+
         touchpad = {
             natural_scroll = true,
+            scroll_factor  = 0.5, -- multiplier on touchpad scroll distance; default 1.0
         },
     },
 })
@@ -270,6 +281,16 @@ hl.device({
     sensitivity = -0.5,
 })
 
+-- MX Master: 70% slower pointer. Hyprland appends "-1" to a duplicate device
+-- name (e.g. after repeated BT reconnects), so cover both spellings.
+local mx_master_sensitivity = -0.7
+for _, name in ipairs({ "logitech-mx-master-3-for-mac", "logitech-mx-master-3-for-mac-1" }) do
+    hl.device({
+        name        = name,
+        sensitivity = mx_master_sensitivity,
+    })
+end
+
 
 ---------------------
 ---- KEYBINDINGS ----
@@ -284,9 +305,9 @@ local closeWindowBind = hl.bind(mainMod .. " + C", hl.dsp.window.close())
 hl.bind(mainMod .. " + M", hl.dsp.exit())
 hl.bind(mainMod .. " + F", hl.dsp.exec_cmd(fileManager))
 hl.bind(mainMod .. " + P", hl.dsp.exec_cmd(menu))
-hl.bind(mainMod .. " + W", hl.dsp.exec_cmd("zen-browser"))
+hl.bind(mainMod .. " + W", hl.dsp.exec_cmd(browser))
 hl.bind(mainMod .. " + SHIFT + W", hl.dsp.exec_cmd("wayle panel toggle")) -- show/hide the Wayle bar on all monitors
-hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(browser))
+-- hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(browser))
 -- Cycle the focused monitor's wallpaper (awww); exec env may lack PATH, so absolute path.
 hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/wall-next next"))
 hl.bind(mainMod .. " + SHIFT + B", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/wall-next prev"))
@@ -295,6 +316,8 @@ hl.bind(mainMod .. " + SHIFT + F", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/
 -- Cycle within favorites only (CTRL = the key labelled Alt, due to ctrl:swap_lalt_lctl).
 hl.bind(mainMod .. " + CTRL + SHIFT + N", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/wall-next --favorites next"))
 hl.bind(mainMod .. " + CTRL + SHIFT + B", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/wall-next --favorites prev"))
+-- Clipboard history picker (cliphist + wofi); SUPER+V is the float toggle.
+hl.bind(mainMod .. " + SHIFT + V", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/clip-pick"))
 hl.bind(mainMod .. " + space", function()
     hl.plugin.hyprexpo.expo("toggle")
 end)
@@ -330,6 +353,17 @@ local function usableSize(monitor)
     return w - r.left - r.right, h - r.top - r.bottom
 end
 
+-- Size a just-floated window to floatRatio of its monitor and centre it.
+-- Callers skip fullscreen windows: both resize and center reject them.
+local function sizeFloating(win)
+    local monitor = win.monitor or hl.get_active_monitor()
+    if not monitor then return end
+
+    local w, h = usableSize(monitor)
+    hl.dispatch(hl.dsp.window.resize({ window = win, x = math.floor(w * floatRatio), y = math.floor(h * floatRatio) }))
+    hl.dispatch(hl.dsp.window.center({ window = win })) -- after resize: it centres the goal size
+end
+
 hl.bind(mainMod .. " + V", function()
     local win = hl.get_active_window()
     if not win then return end
@@ -341,12 +375,7 @@ hl.bind(mainMod .. " + V", function()
     -- dwindle split, and both resize and center reject fullscreen windows.
     if wasFloating or win.fullscreen ~= 0 then return end
 
-    local monitor = win.monitor or hl.get_active_monitor()
-    if not monitor then return end
-
-    local w, h = usableSize(monitor)
-    hl.dispatch(hl.dsp.window.resize({ x = math.floor(w * floatRatio), y = math.floor(h * floatRatio) }))
-    hl.dispatch(hl.dsp.window.center()) -- after resize: it centres the goal size
+    sizeFloating(win)
 end)
 
 
@@ -364,9 +393,33 @@ hl.bind(mainMod .. " + j",  hl.dsp.focus({ direction = "down" }))
 -- The ctrl:swap_lalt_lctl kb_option above makes the key labelled Alt emit
 -- CTRL, so the bind is CTRL + Tab. Trade-off, accepted: apps no longer see
 -- CTRL + Tab from that key for their own tab switching.
+--
+-- Float handoff: when the window being left is floating, the float moves with
+-- the focus -- the old window re-tiles and the next one floats, sized like the
+-- SUPER+V toggle. The target is resolved by cycling *before* unfloating,
+-- because re-tiling the old window reorders the tiled cycle. Pinned and
+-- fullscreen windows on either side opt out and are cycled as before.
 local function cycleWindows(forward)
     return function()
+        local from = hl.get_active_window()
         hl.dispatch(hl.dsp.window.cycle_next({ next = forward }))
+        local to = hl.get_active_window()
+
+        local handoff = from and to and from.address ~= to.address
+            and from.floating and not from.pinned and from.fullscreen == 0
+            and to.fullscreen == 0
+        if handoff then
+            local toWasFloating = to.floating
+            hl.dispatch(hl.dsp.window.float({ window = from, action = "disable" }))
+            -- Re-tiling may move focus onto the old window; put it back.
+            hl.dispatch(hl.dsp.focus({ window = to }))
+            -- An already-floating target keeps the size the user gave it.
+            if not toWasFloating then
+                hl.dispatch(hl.dsp.window.float({ window = to, action = "enable" }))
+                sizeFloating(to)
+            end
+        end
+
         -- cycle_next only focuses; floating windows stay buried without this.
         hl.dispatch(hl.dsp.window.bring_to_top())
     end
