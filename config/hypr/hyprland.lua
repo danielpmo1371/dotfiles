@@ -25,10 +25,10 @@ hl.monitor({
 ---------------------
 
 -- Set programs that you use
-local terminal    = "kitty"
+local terminal    = "ghostty"
 local fileManager = "dolphin"
 local menu        = "wofi --show drun"
-local browser     = "google-chrome-stable"
+local browser     = "brave"
 
 
 -------------------
