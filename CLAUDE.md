@@ -130,6 +130,7 @@ Settings symlinked from `config/claude/` to `~/.claude/`:
 - `commands/wrap-up.md` - `/wrap-up` command: audits the CURRENT session's conversation for unverified claims and abandoned threads, reports, gates on approval, then lands it (verify → commit → handoff block in `workflow_state.md` + a session memory). Distinct from `/recap` (reconstructs tmux *scrollback*) and `/review-before-commit` (reviews the *diff*) — `/wrap-up` reviews the *conversation thread*. `disable-model-invocation: true`, so it is user-invoked only.
 - `agents/pipeline-runner.md` - Autonomous pipeline trigger/monitor/recovery agent
 - `skills/pipeline-ops/` - Auto-discoverable skill matching "deploy", "run pipeline" etc.
+- `skills/ntfy-notifications/` - When and how to push to the phone with `ntfy-send` (what not to send, priorities, exit codes, delivery check)
 
 The loose `hooks/*.sh` files (the three `pipeline-*-guard.sh`, `destructive-ops-guard.sh` and `notification.sh`) are not delivered by the whole-dir symlinks (because `~/.claude/hooks/` is shared with `memory-hooks` and `logging-hooks`). The pipeline guards are installed by `installers/claude-azdo-pipeline-hooks.sh` and the general ones (`destructive-ops-guard.sh`, `notification.sh`) by `installers/claude-hooks.sh`. Both are auto-invoked by `installers/claude.sh` (i.e. by `./install.sh --claude`) and can also be run standalone via `./install.sh --claude-azdo-pipeline-hooks` / `./install.sh --claude-hooks`. Their registration in `settings.json` is delivered through the existing `settings.json` whole-file symlink.
 
