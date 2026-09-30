@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+"""Unlock the libsecret keyring holding our secrets, then return.
+
+Usage: keyring-unlock-wait [SERVICE]
+
+Run before a login service whose shells export secrets (claude-rc): if any
+item with attribute service=SERVICE (default: $SECRETS_SERVICE, else
+"dotfiles") is locked, show the keyring's unlock dialog and wait for it, so
+the environment the service starts with already holds the secrets. Env vars
+are fixed when a process starts, so unlocking after the fact does not reach it.
+
+Exit codes: 0 unlocked (or nothing to unlock), 1 still locked (dialog
+dismissed or KEYRING_UNLOCK_TIMEOUT seconds passed, default 300),
+2 no Secret Service or no libsecret Python bindings. Callers that must start
+anyway use systemd's "-" prefix; the reason goes to stderr (the journal).
+"""
+
+import os
+import sys
+
+DEFAULT_SERVICE = "dotfiles"
+DEFAULT_TIMEOUT_SECONDS = 300
+EXIT_UNLOCKED = 0
+EXIT_LOCKED = 1
+EXIT_UNAVAILABLE = 2
+PREFIX = "keyring-unlock-wait:"
+
+try:
+    import gi
+
+    gi.require_version("Secret", "1")
+    from gi.repository import Gio, GLib, Secret
+except (ImportError, ValueError) as err:
+    print(f"{PREFIX} libsecret Python bindings unavailable ({err})", file=sys.stderr)
+    sys.exit(EXIT_UNAVAILABLE)
+
+
+def timeout_seconds():
+    raw = os.environ.get("KEYRING_UNLOCK_TIMEOUT", "")
+    if raw.isdigit():
+        return int(raw)
+    if raw:
+        print(f"{PREFIX} invalid KEYRING_UNLOCK_TIMEOUT '{raw}', using {DEFAULT_TIMEOUT_SECONDS}", file=sys.stderr)
+    return DEFAULT_TIMEOUT_SECONDS
+
+
+def main():
+    service_attr = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("SECRETS_SERVICE", DEFAULT_SERVICE)
+    timeout = timeout_seconds()
+
+    try:
+        service = Secret.Service.get_sync(Secret.ServiceFlags.NONE, None)
+        # ALL returns locked items too, and never prompts (no UNLOCK flag).
+        items = service.search_sync(None, {"service": service_attr}, Secret.SearchFlags.ALL, None)
+    except GLib.Error as err:
+        print(f"{PREFIX} Secret Service unavailable ({err.message})", file=sys.stderr)
+        return EXIT_UNAVAILABLE
+
+    locked = [item for item in items if item.get_locked()]
+    if not locked:
+        print(f"{PREFIX} {len(items)} '{service_attr}' items unlocked", file=sys.stderr)
+        return EXIT_UNLOCKED
+
+    print(f"{PREFIX} {len(locked)} '{service_attr}' items locked, showing unlock dialog (waiting up to {timeout}s)", file=sys.stderr)
+    loop = GLib.MainLoop()
+    cancellable = Gio.Cancellable()
+    result = {"code": EXIT_LOCKED}
+
+    def on_unlocked(source, res):
+        try:
+            count, _ = source.unlock_finish(res)
+            if count > 0:
+                result["code"] = EXIT_UNLOCKED
+        except GLib.Error as err:
+            print(f"{PREFIX} unlock failed ({err.message})", file=sys.stderr)
+        loop.quit()
+
+    def on_timeout():
+        print(f"{PREFIX} no unlock within {timeout}s", file=sys.stderr)
+        cancellable.cancel()
+        return GLib.SOURCE_REMOVE
+
+    # One connection for the unlock call and its prompt: gnome-keyring drops a
+    # prompt whose requesting connection goes away.
+    service.unlock(locked, cancellable, on_unlocked)
+    GLib.timeout_add_seconds(timeout, on_timeout)
+    loop.run()
+
+    print(f"{PREFIX} {'unlocked' if result['code'] == EXIT_UNLOCKED else 'still locked, starting without secrets'}", file=sys.stderr)
+    return result["code"]
+
+
+if __name__ == "__main__":
+    sys.exit(main())

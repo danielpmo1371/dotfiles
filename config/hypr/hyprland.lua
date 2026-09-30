@@ -54,7 +54,9 @@ hl.on("hyprland.start", function ()
     hl.exec_cmd("systemctl --user start hyprpolkitagent")
     -- Brings up graphical-session.target, which starts the units that must wait
     -- for login (claude-rc: needs the keyring unlocked and a display for prompts).
-    hl.exec_cmd("systemctl --user start hyprland-session.target")
+    -- Export the display first: the keyring's unlock dialog is D-Bus-activated
+    -- by systemd and can only open if these are in its activation environment.
+    hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE && systemctl --user start hyprland-session.target")
     -- Clipboard history for clip-pick (SUPER+SHIFT+V); one watcher per MIME class, per the cliphist README.
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
     hl.exec_cmd("wl-paste --type image --watch cliphist store")

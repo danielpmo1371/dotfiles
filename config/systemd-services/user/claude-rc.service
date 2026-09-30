@@ -12,6 +12,13 @@
   # can't serve this, it's the TUI. %S = ~/.local/state, created by StateDirectory.
   # The previous run's log is kept as debug.log.1 so a restart keeps the evidence.
   StateDirectory=claude-rc
+  # Show the keyring unlock dialog and wait for it, so the shell below starts
+  # with secrets: env vars are fixed at start, a later unlock never reaches it.
+  # "-": still start (without secrets) if the dialog is dismissed or times out.
+  # The start timeout must outlast the wait (default 90s includes ExecStartPre).
+  Environment=KEYRING_UNLOCK_TIMEOUT=300
+  TimeoutStartSec=330
+  ExecStartPre=-%h/repos/dotfiles/util-scripts/keyring-unlock-wait
   ExecStartPre=-/bin/mv -f %S/claude-rc/debug.log %S/claude-rc/debug.log.1
   ExecStart=/bin/zsh -lic 'exec %h/.local/bin/claude remote-control --permission-mode bypassPermissions --name %H-repos --debug-file %S/claude-rc/debug.log'
   Restart=on-failure
