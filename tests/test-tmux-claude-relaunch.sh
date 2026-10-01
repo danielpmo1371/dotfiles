@@ -128,6 +128,11 @@ pane_has_marker() {
     t capture-pane -p -t "=$1" | grep -q "$RELAUNCH_MARKER"
 }
 
+# True when the record for key $1 exists and carries a numeric relaunched_at.
+record_marked() {
+    jq -e '.relaunched_at | numbers' "$(record_path "$1")" > /dev/null 2>&1
+}
+
 reset_state() {
     rm -f "$PANES_DIR"/* "$SNAPSHOT"
     : > "$SNAPSHOT"
@@ -139,7 +144,7 @@ run_relaunch() {
 
 echo -e "${BLUE}tmux-claude-relaunch.sh${NC}"
 
-# 1. eligible pane (session name with `/` and a space) -> relaunched, record removed.
+# 1. eligible pane (session name with `/` and a space) -> relaunched, record kept and marked.
 reset_state
 key=$(new_pane "proj/x y" "$PROJ" "$PANE_SHELL")
 wait_for_shell "$key"
@@ -151,10 +156,10 @@ if pane_relaunched "$key" "$SESSION_ID"; then
 else
     fail "eligible pane: no relaunch output; log: $(tail -n3 "$CLAUDE_TMUX_STATE_DIR/relaunch.log")"
 fi
-if [ ! -e "$(record_path "$key")" ]; then
-    pass "relaunched pane's record is removed"
+if record_marked "$key" && [ "$(jq -r '.session_id' "$(record_path "$key")")" = "$SESSION_ID" ]; then
+    pass "relaunched pane's record is kept, marked relaunched_at"
 else
-    fail "relaunched pane's record still exists"
+    fail "relaunched pane's record: '$(cat "$(record_path "$key")" 2>/dev/null)'"
 fi
 ELIGIBLE_KEY="$key"
 
@@ -290,10 +295,46 @@ mkdir -p "$WORK/transcripts"
 write_record "$key" "$SESSION_ID" "$PROJ" "$WORK/transcripts/$SESSION_ID.jsonl"
 snapshot_pane "$key" claude
 run_relaunch
-if pane_relaunched "$key" "$SESSION_ID" && [ ! -e "$(record_path "$key")" ]; then
-    pass "existing transcript -> relaunched, record removed"
+if pane_relaunched "$key" "$SESSION_ID" && record_marked "$key"; then
+    pass "existing transcript -> relaunched, record kept and marked"
 else
-    fail "existing transcript: not relaunched or record kept"
+    fail "existing transcript: not relaunched or record not marked"
+fi
+
+# 8d. regression (2026-09-30): the pane shell is still stuck in its rc file
+# (there: secret-tool waiting on a locked keyring) yet already reports itself
+# as the pane's command, so the typed command never runs. The record must
+# survive for the next restore instead of being removed on typing.
+reset_state
+cat > "$WORK/stuck-rc" <<'RC'
+stuck=$(sleep 30)
+RC
+key=$(new_pane "stuckrc" "$PROJ" "bash --noprofile --rcfile $WORK/stuck-rc -i")
+wait_for_shell "$key"
+write_record "$key" "$SESSION_ID" "$PROJ"
+snapshot_pane "$key" claude
+run_relaunch
+sleep 0.5
+if record_marked "$key" && ! t capture-pane -p -t "=$key" | grep -qx "$RELAUNCH_MARKER --resume $SESSION_ID"; then
+    pass "relaunch typed into a shell stuck in its rc -> record kept and marked"
+else
+    fail "stuck rc: record '$(cat "$(record_path "$key")" 2>/dev/null)'"
+fi
+
+# 8e. next restore: the snapshot saved meanwhile shows the shell the relaunch
+# never got past, but the record is still marked -> retried.
+reset_state
+key=$(new_pane "retry" "$PROJ" "$PANE_SHELL")
+wait_for_shell "$key"
+write_record "$key" "$SESSION_ID" "$PROJ"
+jq '. + {relaunched_at: 1}' "$(record_path "$key")" > "$WORK/marked" && mv "$WORK/marked" "$(record_path "$key")"
+snapshot_pane "$key" bash
+run_relaunch
+if pane_relaunched "$key" "$SESSION_ID" \
+    && grep -q "retry.*relaunch at 1 was never confirmed; retrying" "$CLAUDE_TMUX_STATE_DIR/relaunch.log"; then
+    pass "unconfirmed relaunch is retried although the snapshot shows a shell"
+else
+    fail "unconfirmed relaunch not retried; log: $(tail -n3 "$CLAUDE_TMUX_STATE_DIR/relaunch.log")"
 fi
 
 # 9. no state dir -> exit 0, nothing created.
@@ -380,12 +421,16 @@ recorded_id() {
     jq -r '.session_id' "$HOOK_RECORD" 2>/dev/null
 }
 
-# 10. SessionStart from the pane's claude writes the record.
-run_hook SessionStart "$SESSION_ID" '"source":"startup"'
+# 10. SessionStart from the pane's claude writes the record, replacing one the
+# relaunch marked (that is how a resumed session confirms the relaunch).
+jq -n --arg id "$SESSION_ID" --arg cwd "$PROJ" \
+    '{session_id: $id, cwd: $cwd, epoch: 0, relaunched_at: 1}' > "$HOOK_RECORD"
+run_hook SessionStart "$SESSION_ID" '"source":"resume"'
 if [ "$HOOK_STATUS" = 0 ] && [ "$(recorded_id)" = "$SESSION_ID" ] \
+    && [ "$(jq 'has("relaunched_at")' "$HOOK_RECORD")" = false ] \
     && [ "$(jq -r '.cwd' "$HOOK_RECORD")" = "$PROJ" ] \
     && [ "$(jq -r '.transcript_path' "$HOOK_RECORD")" = "$WORK/transcripts/$SESSION_ID.jsonl" ]; then
-    pass "SessionStart writes {session_id, cwd, transcript_path} for the pane's key"
+    pass "SessionStart writes {session_id, cwd, transcript_path} for the pane's key, clearing relaunched_at"
 else
     fail "SessionStart: status $HOOK_STATUS, record '$(cat "$HOOK_RECORD" 2>/dev/null)'"
 fi
@@ -394,6 +439,22 @@ if [ -e "$HOOK_OUT" ] && [ ! -s "$HOOK_OUT" ]; then
 else
     fail "hook stdout: '$(cat "$HOOK_OUT" 2>/dev/null)'"
 fi
+
+# 10b. SessionStart removes another pane's record holding the same session id
+# (a session resumed by hand in a new pane), keeps records of other sessions.
+STALE_KEY="old/ses sion:1.0"
+KEEP_KEY="keep:2.0"
+jq -n --arg id "$SESSION_ID" --arg cwd "$PROJ" \
+    '{session_id: $id, cwd: $cwd, epoch: 0, relaunched_at: 1}' > "$(record_path "$STALE_KEY")"
+write_record "$KEEP_KEY" "$OTHER_ID" "$PROJ"
+run_hook SessionStart "$SESSION_ID" '"source":"resume"'
+if [ "$HOOK_STATUS" = 0 ] && [ ! -e "$(record_path "$STALE_KEY")" ] \
+    && [ -f "$(record_path "$KEEP_KEY")" ] && [ "$(recorded_id)" = "$SESSION_ID" ]; then
+    pass "SessionStart removes other panes' records of the same session, keeps the rest"
+else
+    fail "dedupe: status $HOOK_STATUS, records: $(ls "$PANES_DIR" | tr '\n' ' ')"
+fi
+rm -f "$(record_path "$KEEP_KEY")"
 
 # 11. second SessionStart with a new id overwrites.
 run_hook SessionStart "$OTHER_ID" '"source":"clear"'

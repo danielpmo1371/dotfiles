@@ -20,6 +20,8 @@
 #   logout), and only when it still holds this session's id, so a newer session
 #   in the same pane keeps its record. Any other reason (a crash, a signal,
 #   /clear, resume) keeps it: that is exactly what the relaunch is for.
+#   After a SessionStart write, other panes' records with the same session id
+#   are removed: a session lives in one pane.
 #
 # Nested sessions: a headless `claude -p` started from inside a pane (Claude's
 # Bash tool, scripts) inherits $TMUX_PANE, and its SessionStart would overwrite
@@ -83,7 +85,21 @@ write_record() {
         mv -f "$tmp" "$record"
     else
         rm -f "$tmp"
+        return 1
     fi
+}
+
+# Remove every record other than $1 that holds this session's id: a session
+# lives in one pane, so a resume in a new pane supersedes the old pane's record
+# (e.g. one a relaunch marked but never confirmed), which a later restore would
+# otherwise resume a second time. The glob skips the hidden mktemp files.
+remove_other_records() {
+    local record="$1" other recorded_id
+    for other in "$PANES_DIR"/*; do
+        [ -f "$other" ] && [ "$other" != "$record" ] || continue
+        recorded_id=$(jq -r '.session_id // ""' "$other" 2>/dev/null)
+        [ "$recorded_id" = "$SESSION_ID" ] && rm -f "$other"
+    done
 }
 
 # Remove the record for this pane if it still belongs to this session.
@@ -124,7 +140,8 @@ main() {
 
     case "$(payload_field hook_event_name)" in
         SessionStart)
-            started_by_pane_claude "$pane_pid" && write_record "$record"
+            started_by_pane_claude "$pane_pid" && write_record "$record" \
+                && remove_other_records "$record"
             ;;
         SessionEnd)
             reason=$(payload_field reason)

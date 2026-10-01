@@ -13,7 +13,8 @@
 #      --resume would just error); records without transcript_path, written
 #      before the field existed, count as unknown and proceed;
 #   1. the pane exists in the restored server;
-#   2. the restored resurrect snapshot (`last`) shows `claude` running there;
+#   2. the restored resurrect snapshot (`last`) shows `claude` running there,
+#      or the record is still marked relaunched_at (see below);
 #   3. the pane reaches an idle shell (zsh|bash|sh|fish) and stays there;
 #   4. the pane's current path equals the recorded cwd.
 # Then `<cmd> --resume '<session_id>'` + Enter is typed into it. <cmd> is
@@ -21,7 +22,16 @@
 # alias (config/shell/aliases.sh).
 #
 # Record removal policy:
-#   relaunched       -> removed (the resumed session re-registers via SessionStart)
+#   relaunched       -> KEPT, marked {relaunched_at: <epoch>}. The resumed
+#                       session's SessionStart rewrites the record without that
+#                       field, so its presence means "typed, never confirmed".
+#                       A pane shell still stuck in its rc files (e.g. on a
+#                       locked keyring) already reports pane_current_command
+#                       zsh, so the typed command may never run; removing the
+#                       record at this point lost every session for good. A
+#                       still-marked record is retried on the next restore even
+#                       though that snapshot shows the shell our relaunch never
+#                       got past.
 #   pane missing     -> removed (the layout no longer has that pane)
 #   no transcript, not claude in snapshot, cwd mismatch, invalid record -> removed (stale)
 #   pane never became an idle shell (timeout) -> KEPT, so a later run can retry
@@ -138,10 +148,24 @@ wait_for_idle_shell() {
     return 1
 }
 
+# Add {relaunched_at: <now>} to record $1, atomically (same dir + mv, like the
+# hook's write_record).
+mark_relaunched() {
+    local record="$1" tmp
+    tmp=$(mktemp "$PANES_DIR/.record.XXXXXX") || return 1
+    if jq --argjson now "$(date +%s)" '. + {relaunched_at: $now}' "$record" > "$tmp"; then
+        mv -f "$tmp" "$record"
+    else
+        rm -f "$tmp"
+        return 1
+    fi
+}
+
 # Decide and act on one record. Exits with an OUTCOME_* status.
 process_record() {
     local record="$1" snapshot="$2" cmd="$3" timeout="$4"
     local key target session window pane session_id cwd transcript snap_cmd pane_path
+    local relaunched_at
     # Appended to every log line once the record is parsed: the log is the
     # manual-resume reference for sessions that could not be relaunched.
     local record_ref=""
@@ -172,9 +196,13 @@ process_record() {
 
     pane_exists "$key" || drop "pane does not exist"
 
+    relaunched_at=$(jq -r '.relaunched_at // "" | numbers' "$record" 2>/dev/null) || relaunched_at=""
     snap_cmd=$(snapshot_command "$snapshot" "$session" "$window" "$pane")
-    [ "$snap_cmd" = "claude" ] \
-        || drop "snapshot shows '${snap_cmd:-<no pane>}', not claude"
+    if [ "$snap_cmd" != "claude" ]; then
+        [ -n "$relaunched_at" ] \
+            || drop "snapshot shows '${snap_cmd:-<no pane>}', not claude"
+        log "$key: snapshot shows '${snap_cmd:-<no pane>}', but the relaunch at $relaunched_at was never confirmed; retrying$record_ref"
+    fi
 
     if ! wait_for_idle_shell "$target" "$timeout"; then
         log "$key: skipped, record kept — no idle shell within ${timeout}s$record_ref"
@@ -185,12 +213,15 @@ process_record() {
     [ "$pane_path" = "$cwd" ] \
         || drop "pane cwd '$pane_path' != recorded"
 
+    # Marked before typing, so a SessionStart that is quicker than this script
+    # is never overwritten by the mark.
+    mark_relaunched "$record" \
+        || log "$key: could not mark the record relaunched; it is kept unmarked$record_ref"
     # -l sends the text literally so tmux does not parse key names inside it.
     # session_id is validated above, so single quotes are enough.
     tmux send-keys -t "$target" -l "$cmd --resume '$session_id'"
     tmux send-keys -t "$target" Enter
-    rm -f "$record"
-    log "$key: relaunched — $cmd --resume $session_id$record_ref"
+    log "$key: relaunched — $cmd --resume $session_id, record kept until the session re-registers$record_ref"
     exit "$OUTCOME_RELAUNCHED"
 }
 
