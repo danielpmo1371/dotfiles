@@ -39,8 +39,8 @@ else
 
     # Restore pane borders
     tmux set-option -g pane-border-lines single 2>/dev/null
-    tmux set-option -g pane-border-style "fg=#3c3836"
-    tmux set-option -g pane-active-border-style "fg=#504945"
+    # Border colours come from the active theme (config/tmux/themes)
+    "$(dirname "$0")/tmux-theme.sh" apply-saved
     tmux set-option -g pane-border-indicators colour 2>/dev/null
 
     # Reset window styles

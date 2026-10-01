@@ -55,8 +55,8 @@ else
     tmux set-option -g pane-border-lines double
     tmux set-option -g pane-border-format \
         " #[bold]#{pane_index}#[nobold] #{pane_current_path} | #{pane_title} "
-    tmux set-option -g pane-active-border-style "fg=colour208,bg=default"
-    tmux set-option -g pane-border-style "fg=#3c3836"
+    # Border colours come from the active theme (config/tmux/themes)
+    "$(dirname "$0")/tmux-theme.sh" apply-saved
     tmux set-option -g window-style "default"
     tmux set-option -g window-active-style "default"
 

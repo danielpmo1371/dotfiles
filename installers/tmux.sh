@@ -70,7 +70,6 @@ install_tmux() {
     echo "Plugins installed:"
     echo "  - TPM (Plugin Manager)"
     echo "  - tmux-sensible (Sensible defaults)"
-    echo "  - tmux-gruvbox (Gruvbox dark theme)"
     echo "  - tmux-resurrect (Session saving)"
     echo "  - tmux-continuum (Auto-save/restore)"
     echo ""
