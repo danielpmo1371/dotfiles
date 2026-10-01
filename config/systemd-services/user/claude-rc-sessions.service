@@ -1,0 +1,27 @@
+[Unit]
+Description=Claude Code Remote Control tmux sessions (one per folder in ~/.config/claude-rc/folders)
+# After claude-rc so its unlock dialog is answered first and ours finds the
+# keyring unlocked, instead of both showing a dialog at once.
+After=network-online.target graphical-session.target claude-rc.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# The tmux server forked by rc-start.sh must outlive the oneshot's main process.
+KillMode=process
+# Show the keyring unlock dialog and wait for it, so the shell below starts
+# with secrets: env vars are fixed at start, a later unlock never reaches it.
+# "-": still start (without secrets) if the dialog is dismissed or times out.
+# The start timeout must outlast the wait (default 90s includes ExecStartPre).
+Environment=KEYRING_UNLOCK_TIMEOUT=300
+TimeoutStartSec=330
+ExecStartPre=-%h/repos/dotfiles/util-scripts/keyring-unlock-wait
+ExecStart=%h/bin/rc-start.sh
+ExecStop=%h/bin/rc-stop.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+# After login, not at boot: the keyring and a display exist only then.
+WantedBy=graphical-session.target

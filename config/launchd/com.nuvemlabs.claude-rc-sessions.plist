@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Claude Code Remote Control per-folder tmux sessions (claude-rc-sessions) — macOS LaunchAgent.
+  macOS counterpart of config/systemd-services/user/claude-rc-sessions.service.
+  Installed (copied, not symlinked) to ~/Library/LaunchAgents by installers/services.sh.
+
+  Runs ~/bin/rc-start.sh once at login; it starts a detached tmux session per folder in
+  ~/.config/claude-rc/folders and exits. AbandonProcessGroup keeps launchd from killing the
+  tmux server when this job's script exits. Output goes to ~/Library/Logs/claude-rc-sessions.log
+  (redirected by the shell because launchd does not expand $HOME in StandardOutPath).
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nuvemlabs.claude-rc-sessions</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/zsh</string>
+        <string>-lic</string>
+        <string>exec &gt;&gt;"$HOME/Library/Logs/claude-rc-sessions.log" 2&gt;&amp;1; exec "$HOME/bin/rc-start.sh"</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>AbandonProcessGroup</key>
+    <true/>
+</dict>
+</plist>
