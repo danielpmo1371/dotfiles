@@ -97,7 +97,7 @@
         ]
       },
       {
-        "matcher": "mcp__azure-devops__pipelines_run_pipeline",
+        "matcher": "mcp__azure-devops__pipelines_.*",
         "hooks": [
           {
             "type": "command",
