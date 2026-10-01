@@ -50,10 +50,21 @@ if [[ -f "$SECRETS_LIB" ]]; then
     # ─────────────────────────────────────────────────────────────────────────
     #   Export secrets as environment variables
     # ─────────────────────────────────────────────────────────────────────────
-    export AZDO_PAT="$(secret AZDO_PAT 2>/dev/null)"
-    export AZURE_DEVOPS_PAT="$AZDO_PAT"
-    export AZURE_DEVOPS_EXT_PAT="$AZDO_PAT"
-    export ADO_MCP_AUTH_TOKEN="$AZDO_PAT"
+    # Never export the PAT empty: az devops treats a present-but-empty
+    # AZURE_DEVOPS_EXT_PAT as a PAT and sends anonymous requests (TF400813),
+    # and the azure-devops MCP server inherits the empty ADO_MCP_AUTH_TOKEN.
+    # Unset, az falls back to az login and the MCP server reports it missing.
+    __azdo_pat="$(secret AZDO_PAT 2>/dev/null)"
+    if [[ -n "$__azdo_pat" ]]; then
+        export AZDO_PAT="$__azdo_pat"
+        export AZURE_DEVOPS_PAT="$AZDO_PAT"
+        export AZURE_DEVOPS_EXT_PAT="$AZDO_PAT"
+        export ADO_MCP_AUTH_TOKEN="$AZDO_PAT"
+    else
+        unset AZDO_PAT AZURE_DEVOPS_PAT AZURE_DEVOPS_EXT_PAT ADO_MCP_AUTH_TOKEN
+        echo "[secrets] AZDO_PAT lookup returned nothing — Azure DevOps PAT vars not exported (run: secrets-doctor AZDO_PAT)" >&2
+    fi
+    unset __azdo_pat
     export AZDO_ORG="$(secret AZDO_ORG 2>/dev/null)"
     # AZDO_ORG_URL/AZDO_PROJECT back the "secret:..." refs in config/mcp/servers.json
     # (installers/mcp.sh rewrites those to ${VAR}; Claude Code expands them from this
