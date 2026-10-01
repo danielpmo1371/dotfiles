@@ -22,9 +22,10 @@
 # alias (config/shell/aliases.sh).
 #
 # Record removal policy:
-#   relaunched       -> KEPT, marked {relaunched_at: <epoch>}. The resumed
-#                       session's SessionStart rewrites the record without that
-#                       field, so its presence means "typed, never confirmed".
+#   relaunched       -> KEPT, marked {relaunched_at: <epoch>, relaunch_attempts: N}.
+#                       The resumed session's SessionStart rewrites the record
+#                       without those fields, so their presence means "typed,
+#                       never confirmed" (and the count restarts on success).
 #                       A pane shell still stuck in its rc files (e.g. on a
 #                       locked keyring) already reports pane_current_command
 #                       zsh, so the typed command may never run; removing the
@@ -32,6 +33,10 @@
 #                       still-marked record is retried on the next restore even
 #                       though that snapshot shows the shell our relaunch never
 #                       got past.
+#   marked, relaunch_attempts >= @claude-relaunch-max-attempts -> removed, nothing
+#                       typed; the log line carries the manual resume command.
+#                       A marked record without the counter (written before it
+#                       existed) counts as one attempt.
 #   pane missing     -> removed (the layout no longer has that pane)
 #   no transcript, not claude in snapshot, cwd mismatch, invalid record -> removed (stale)
 #   pane never became an idle shell (timeout) -> KEPT, so a later run can retry
@@ -48,6 +53,7 @@
 #   @claude-relaunch          on|off    (default on; off = log and exit)
 #   @claude-relaunch-cmd      command   (default cdang)
 #   @claude-relaunch-timeout  seconds   (default 30) to wait for an idle shell
+#   @claude-relaunch-max-attempts  N    (default 3) unconfirmed relaunches before giving up
 #
 # Environment (tests): CLAUDE_TMUX_STATE_DIR, RESURRECT_DIR.
 #
@@ -58,6 +64,7 @@ set -euo pipefail
 readonly DEFAULT_ENABLED="on"
 readonly DEFAULT_CMD="cdang"
 readonly DEFAULT_TIMEOUT=30
+readonly DEFAULT_MAX_ATTEMPTS=3
 readonly POLL_INTERVAL=0.5
 # Consecutive polls the pane must show a shell, so a shell that is about to
 # exec something else (or a login still sourcing its rc) is not mistaken for idle.
@@ -65,6 +72,9 @@ readonly SHELL_STABLE_POLLS=2
 readonly SHELL_RE='^(zsh|bash|sh|fish)$'
 # Session ids are UUIDs; anything else in a record is refused before send-keys.
 readonly SESSION_ID_RE='^[0-9a-fA-F-]+$'
+# Unconfirmed relaunch attempts already made on a record; a legacy record
+# marked relaunched_at without the counter has had one.
+readonly ATTEMPTS_JQ='((.relaunch_attempts | numbers) // (if .relaunched_at then 1 else 0 end)) | floor'
 
 # Per-pane outcome, used as the worker subshell's exit status.
 readonly OUTCOME_RELAUNCHED=0
@@ -148,12 +158,14 @@ wait_for_idle_shell() {
     return 1
 }
 
-# Add {relaunched_at: <now>} to record $1, atomically (same dir + mv, like the
-# hook's write_record).
+# Add {relaunched_at: <now>} to record $1 and increment relaunch_attempts, in
+# one atomic write (same dir + mv, like the hook's write_record).
 mark_relaunched() {
     local record="$1" tmp
     tmp=$(mktemp "$PANES_DIR/.record.XXXXXX") || return 1
-    if jq --argjson now "$(date +%s)" '. + {relaunched_at: $now}' "$record" > "$tmp"; then
+    if jq --argjson now "$(date +%s)" \
+        ". + {relaunched_at: \$now, relaunch_attempts: (($ATTEMPTS_JQ) + 1)}" \
+        "$record" > "$tmp"; then
         mv -f "$tmp" "$record"
     else
         rm -f "$tmp"
@@ -163,9 +175,9 @@ mark_relaunched() {
 
 # Decide and act on one record. Exits with an OUTCOME_* status.
 process_record() {
-    local record="$1" snapshot="$2" cmd="$3" timeout="$4"
+    local record="$1" snapshot="$2" cmd="$3" timeout="$4" max_attempts="$5"
     local key target session window pane session_id cwd transcript snap_cmd pane_path
-    local relaunched_at
+    local relaunched_at attempts
     # Appended to every log line once the record is parsed: the log is the
     # manual-resume reference for sessions that could not be relaunched.
     local record_ref=""
@@ -197,6 +209,12 @@ process_record() {
     pane_exists "$key" || drop "pane does not exist"
 
     relaunched_at=$(jq -r '.relaunched_at // "" | numbers' "$record" 2>/dev/null) || relaunched_at=""
+    if [ -n "$relaunched_at" ]; then
+        attempts=$(jq -r "$ATTEMPTS_JQ" "$record" 2>/dev/null) || attempts=0
+        [[ "$attempts" =~ ^[0-9]+$ ]] || attempts=0
+        [ "$attempts" -lt "$max_attempts" ] \
+            || drop "$attempts relaunch attempts never confirmed (limit $max_attempts); resume manually: $cmd --resume $session_id"
+    fi
     snap_cmd=$(snapshot_command "$snapshot" "$session" "$window" "$pane")
     if [ "$snap_cmd" != "claude" ]; then
         [ -n "$relaunched_at" ] \
@@ -226,7 +244,7 @@ process_record() {
 }
 
 main() {
-    local enabled cmd timeout snapshot record pid status skipped
+    local enabled cmd timeout max_attempts snapshot record pid status skipped
     local relaunched=0 removed=0 kept=0 failed=0
     local -a pids=()
 
@@ -251,6 +269,11 @@ main() {
         log "invalid @claude-relaunch-timeout '$timeout', using $DEFAULT_TIMEOUT"
         timeout="$DEFAULT_TIMEOUT"
     fi
+    max_attempts=$(tmux_option @claude-relaunch-max-attempts "$DEFAULT_MAX_ATTEMPTS")
+    if ! [[ "$max_attempts" =~ ^[1-9][0-9]*$ ]]; then
+        log "invalid @claude-relaunch-max-attempts '$max_attempts', using $DEFAULT_MAX_ATTEMPTS"
+        max_attempts="$DEFAULT_MAX_ATTEMPTS"
+    fi
 
     snapshot="$(resolve_resurrect_dir)/last"
     if [ ! -r "$snapshot" ]; then
@@ -258,11 +281,11 @@ main() {
         exit 0
     fi
 
-    log "run: snapshot $(readlink -f "$snapshot"), cmd '$cmd', timeout ${timeout}s"
+    log "run: snapshot $(readlink -f "$snapshot"), cmd '$cmd', timeout ${timeout}s, max attempts $max_attempts"
     shopt -s nullglob
     for record in "$PANES_DIR"/*; do
         [ -f "$record" ] || continue
-        ( process_record "$record" "$snapshot" "$cmd" "$timeout" ) &
+        ( process_record "$record" "$snapshot" "$cmd" "$timeout" "$max_attempts" ) &
         pids+=("$!")
     done
 

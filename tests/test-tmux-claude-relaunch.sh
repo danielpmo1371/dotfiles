@@ -133,6 +133,16 @@ record_marked() {
     jq -e '.relaunched_at | numbers' "$(record_path "$1")" > /dev/null 2>&1
 }
 
+# Mark the record for key $1 as relaunched (never confirmed) $2 times.
+mark_record() {
+    jq --argjson n "$2" '. + {relaunched_at: 1, relaunch_attempts: $n}' \
+        "$(record_path "$1")" > "$WORK/marked" && mv "$WORK/marked" "$(record_path "$1")"
+}
+
+record_attempts() {
+    jq -r '.relaunch_attempts' "$(record_path "$1")" 2>/dev/null
+}
+
 reset_state() {
     rm -f "$PANES_DIR"/* "$SNAPSHOT"
     : > "$SNAPSHOT"
@@ -156,8 +166,9 @@ if pane_relaunched "$key" "$SESSION_ID"; then
 else
     fail "eligible pane: no relaunch output; log: $(tail -n3 "$CLAUDE_TMUX_STATE_DIR/relaunch.log")"
 fi
-if record_marked "$key" && [ "$(jq -r '.session_id' "$(record_path "$key")")" = "$SESSION_ID" ]; then
-    pass "relaunched pane's record is kept, marked relaunched_at"
+if record_marked "$key" && [ "$(record_attempts "$key")" = 1 ] \
+    && [ "$(jq -r '.session_id' "$(record_path "$key")")" = "$SESSION_ID" ]; then
+    pass "relaunched pane's record is kept, marked relaunched_at, relaunch_attempts 1"
 else
     fail "relaunched pane's record: '$(cat "$(record_path "$key")" 2>/dev/null)'"
 fi
@@ -337,6 +348,73 @@ else
     fail "unconfirmed relaunch not retried; log: $(tail -n3 "$CLAUDE_TMUX_STATE_DIR/relaunch.log")"
 fi
 
+# 8f. marked record below the default limit -> retried, counter incremented.
+reset_state
+key=$(new_pane "below" "$PROJ" "$PANE_SHELL")
+wait_for_shell "$key"
+write_record "$key" "$SESSION_ID" "$PROJ"
+mark_record "$key" 2
+snapshot_pane "$key" bash
+run_relaunch
+if pane_relaunched "$key" "$SESSION_ID" && [ "$(record_attempts "$key")" = 3 ]; then
+    pass "marked record below the limit is retried, relaunch_attempts 2 -> 3"
+else
+    fail "below the limit: record '$(cat "$(record_path "$key")" 2>/dev/null)'"
+fi
+
+# 8g. marked record at the default limit -> nothing typed, removed, manual
+# resume command and attempt count logged.
+reset_state
+key=$(new_pane "atlimit" "$PROJ" "$PANE_SHELL")
+wait_for_shell "$key"
+write_record "$key" "$SESSION_ID" "$PROJ"
+mark_record "$key" 3
+snapshot_pane "$key" claude
+run_relaunch
+sleep 0.5
+if ! pane_has_marker "$key" && [ ! -e "$(record_path "$key")" ] \
+    && grep -q "atlimit.*record removed — 3 relaunch attempts never confirmed (limit 3); resume manually: echo $RELAUNCH_MARKER --resume $SESSION_ID (session $SESSION_ID, cwd $PROJ)" \
+        "$CLAUDE_TMUX_STATE_DIR/relaunch.log"; then
+    pass "marked record at the limit -> nothing typed, record removed, manual resume logged"
+else
+    fail "at the limit: typed, record kept or not logged; log: $(tail -n3 "$CLAUDE_TMUX_STATE_DIR/relaunch.log")"
+fi
+
+# 8h. custom @claude-relaunch-max-attempts is honoured: 2 attempts reach a limit of 2.
+reset_state
+key=$(new_pane "customlimit" "$PROJ" "$PANE_SHELL")
+wait_for_shell "$key"
+write_record "$key" "$SESSION_ID" "$PROJ"
+mark_record "$key" 2
+snapshot_pane "$key" claude
+t set -g @claude-relaunch-max-attempts 2
+run_relaunch
+t set -gu @claude-relaunch-max-attempts
+sleep 0.5
+if ! pane_has_marker "$key" && [ ! -e "$(record_path "$key")" ] \
+    && grep -q "customlimit.*2 relaunch attempts never confirmed (limit 2)" "$CLAUDE_TMUX_STATE_DIR/relaunch.log"; then
+    pass "@claude-relaunch-max-attempts 2 -> record with 2 attempts removed"
+else
+    fail "custom limit not honoured; log: $(tail -n3 "$CLAUDE_TMUX_STATE_DIR/relaunch.log")"
+fi
+
+# 8i. invalid @claude-relaunch-max-attempts (0) -> logged, default 3 applies.
+reset_state
+key=$(new_pane "badlimit" "$PROJ" "$PANE_SHELL")
+wait_for_shell "$key"
+write_record "$key" "$SESSION_ID" "$PROJ"
+mark_record "$key" 2
+snapshot_pane "$key" claude
+t set -g @claude-relaunch-max-attempts 0
+run_relaunch
+t set -gu @claude-relaunch-max-attempts
+if pane_relaunched "$key" "$SESSION_ID" && [ "$(record_attempts "$key")" = 3 ] \
+    && grep -q "invalid @claude-relaunch-max-attempts '0', using 3" "$CLAUDE_TMUX_STATE_DIR/relaunch.log"; then
+    pass "invalid @claude-relaunch-max-attempts -> logged, default limit applies"
+else
+    fail "invalid limit: record '$(cat "$(record_path "$key")" 2>/dev/null)'; log: $(tail -n3 "$CLAUDE_TMUX_STATE_DIR/relaunch.log")"
+fi
+
 # 9. no state dir -> exit 0, nothing created.
 if CLAUDE_TMUX_STATE_DIR="$WORK/absent" "$RELAUNCH" && [ ! -e "$WORK/absent" ]; then
     pass "absent state dir -> exit 0, nothing created"
@@ -424,13 +502,13 @@ recorded_id() {
 # 10. SessionStart from the pane's claude writes the record, replacing one the
 # relaunch marked (that is how a resumed session confirms the relaunch).
 jq -n --arg id "$SESSION_ID" --arg cwd "$PROJ" \
-    '{session_id: $id, cwd: $cwd, epoch: 0, relaunched_at: 1}' > "$HOOK_RECORD"
+    '{session_id: $id, cwd: $cwd, epoch: 0, relaunched_at: 1, relaunch_attempts: 2}' > "$HOOK_RECORD"
 run_hook SessionStart "$SESSION_ID" '"source":"resume"'
 if [ "$HOOK_STATUS" = 0 ] && [ "$(recorded_id)" = "$SESSION_ID" ] \
-    && [ "$(jq 'has("relaunched_at")' "$HOOK_RECORD")" = false ] \
+    && [ "$(jq 'has("relaunched_at") or has("relaunch_attempts")' "$HOOK_RECORD")" = false ] \
     && [ "$(jq -r '.cwd' "$HOOK_RECORD")" = "$PROJ" ] \
     && [ "$(jq -r '.transcript_path' "$HOOK_RECORD")" = "$WORK/transcripts/$SESSION_ID.jsonl" ]; then
-    pass "SessionStart writes {session_id, cwd, transcript_path} for the pane's key, clearing relaunched_at"
+    pass "SessionStart writes {session_id, cwd, transcript_path} for the pane's key, clearing relaunched_at and relaunch_attempts"
 else
     fail "SessionStart: status $HOOK_STATUS, record '$(cat "$HOOK_RECORD" 2>/dev/null)'"
 fi
