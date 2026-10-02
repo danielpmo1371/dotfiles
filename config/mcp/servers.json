@@ -13,7 +13,7 @@
   "azure-devops": {
     "type": "stdio",
     "command": "npx",
-    "args": ["-y", "@azure-devops/mcp", "secret:AZDO_ORG", "--authentication", "envvar"],
+    "args": ["--allow-scripts=keytar", "-y", "@azure-devops/mcp", "secret:AZDO_ORG", "--authentication", "envvar"],
     "env": {
       "AZURE_DEVOPS_ORG_URL": "secret:AZDO_ORG_URL",
       "AZURE_DEVOPS_AUTH_METHOD": "pat",
