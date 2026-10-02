@@ -8,7 +8,8 @@ The default is to act. Do not ask the user a question that you can answer with t
 
 1. Pick the option a careful colleague would pick. Prefer the reversible one.
 2. Record it as one line under `### Decisions` in `workflow_state.md`:
-   `- D<n> (<date>): <decision> — assumption: <why> — undo: <how to reverse>`
+   `- D<n> (<date>) <area>: <decision> — assumptions: <what you took as given> — undo: <how to reverse>`
+   (`<area>` is a short tag such as `pipeline`, `sdlc`, `git`, `infra`.)
 3. Proceed. Mention the decision in your report so the user can veto it later.
 
 Reserved for the user (ask, and wait, only for these):

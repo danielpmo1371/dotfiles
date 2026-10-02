@@ -20,14 +20,25 @@
       "Bash(which:*)",
       "Bash(whoami:*)",
       "Bash(jq:*)",
-      "Bash(ttalk:*)"
+      "Bash(ttalk:*)",
+      "mcp__azure-devops__pipelines_write",
+      "mcp__azure-devops__pipelines_build",
+      "mcp__azure-devops__pipelines_run",
+      "mcp__azure-devops__pipelines_build_log"
     ],
-    "deny": [],
-    "defaultMode": "acceptEdits",
-    "additionalDirectories": [],
-    "autoApprove": [
-      "git"
-    ]
+    "deny": [
+      "Bash(az * delete*)",
+      "Bash(kubectl delete*)",
+      "Bash(helm uninstall*)",
+      "Bash(helm delete*)",
+      "Bash(terraform destroy*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git push * --force)",
+      "Bash(git push * -f)"
+    ],
+    "defaultMode": "auto",
+    "additionalDirectories": []
   },
   "model": "opus[1m]",
   "hooks": {

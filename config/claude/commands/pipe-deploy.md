@@ -1,133 +1,23 @@
 ---
 description: Trigger CI/CD pipelines for the current service. Auto-detects service from CWD, uses current git branch. Monitors, diagnoses failures, attempts one auto-fix.
-allowed-tools: Bash(*), Read(*), Grep(*), Glob(*)
+allowed-tools: Agent, Bash, Read, Grep, Glob
 ---
-
-## Dependencies
-
-This command depends on the AZDO pipeline guard hooks at `~/.claude/hooks/pipeline-guard.sh` and `~/.claude/hooks/pipeline-trigger-guard.sh`, plus the supporting scripts in `~/.claude/scripts/` (`pipeline-validator.sh`, `pipeline-registry.sh`). All are installed by `installers/claude-azdo-pipeline-hooks.sh` (auto-invoked by `./install.sh --claude`) and the whole-dir `scripts` symlink from `claude.sh`.
 
 ## Pipeline Deploy: $ARGUMENTS
 
-### Step 1: Detect Service and Branch
+Thin wrapper. The workflow (decision rules, validation, trigger, monitoring, one auto-fix, audit line, report) lives in the `pipeline-runner` agent; do not restate its steps here and never put a question to the user.
 
-Detect the current service and branch:
+Parse `$ARGUMENTS` (all optional, any order):
+- service: a word matching a registry service name (`~/.claude/scripts/pipeline-registry.sh <name>` resolves it)
+- environment: `dev`, `sit` or `uat` (never `pre`/`prd`)
+- stages: comma-separated CD stage names
+- branch: contains `/`, or is `develop` / `main`
+- `--ci-only`: run CI without CD
 
-```bash
-# Detect service from CWD (or use first argument if it looks like a service name)
-SERVICE_INFO=$(~/.claude/scripts/pipeline-registry.sh 2>&1) || true
+Anything not given is left to the agent's decision rules.
 
-# Get current branch
-CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "")
-```
+Dispatch `Agent` with `subagent_type: pipeline-runner` and this prompt:
 
-Parse `$ARGUMENTS`:
-- If arguments contain a branch name (contains `/` or starts with `feature/`, `release/`, `hotfix/`, `develop`, `main`): use it as branch override
-- If arguments contain a service name (matches a known service): use it as service override
-- If arguments contain `--ci-only`: skip CD pipeline
-- If arguments contain `--skip-ci`: skip CI, go directly to CD
-- Otherwise: use auto-detected service and current branch
+> Deploy. Service: {service or "detect from CWD"}. Environment: {env or "default"}. Stages: {stages or "default"}. Branch: {branch or "current"}. Flags: {flags or "none"}. Apply the decision rules; do not ask. Record the D<n> decision line and include it, the Logs Verified line and the build links in your report.
 
-Display what was detected and ask user to confirm before proceeding.
-
-### Step 2: Resolve Pipeline IDs
-
-From the service info JSON, extract:
-- `ci.id` — CI pipeline definition ID
-- `cd.id` — CD pipeline definition ID (may be null)
-- `terraform.id` — Terraform pipeline definition ID (may be absent)
-- `project` — AzDO project name
-- `stages.allowed` — allowed deployment stages
-
-Full registry schema and authoring guide: `~/.claude/skills/pipeline-ops/REGISTRY.md`.
-
-If the service has a `terraform` key, this is a **Terraform pipeline** — skip to **Step 2b**.
-If no CI or CD pipeline exists for the service, inform the user.
-
-### Step 2b: Terraform Pipeline Flow
-
-When the service has a `terraform` key (e.g., iac):
-
-1. Parse `$ARGUMENTS` for environment and location:
-   - If arguments contain an environment name (dev/sit/uat): use it
-   - If arguments contain a location (ae/ase): use it
-   - Otherwise: ask the user which environment (dev/sit/uat) and location (ae/ase, default: ae)
-2. Validate through pipeline-validator.sh with `type: "terraform"`:
-   ```bash
-   echo '{"service":"iac","type":"terraform","branch":"BRANCH","pipelineId":"<TERRAFORM_PIPELINE_ID>","project":"Example Project","environment":"ENV","location":"LOC"}' | ~/.claude/scripts/pipeline-validator.sh
-   ```
-3. If approved, trigger via MCP using the validator's returned `templateParameters` and `stagesToSkip`
-4. Monitor using the same polling pattern as Step 4
-5. On failure, use fetch-azdo-logs agent for diagnosis + one auto-fix attempt
-6. Report plan results — skip to Step 8
-
-**CRITICAL**: Terraform pipelines are PLAN ONLY by default — the apply stage is skipped. The ONE exemption is an environment listed in the registry's `.services.<svc>.terraform.applyAllowedEnvironments` (human-committed, integrity-checked, AI writes blocked). Even then the run must carry `deployToggle=deploy` and `requireManualApproval=True` (exact values, set by the validator and enforced by the pipeline-guard hook), AzDO holds the apply at the ManualValidation gate for a human, `destroy*` stages are always skipped, and PRE/PRD stay blocked regardless. Non-allowlisted environments remain plan-only. Never approve the gate yourself.
-
-### Step 3: Validate and Trigger CI
-
-Run the validator:
-```bash
-echo '{"service":"SERVICE","type":"ci","branch":"BRANCH","pipelineId":"CI_ID","project":"PROJECT"}' | ~/.claude/scripts/pipeline-validator.sh
-```
-
-If approved, use `ToolSearch` to load `mcp__azure-devops__pipelines_write`, then trigger:
-- `action`: `run_pipeline` (the only permitted action — every other `pipelines_write` action is blocked by pipeline-guard.sh)
-- `project`: from registry
-- `pipelineId`: CI pipeline ID
-- `resources.repositories.self.refName`: `refs/heads/BRANCH`
-
-### Step 4: Monitor CI
-
-Use `ToolSearch` to load `mcp__azure-devops__pipelines_build`.
-
-Poll every 30 seconds:
-1. Call `mcp__azure-devops__pipelines_build` with `action: "list"`, `definitions: [<CI definition ID>]`, `top: 1`, to get the latest buildId
-2. Call `mcp__azure-devops__pipelines_build` with `action: "get_status"` and the buildId
-3. Report status to user (in progress / succeeded / failed)
-4. Continue until completed
-
-### Step 5: Handle CI Failure
-
-If CI fails:
-1. Use the `fetch-azdo-logs` agent (Task tool, subagent_type=fetch-azdo-logs) to fetch and analyze logs
-2. Based on the diagnosis, attempt one auto-fix:
-   - Read the identified failing file
-   - Apply the suggested fix
-   - Commit the fix
-   - Re-trigger CI (back to Step 3, but only ONCE)
-3. If the retry also fails, or the fix agent can't determine a fix:
-   - Report the full diagnosis to the user
-   - Provide the pipeline URL for manual investigation
-   - STOP
-
-### Step 6: Trigger CD (if applicable)
-
-If CI passed and a CD pipeline exists (`cd.id` is not null), and `--ci-only` was NOT specified:
-
-1. Ask user which stages to deploy to (from `stages.allowed` list)
-2. Run validator with type=cd and selected stages
-3. If approved, trigger CD via MCP with `stagesToSkip` for non-selected stages
-4. Monitor CD the same way as CI (Step 4)
-
-### Step 7: Handle CD Failure
-
-Same as Step 5 but for CD pipeline. One auto-fix attempt, then report.
-
-### Step 8: Summary
-
-Report:
-- Service deployed
-- Branch
-- CI result (pass/fail, build number, duration)
-- CD result (pass/fail, build number, stages deployed)
-- Any fixes applied
-- Pipeline URLs for reference
-
-### Safety Rules (NON-NEGOTIABLE)
-
-- **NEVER** trigger pipelines targeting PRE or PRD environments
-- **ALWAYS** run through pipeline-validator.sh before any MCP call
-- **ALWAYS** use the current branch unless explicitly overridden
-- **MAXIMUM ONE** auto-fix retry per pipeline run
-- **CD requires explicit stage selection** from the allowed list
-- **Terraform pipelines are PLAN ONLY by default** — apply runs only for a registry-allowlisted environment (`terraform.applyAllowedEnvironments`), never destroy
+Relay the agent's report to the user unchanged.
