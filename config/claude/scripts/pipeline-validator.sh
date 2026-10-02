@@ -283,6 +283,10 @@ fi
 # only for an env in the registry's terraform.applyAllowedEnvironments, and
 # a BLOCK always overrides an ALLOW: stages.blocked, alwaysSkipStages and
 # destroy* stages are skipped on every run, whatever the allowlist says.
+# An apply run is held at AzDO's manual approval gate
+# (requireManualApproval=True) unless the env is ALSO listed in
+# terraform.applyWithoutApprovalEnvironments, which must be a subset of
+# applyAllowedEnvironments and may never name a blocked environment.
 # ============================================================================
 ALLOWED_TF_ENVS=("dev" "sit" "uat" "npe" "dry")
 ALLOWED_TF_LOCATIONS=("ae" "ase")
@@ -355,7 +359,9 @@ if [[ "$TYPE" == "terraform" ]]; then
   #   - per-service environment policy (terraform.parameters.environment.{blocked,allowed})
   #   - stagesToSkip (stages.blocked ∪ terraform.alwaysSkipStages ∪ destroy* stages,
   #     plus apply* stages unless the env is in terraform.applyAllowedEnvironments)
-  #   - templateParameters (terraform.defaultParameters merged with env/location)
+  #   - templateParameters (terraform.defaultParameters merged with env/location;
+  #     requireManualApproval is False on apply runs only for an env in
+  #     terraform.applyWithoutApprovalEnvironments, True otherwise)
   #
   # If the registry cannot be found or the pipelineId is not in it, we fail
   # CLOSED (TERRAFORM_NOT_REGISTERED below) — stage names are never guessed.
@@ -437,6 +443,48 @@ if [[ "$TYPE" == "terraform" ]]; then
       done
     fi
 
+    # Approval-waiver policy: terraform.applyWithoutApprovalEnvironments lists
+    # the environments whose apply runs WITHOUT the manual approval gate. It
+    # is only ever consulted for an apply run, and the registry is refused
+    # outright (fail closed, no silent downgrade) when the list is not an
+    # array of strings, names a hardcoded blocked environment, or is not a
+    # subset of applyAllowedEnvironments — a human must fix and commit it.
+    BLOCKED_ENVS_JSON=$(printf '%s\n' "${BLOCKED_ENVS[@]}" | jq -R . | jq -sc .)
+    NO_APPROVAL_SHAPE_OK=$(echo "$SERVICE_ENTRY" | jq -r '
+      .value.terraform.applyWithoutApprovalEnvironments // []
+      | type == "array" and all(.[]; type == "string")')
+    if [[ "$NO_APPROVAL_SHAPE_OK" != "true" ]]; then
+      log_validator "BLOCKED: malformed registry entry for '$REG_SVC_NAME': terraform.applyWithoutApprovalEnvironments is not an array of strings"
+      jq -n \
+        --arg reason "BLOCKED: Malformed registry entry for service '$REG_SVC_NAME': terraform.applyWithoutApprovalEnvironments must be an array of strings. The registry is trusted only when well-formed; a human must fix and commit it." \
+        '{"approved": false, "reason": $reason, "rule": "REGISTRY_MALFORMED"}'
+      exit 1
+    fi
+    NO_APPROVAL_BLOCKED=$(echo "$SERVICE_ENTRY" | jq -r --argjson blocked "$BLOCKED_ENVS_JSON" '
+      [.value.terraform.applyWithoutApprovalEnvironments // [] | .[] | ascii_downcase
+       | select(. as $e | any($blocked[]; . == $e))] | join(",")')
+    if [[ -n "$NO_APPROVAL_BLOCKED" ]]; then
+      log_validator "BLOCKED: registry contradiction for '$REG_SVC_NAME': blocked environment(s) '$NO_APPROVAL_BLOCKED' in applyWithoutApprovalEnvironments"
+      jq -n \
+        --arg reason "BLOCKED: Registry contradiction for service '$REG_SVC_NAME': terraform.applyWithoutApprovalEnvironments lists blocked environment(s) '$NO_APPROVAL_BLOCKED'. PRE/PRD can never run without approval — they can never run at all via AI. A human must remove them and commit." \
+        '{"approved": false, "reason": $reason, "rule": "REGISTRY_CONTRADICTION"}'
+      exit 1
+    fi
+    NO_APPROVAL_NOT_SUBSET=$(echo "$SERVICE_ENTRY" | jq -r '
+      (.value.terraform.applyAllowedEnvironments // [] | map(ascii_downcase)) as $allowed
+      | [.value.terraform.applyWithoutApprovalEnvironments // [] | .[] | ascii_downcase
+         | select(. as $e | any($allowed[]; . == $e) | not)] | join(",")')
+    if [[ -n "$NO_APPROVAL_NOT_SUBSET" ]]; then
+      log_validator "BLOCKED: registry contradiction for '$REG_SVC_NAME': '$NO_APPROVAL_NOT_SUBSET' in applyWithoutApprovalEnvironments but not in applyAllowedEnvironments"
+      jq -n \
+        --arg reason "BLOCKED: Registry contradiction for service '$REG_SVC_NAME': environment(s) '$NO_APPROVAL_NOT_SUBSET' are in terraform.applyWithoutApprovalEnvironments but not in terraform.applyAllowedEnvironments. The waiver list must be a subset of the apply allowlist. A human must fix the registry and commit." \
+        '{"approved": false, "reason": $reason, "rule": "REGISTRY_CONTRADICTION"}'
+      exit 1
+    fi
+    APPROVAL_WAIVED=$(echo "$SERVICE_ENTRY" | jq -r --arg env "$TF_ENV_LOWER" '
+      .value.terraform.applyWithoutApprovalEnvironments // []
+      | any(.[]; ascii_downcase == $env)')
+
     DEFAULT_PARAMS=$(echo "$SERVICE_ENTRY" | jq -c '.value.terraform.defaultParameters // {}')
 
     if [[ "$APPLY_PERMITTED" == "true" ]]; then
@@ -456,16 +504,25 @@ if [[ "$TYPE" == "terraform" ]]; then
 
       STAGES_TO_SKIP="$HARD_SKIP"
 
-      # The apply is only ever reachable behind a human approval, and only as a
-      # deploy — never a destroy — whatever the registry defaults happen to say.
+      # The apply is only ever a deploy — never a destroy — whatever the
+      # registry defaults happen to say, and it is held behind a human
+      # approval unless the registry waives the gate for this environment.
+      if [[ "$APPROVAL_WAIVED" == "true" ]]; then
+        REQUIRE_MANUAL_APPROVAL="False"
+        APPROVAL_NOTE="approval waived: environment '$TF_ENV_LOWER' is in applyWithoutApprovalEnvironments, apply runs without the manual approval gate"
+      else
+        REQUIRE_MANUAL_APPROVAL="True"
+        APPROVAL_NOTE="apply held at the manual approval gate"
+      fi
       TEMPLATE_PARAMS=$(jq -nc \
         --arg env "$TF_ENV_LOWER" \
         --arg loc "$TF_LOC_LOWER" \
+        --arg approval "$REQUIRE_MANUAL_APPROVAL" \
         --argjson defaults "$DEFAULT_PARAMS" \
         '$defaults + {"environment": $env, "location": $loc,
-                      "deployToggle": "deploy", "requireManualApproval": "True"}')
+                      "deployToggle": "deploy", "requireManualApproval": $approval}')
 
-      REASON="Terraform PLAN+APPLY approved for service '$REG_SVC_NAME' env=$TF_ENV_LOWER loc=$TF_LOC_LOWER (env is in registry applyAllowedEnvironments; apply held at the manual approval gate, blocked/alwaysSkip/destroy stages still skipped)"
+      REASON="Terraform PLAN+APPLY approved for service '$REG_SVC_NAME' env=$TF_ENV_LOWER loc=$TF_LOC_LOWER (env is in registry applyAllowedEnvironments; $APPROVAL_NOTE, blocked/alwaysSkip/destroy stages still skipped)"
     else
       # Plan-only: hard skip set plus every apply stage.
       STAGES_TO_SKIP=$(jq -nc \

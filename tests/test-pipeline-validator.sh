@@ -164,6 +164,82 @@ cat > "$WS/.claude/pipeline-registry.json" << 'EOF'
         "blocked": ["apply_v"]
       }
     },
+    "svc-tf-nogate": {
+      "project": "Test Project",
+      "ci": null,
+      "cd": null,
+      "terraform": {
+        "id": 955,
+        "name": "Test - Terraform (dev+sit apply allowlisted, sit without approval gate)",
+        "applyAllowedEnvironments": ["dev", "sit"],
+        "applyWithoutApprovalEnvironments": ["sit"],
+        "defaultParameters": { "deployToggle": "plan", "requireManualApproval": "True", "TF_LOG": "NONE" },
+        "parameters": {
+          "environment": { "values": ["dev", "sit", "uat"], "allowed": ["dev", "sit", "uat"], "blocked": [] },
+          "location": { "values": ["ae"], "default": "ae" }
+        }
+      },
+      "folder": "svc-tf-nogate",
+      "stages": {
+        "all": ["plan_ng", "apply_ng", "destroy_ng"],
+        "allowed": ["plan_ng"],
+        "blocked": ["destroy_ng"]
+      }
+    },
+    "svc-tf-nogate-pre": {
+      "project": "Test Project",
+      "ci": null,
+      "cd": null,
+      "terraform": {
+        "id": 956,
+        "name": "Test - Terraform (waiver list names a blocked environment)",
+        "applyAllowedEnvironments": ["dev", "sit"],
+        "applyWithoutApprovalEnvironments": ["sit", "PRE"],
+        "defaultParameters": { "deployToggle": "plan" },
+        "parameters": {
+          "environment": { "values": ["dev", "sit"], "allowed": ["dev", "sit"], "blocked": [] },
+          "location": { "values": ["ae"], "default": "ae" }
+        }
+      },
+      "folder": "svc-tf-nogate-pre",
+      "stages": { "all": ["plan_np", "apply_np"], "allowed": ["plan_np"], "blocked": [] }
+    },
+    "svc-tf-nogate-notsubset": {
+      "project": "Test Project",
+      "ci": null,
+      "cd": null,
+      "terraform": {
+        "id": 957,
+        "name": "Test - Terraform (waiver list not a subset of applyAllowedEnvironments)",
+        "applyAllowedEnvironments": ["dev"],
+        "applyWithoutApprovalEnvironments": ["sit"],
+        "defaultParameters": { "deployToggle": "plan" },
+        "parameters": {
+          "environment": { "values": ["dev", "sit"], "allowed": ["dev", "sit"], "blocked": [] },
+          "location": { "values": ["ae"], "default": "ae" }
+        }
+      },
+      "folder": "svc-tf-nogate-notsubset",
+      "stages": { "all": ["plan_ns", "apply_ns"], "allowed": ["plan_ns"], "blocked": [] }
+    },
+    "svc-tf-nogate-string": {
+      "project": "Test Project",
+      "ci": null,
+      "cd": null,
+      "terraform": {
+        "id": 958,
+        "name": "Test - Terraform (waiver list is a string, not an array)",
+        "applyAllowedEnvironments": ["dev", "sit"],
+        "applyWithoutApprovalEnvironments": "sit",
+        "defaultParameters": { "deployToggle": "plan" },
+        "parameters": {
+          "environment": { "values": ["dev", "sit"], "allowed": ["dev", "sit"], "blocked": [] },
+          "location": { "values": ["ae"], "default": "ae" }
+        }
+      },
+      "folder": "svc-tf-nogate-string",
+      "stages": { "all": ["plan_st", "apply_st"], "allowed": ["plan_st"], "blocked": [] }
+    },
     "svc-tf-envpolicy": {
       "project": "Test Project",
       "ci": null,
@@ -431,6 +507,53 @@ check_tf_output "same service env=sit: alwaysSkipStages apply stage skipped as u
     '.approved == true
      and (.stagesToSkip | index("apply_z") != null)
      and .templateParameters.deployToggle == "plan"'
+
+echo -e "${BLUE}=== Terraform: approval waiver (registry terraform.applyWithoutApprovalEnvironments) ===${NC}"
+# One registry: sit is in both lists -> apply WITHOUT the approval gate;
+# dev is only in applyAllowedEnvironments -> apply held at the gate (True).
+run "$WS" '{"service":"svc-tf-nogate","type":"terraform","branch":"develop","pipelineId":"955","project":"P","environment":"sit","location":"ae"}'
+check_tf_output "sit in applyWithoutApprovalEnvironments: PLAN+APPLY, deploy forced, requireManualApproval=False, reason says why" \
+    '.approved == true
+     and (.stagesToSkip | index("apply_ng") | not)
+     and (.stagesToSkip | index("destroy_ng") != null)
+     and .templateParameters.deployToggle == "deploy"
+     and .templateParameters.requireManualApproval == "False"
+     and .templateParameters.environment == "sit"
+     and (.reason | test("approval waived: environment .sit. is in applyWithoutApprovalEnvironments"))'
+run "$WS" '{"service":"svc-tf-nogate","type":"terraform","branch":"develop","pipelineId":"955","project":"P","environment":"dev","location":"ae"}'
+check_tf_output "same registry, dev not in the waiver list: PLAN+APPLY with requireManualApproval=True" \
+    '.approved == true
+     and (.stagesToSkip | index("apply_ng") | not)
+     and .templateParameters.deployToggle == "deploy"
+     and .templateParameters.requireManualApproval == "True"
+     and (.reason | test("held at the manual approval gate"))'
+run "$WS" '{"service":"svc-tf-nogate","type":"terraform","branch":"develop","pipelineId":"955","project":"P","environment":"SIT","location":"ae"}'
+check_tf_output "waiver list matched case-insensitively (SIT -> sit)" \
+    '.approved == true and .templateParameters.requireManualApproval == "False"'
+# Plan-only runs are untouched by the waiver: uat is in neither list, so the
+# apply stage is skipped, deployToggle pinned to plan, and the registry's
+# declared requireManualApproval default is passed through unchanged.
+run "$WS" '{"service":"svc-tf-nogate","type":"terraform","branch":"develop","pipelineId":"955","project":"P","environment":"uat","location":"ae"}'
+check_tf_output "same registry, uat in neither list: plan-only, apply skipped, registry requireManualApproval default kept" \
+    '.approved == true
+     and (.stagesToSkip | index("apply_ng") != null)
+     and .templateParameters.deployToggle == "plan"
+     and .templateParameters.requireManualApproval == "True"'
+# A waiver list that names a blocked environment, is not a subset of the
+# apply allowlist, or is not an array of strings fails CLOSED for every
+# request against that service — even one that would not use the waiver.
+assert_blocked "waiver list names 'PRE' -> REGISTRY_CONTRADICTION even for env=dev" "REGISTRY_CONTRADICTION" 1 "$WS" \
+    '{"service":"svc-tf-nogate-pre","type":"terraform","branch":"develop","pipelineId":"956","project":"P","environment":"dev","location":"ae"}'
+assert_blocked "waiver list names 'PRE' -> REGISTRY_CONTRADICTION for env=sit" "REGISTRY_CONTRADICTION" 1 "$WS" \
+    '{"service":"svc-tf-nogate-pre","type":"terraform","branch":"develop","pipelineId":"956","project":"P","environment":"sit","location":"ae"}'
+assert_blocked "waiver list not a subset of applyAllowedEnvironments -> REGISTRY_CONTRADICTION" "REGISTRY_CONTRADICTION" 1 "$WS" \
+    '{"service":"svc-tf-nogate-notsubset","type":"terraform","branch":"develop","pipelineId":"957","project":"P","environment":"dev","location":"ae"}'
+assert_blocked "waiver list is a string -> REGISTRY_MALFORMED" "REGISTRY_MALFORMED" 1 "$WS" \
+    '{"service":"svc-tf-nogate-string","type":"terraform","branch":"develop","pipelineId":"958","project":"P","environment":"sit","location":"ae"}'
+# The hardcoded environment blocklist still runs first: a request for a
+# blocked environment never reaches the waiver logic.
+assert_blocked "env=pre against the waiver service -> ENVIRONMENT_BLOCKLIST" "ENVIRONMENT_BLOCKLIST" 1 "$WS" \
+    '{"service":"svc-tf-nogate","type":"terraform","branch":"develop","pipelineId":"955","project":"P","environment":"pre","location":"ae"}'
 
 echo -e "${BLUE}=== Terraform: registry env policy, destroy always skipped, plan-only pins deployToggle ===${NC}"
 # terraform.parameters.environment.blocked / .allowed are honoured after the

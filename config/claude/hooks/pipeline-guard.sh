@@ -76,12 +76,21 @@ trap 'fail_closed "internal error (exit $? at line $LINENO: $BASH_COMMAND) — f
 # the exemption fails closed. It also stays narrow — see Check 4: the run must
 # be deployToggle=deploy with requireManualApproval=True (AzDO still holds it
 # at the review gate for a human), and PRE/PRD remain blocked by Check 3
-# regardless of what the registry lists. BLOCK OVERRIDES ALLOW, no exceptions:
+# regardless of what the registry lists. The review gate itself can be waived
+# per environment with a second registry list,
+#   .services[<svc>].terraform.applyWithoutApprovalEnvironments: ["sit"]
+# which must be a subset of applyAllowedEnvironments and may never name a
+# blocked environment (either makes the registry fail closed); only an apply
+# run (deployToggle=deploy, apply stage not skipped) for an environment in
+# that list may carry requireManualApproval=False. BLOCK OVERRIDES ALLOW, no exceptions:
 # a stage the registry lists in stages.blocked or terraform.alwaysSkipStages
 # must be skipped on every run even when the environment is allowlisted — a
 # registry that does both contradicts itself and the run fails closed.
 # ============================================================================
 BLOCKED_STAGE_PATTERNS=("pre" "prd" "prod" "production")
+# Exact environment names that may never appear in a registry approval-waiver
+# list (mirrors BLOCKED_ENVS in pipeline-validator.sh).
+BLOCKED_ENVS=("pre" "prd" "prod" "pre-prod" "production")
 TERRAFORM_PIPELINE_ID="${PIPELINE_GUARD_TERRAFORM_ID:-}"
 TERRAFORM_APPLY_STAGE="${PIPELINE_GUARD_TERRAFORM_APPLY_STAGE:-}"
 # ============================================================================
@@ -348,6 +357,7 @@ if [[ -n "$REGISTRY_FILE" ]]; then
       (if ($s.stages.blocked // []) | str_array then empty else "stages.blocked must be an array of strings" end),
       (if ($s.terraform.alwaysSkipStages // []) | str_array then empty else "terraform.alwaysSkipStages must be an array of strings" end),
       (if ($s.terraform.applyAllowedEnvironments // []) | str_array then empty else "terraform.applyAllowedEnvironments must be an array of strings" end),
+      (if ($s.terraform.applyWithoutApprovalEnvironments // []) | str_array then empty else "terraform.applyWithoutApprovalEnvironments must be an array of strings" end),
       (if ($s.terraform.defaultParameters // {}) | type == "object" then empty else "terraform.defaultParameters must be an object" end)
     ] | join("; ")' "$REGISTRY_FILE")
   if [[ -n "$REGISTRY_SHAPE_ERROR" ]]; then
@@ -441,11 +451,17 @@ done
 #      run, and on plan-only runs of the keychain pipeline or of any service
 #      whose registry terraform.defaultParameters declares the parameter (a
 #      plan-only run keeps it so an apply can never be reached by a later stage
-#      rerun without a human approval).
+#      rerun without a human approval). The ONE waiver: an apply run
+#      (apply stage not skipped, deployToggle=deploy) for an environment that
+#      is in BOTH terraform.applyAllowedEnvironments and
+#      terraform.applyWithoutApprovalEnvironments, and is not a blocked
+#      environment, may carry requireManualApproval=False. A registry whose
+#      waiver list names a blocked environment or is not a subset of the
+#      apply allowlist fails closed before any of this is evaluated.
 #   5. Every apply* stage (registry stages.all ∪ keychain apply stage) must be
 #      in stagesToSkip UNLESS the environment is listed in the service's
 #      terraform.applyAllowedEnvironments AND deployToggle=deploy (exact) AND
-#      requireManualApproval=True.
+#      requireManualApproval passed rule 4.
 # ============================================================================
 IS_KEYCHAIN_TERRAFORM=false
 [[ "$PIPELINE_ID" == "$TERRAFORM_PIPELINE_ID" ]] && IS_KEYCHAIN_TERRAFORM=true
@@ -470,6 +486,7 @@ if [[ "$IS_KEYCHAIN_TERRAFORM" == true || "$IS_REGISTRY_TERRAFORM" == true ]]; t
   REGISTRY_STAGES_BLOCKED="[]"
   REGISTRY_ALWAYS_SKIP="[]"
   APPLY_ALLOWED_ENVS=""
+  NO_APPROVAL_ENVS=""
   REGISTRY_DECLARES_APPROVAL=false
   if [[ "$IS_REGISTRY_TERRAFORM" == true ]]; then
     REGISTRY_STAGES_ALL=$(jq -c --arg svc "$MATCHED_SERVICE" \
@@ -484,6 +501,34 @@ if [[ "$IS_KEYCHAIN_TERRAFORM" == true || "$IS_REGISTRY_TERRAFORM" == true ]]; t
     REGISTRY_DECLARES_APPROVAL=$(jq -r --arg svc "$MATCHED_SERVICE" \
       '.services[$svc].terraform.defaultParameters // {} | has("requireManualApproval")' \
       "$REGISTRY_FILE" 2>/dev/null)
+    NO_APPROVAL_ENVS=$(jq -r --arg svc "$MATCHED_SERVICE" \
+      '.services[$svc].terraform.applyWithoutApprovalEnvironments // [] | join(",")' \
+      "$REGISTRY_FILE" 2>/dev/null)
+
+    # The approval-waiver list is refused outright — a human must fix and
+    # commit — when it names a blocked environment or is not a subset of
+    # applyAllowedEnvironments. Checked on every run of this pipeline, not
+    # only when the waiver would be used, so the mistake surfaces at once.
+    BLOCKED_ENVS_JSON=$(printf '%s\n' "${BLOCKED_ENVS[@]}" | jq -R . | jq -sc .)
+    NO_APPROVAL_BLOCKED=$(jq -r --arg svc "$MATCHED_SERVICE" --argjson blocked "$BLOCKED_ENVS_JSON" \
+      '[.services[$svc].terraform.applyWithoutApprovalEnvironments // [] | .[] | ascii_downcase
+        | select(. as $e | any($blocked[]; . == $e))] | join(", ")' "$REGISTRY_FILE" 2>/dev/null)
+    if [[ -n "$NO_APPROVAL_BLOCKED" ]]; then
+      log_detail "BLOCKED: registry contradiction — applyWithoutApprovalEnvironments for '$MATCHED_SERVICE' names blocked environment(s) '$NO_APPROVAL_BLOCKED'"
+      log_audit "blocked" "Registry contradiction for pipeline $PIPELINE_ID: terraform.applyWithoutApprovalEnvironments names blocked environment(s) '$NO_APPROVAL_BLOCKED'. PRE/PRD are NEVER allowed via AI. A human must fix the registry."
+      echo "BLOCKED by pipeline-guard hook: registry contradiction for Terraform pipeline $PIPELINE_ID — terraform.applyWithoutApprovalEnvironments names blocked environment(s) '$NO_APPROVAL_BLOCKED'. PRE/PRD are NEVER allowed via AI, with or without approval. A HUMAN must remove them from the registry and commit." >&2
+      exit 2
+    fi
+    NO_APPROVAL_NOT_SUBSET=$(jq -r --arg svc "$MATCHED_SERVICE" \
+      '(.services[$svc].terraform.applyAllowedEnvironments // [] | map(ascii_downcase)) as $allowed
+       | [.services[$svc].terraform.applyWithoutApprovalEnvironments // [] | .[] | ascii_downcase
+          | select(. as $e | any($allowed[]; . == $e) | not)] | join(", ")' "$REGISTRY_FILE" 2>/dev/null)
+    if [[ -n "$NO_APPROVAL_NOT_SUBSET" ]]; then
+      log_detail "BLOCKED: registry contradiction — applyWithoutApprovalEnvironments for '$MATCHED_SERVICE' lists '$NO_APPROVAL_NOT_SUBSET' which is not in applyAllowedEnvironments ('$APPLY_ALLOWED_ENVS')"
+      log_audit "blocked" "Registry contradiction for pipeline $PIPELINE_ID: environment(s) '$NO_APPROVAL_NOT_SUBSET' are in terraform.applyWithoutApprovalEnvironments but not in terraform.applyAllowedEnvironments ('$APPLY_ALLOWED_ENVS'). A human must fix the registry."
+      echo "BLOCKED by pipeline-guard hook: registry contradiction for Terraform pipeline $PIPELINE_ID — environment(s) '$NO_APPROVAL_NOT_SUBSET' are in terraform.applyWithoutApprovalEnvironments but not in terraform.applyAllowedEnvironments ('${APPLY_ALLOWED_ENVS:-<none>}'). The waiver list must be a subset of the apply allowlist. A HUMAN must fix the registry and commit." >&2
+      exit 2
+    fi
   fi
 
   KEYCHAIN_APPLY_STAGE=""
@@ -503,11 +548,21 @@ if [[ "$IS_KEYCHAIN_TERRAFORM" == true || "$IS_REGISTRY_TERRAFORM" == true ]]; t
   # ONE (non-matching) name, never two, and non-string entries never match.
   ENVIRONMENT_LOWER=$(echo "$ENVIRONMENT" | tr '[:upper:]' '[:lower:]')
   APPLY_ENV_ALLOWED=false
+  NO_APPROVAL_ENV_LISTED=false
   if [[ "$IS_REGISTRY_TERRAFORM" == true && "$ENVIRONMENT_LOWER" != "unset" ]]; then
     APPLY_ENV_ALLOWED=$(jq -r --arg svc "$MATCHED_SERVICE" --arg env "$ENVIRONMENT_LOWER" \
       '.services[$svc].terraform.applyAllowedEnvironments // []
        | any(.[]; type == "string" and ascii_downcase == $env)' "$REGISTRY_FILE" 2>/dev/null)
+    NO_APPROVAL_ENV_LISTED=$(jq -r --arg svc "$MATCHED_SERVICE" --arg env "$ENVIRONMENT_LOWER" \
+      '.services[$svc].terraform.applyWithoutApprovalEnvironments // []
+       | any(.[]; type == "string" and ascii_downcase == $env)' "$REGISTRY_FILE" 2>/dev/null)
   fi
+  # Belt-and-braces for the waiver: Check 3 already exits on a blocked
+  # environment parameter, but the waiver must never be reachable for one.
+  ENV_IS_BLOCKED=false
+  for blocked_env in "${BLOCKED_ENVS[@]}"; do
+    [[ "$ENVIRONMENT_LOWER" == "$blocked_env" ]] && ENV_IS_BLOCKED=true
+  done
 
   # not_skipped <stages-json>: the given stages that are NOT in stagesToSkip,
   # comma-joined (empty string when all are skipped).
@@ -570,13 +625,33 @@ if [[ "$IS_KEYCHAIN_TERRAFORM" == true || "$IS_REGISTRY_TERRAFORM" == true ]]; t
     APPROVAL_REASON="registry terraform.defaultParameters declares requireManualApproval"
   fi
 
-  if [[ "$APPROVAL_REQUIRED" == true && "$MANUAL_APPROVAL" != "True" && "$MANUAL_APPROVAL" != "true" ]]; then
-    log_detail "BLOCKED: requireManualApproval is '$MANUAL_APPROVAL' (must be True — $APPROVAL_REASON)"
-    log_audit "blocked" "Terraform pipeline $PIPELINE_ID requireManualApproval='$MANUAL_APPROVAL' (must be True — $APPROVAL_REASON)"
-    echo "BLOCKED by pipeline-guard hook: Terraform pipeline $PIPELINE_ID MUST have requireManualApproval=True ($APPROVAL_REASON). Got '$MANUAL_APPROVAL'" >&2
-    exit 2
+  # The waiver: requireManualApproval=False is accepted ONLY on an apply run
+  # (apply stage not skipped, deployToggle=deploy exact) for an environment
+  # that is in applyWithoutApprovalEnvironments AND applyAllowedEnvironments
+  # and is not a blocked environment. Everything else keeps the gate.
+  APPROVAL_WAIVABLE=false
+  if [[ -n "$APPLY_NOT_SKIPPED" && "$NO_APPROVAL_ENV_LISTED" == true && "$APPLY_ENV_ALLOWED" == true \
+        && "$DEPLOY_TOGGLE" == "deploy" && "$ENV_IS_BLOCKED" == false ]]; then
+    APPROVAL_WAIVABLE=true
   fi
-  [[ "$APPROVAL_REQUIRED" == true ]] && log_detail "PASS: requireManualApproval=True"
+  APPROVAL_STATUS="requireManualApproval=True, held at the manual approval gate"
+  if [[ "$APPROVAL_REQUIRED" == true && "$MANUAL_APPROVAL" != "True" && "$MANUAL_APPROVAL" != "true" ]]; then
+    if [[ "$APPROVAL_WAIVABLE" == true && ( "$MANUAL_APPROVAL" == "False" || "$MANUAL_APPROVAL" == "false" ) ]]; then
+      APPROVAL_STATUS="approval waived: environment '$ENVIRONMENT' is in applyWithoutApprovalEnvironments ('$NO_APPROVAL_ENVS'), requireManualApproval=False"
+      log_detail "PASS: $APPROVAL_STATUS (apply stage(s) '$APPLY_NOT_SKIPPED' run, deployToggle=deploy)"
+    else
+      WAIVER_HINT=""
+      if [[ "$NO_APPROVAL_ENV_LISTED" == true ]]; then
+        WAIVER_HINT=" Environment '$ENVIRONMENT' is in applyWithoutApprovalEnvironments, but the waiver applies only to an apply run (apply stage not skipped) with deployToggle=deploy and requireManualApproval=False exactly."
+      fi
+      log_detail "BLOCKED: requireManualApproval is '$MANUAL_APPROVAL' (must be True — $APPROVAL_REASON; waivable=$APPROVAL_WAIVABLE)"
+      log_audit "blocked" "Terraform pipeline $PIPELINE_ID requireManualApproval='$MANUAL_APPROVAL' (must be True — $APPROVAL_REASON; waiver not applicable: env in applyWithoutApprovalEnvironments=$NO_APPROVAL_ENV_LISTED, apply runs=$([[ -n "$APPLY_NOT_SKIPPED" ]] && echo true || echo false), deployToggle='$DEPLOY_TOGGLE')"
+      echo "BLOCKED by pipeline-guard hook: Terraform pipeline $PIPELINE_ID MUST have requireManualApproval=True ($APPROVAL_REASON). Got '$MANUAL_APPROVAL'.$WAIVER_HINT" >&2
+      exit 2
+    fi
+  elif [[ "$APPROVAL_REQUIRED" == true ]]; then
+    log_detail "PASS: requireManualApproval=True"
+  fi
 
   # Rule 5: apply stages. Reached only after every block above has passed.
   if [[ -n "$APPLY_NOT_SKIPPED" ]]; then
@@ -596,8 +671,8 @@ if [[ "$IS_KEYCHAIN_TERRAFORM" == true || "$IS_REGISTRY_TERRAFORM" == true ]]; t
       exit 2
     fi
 
-    log_detail "PASS: apply stage(s) '$APPLY_NOT_SKIPPED' permitted — environment '$ENVIRONMENT' is in applyAllowedEnvironments ('$APPLY_ALLOWED_ENVS'), deployToggle=deploy, requireManualApproval=True"
-    log_audit "allowed" "Terraform apply stage(s) '$APPLY_NOT_SKIPPED' permitted for allowlisted environment '$ENVIRONMENT' (deployToggle=deploy, requireManualApproval=True)"
+    log_detail "PASS: apply stage(s) '$APPLY_NOT_SKIPPED' permitted — environment '$ENVIRONMENT' is in applyAllowedEnvironments ('$APPLY_ALLOWED_ENVS'), deployToggle=deploy, $APPROVAL_STATUS"
+    log_audit "allowed" "Terraform apply stage(s) '$APPLY_NOT_SKIPPED' permitted for allowlisted environment '$ENVIRONMENT' (deployToggle=deploy; $APPROVAL_STATUS)"
   else
     log_detail "PASS: all apply stage(s) are in stagesToSkip ($APPLY_STAGES_JSON)"
   fi

@@ -17,9 +17,15 @@ Both requirements are **enforced**, not advisory:
 
 - **Only a human may modify it.** A PreToolUse hook
   (`~/.claude/hooks/pipeline-registry-write-guard.sh`) blocks Edit/Write/NotebookEdit
-  targeting the file and Bash commands that mention it alongside write indicators
-  (redirects, `tee`, `sed -i`, `mv`, ...). Read it without redirects
-  (`jq '.' .claude/pipeline-registry.json`).
+  targeting the file and Bash commands in which the file is the *target* of a write:
+  a redirect target (`>`, `>>`, `>|`, `&>`), an argument of `tee`, `mv`, `cp`, `rm`,
+  `truncate`, `install`, `ln`, `dd of=`, `git rm/mv`, or of `sed -i` / `perl -i`.
+  Reading it (`jq '.' .claude/pipeline-registry.json`, `cat`, `diff`, even redirected
+  into a differently named file) and a heredoc whose *body* merely mentions the name
+  are allowed. Two cases are judged conservatively and block on any write indicator:
+  commands that run an interpreter or opaque runner (`bash -c`, `python`, `eval`,
+  `xargs`, `find`, ...) while naming the file, and write targets the hook cannot
+  resolve (`> "$VAR"`, `$(...)`) while the file is named anywhere in the command.
 - **Only the committed state is trusted.** Both `pipeline-validator.sh` and
   `pipeline-guard.sh` fail CLOSED (`REGISTRY_NOT_COMMITTED`) when a discovered registry
   is untracked, has uncommitted changes, or sits outside a git work tree. A tampered or
@@ -37,8 +43,8 @@ every service repo checked out under the workspace root.
 | Consumer | What it reads |
 |---|---|
 | `~/.claude/scripts/pipeline-registry.sh` | `.organization`, `.services` keys (CWD-based service detection, ID resolution) |
-| `~/.claude/scripts/pipeline-validator.sh` | `.services.<name>.stages.allowed/blocked` (CD), `.terraform.*` incl. `applyAllowedEnvironments` (terraform); entry matched by `.cd.id` first, service name as fallback |
-| `~/.claude/hooks/pipeline-guard.sh` | `.services.<name>.{ci,cd,test,terraform}.id`, `.stages.blocked` (CD only), `.terraform.applyAllowedEnvironments` |
+| `~/.claude/scripts/pipeline-validator.sh` | `.services.<name>.stages.allowed/blocked` (CD), `.terraform.*` incl. `applyAllowedEnvironments` and `applyWithoutApprovalEnvironments` (terraform); entry matched by `.cd.id` first, service name as fallback |
+| `~/.claude/hooks/pipeline-guard.sh` | `.services.<name>.{ci,cd,test,terraform}.id`, `.stages.blocked` (CD only), `.terraform.applyAllowedEnvironments`, `.terraform.applyWithoutApprovalEnvironments` |
 
 ## Schema
 
@@ -74,6 +80,11 @@ every service repo checked out under the workspace root.
                                                      // apply stage may run. Default none = plan-only.
                                                      // Must NOT coexist with the apply stage in
                                                      // alwaysSkipStages / stages.blocked
+        "applyWithoutApprovalEnvironments": [],      // optional; subset of applyAllowedEnvironments
+                                                     // whose apply runs WITHOUT the ManualValidation
+                                                     // gate (requireManualApproval=False). Default
+                                                     // none = every apply is held at the gate. Never
+                                                     // pre/prd/prod/pre-prod/production
         "parameters": {
           "environment": {
             "values":  ["dev", "sit", "uat", "pre", "prd"],
@@ -132,7 +143,8 @@ Even for an allowlisted environment the run stays narrow, in both layers:
 - The validator forces `deployToggle=deploy` and `requireManualApproval=True`, and the
   hook rejects any other value (exact match — `Deploy`, `TRUE`, `destroy` are all
   blocked). AzDO therefore still holds the apply at its ManualValidation gate for a
-  human; the agent never approves it.
+  human; the agent never approves it. The one way around the gate is the
+  `applyWithoutApprovalEnvironments` list below.
 - Stages whose name starts with `destroy` are always in `stagesToSkip`, on plan-only and
   apply runs alike. On plan-only runs `deployToggle` is pinned to `plan` regardless of
   `defaultParameters`.
@@ -151,6 +163,43 @@ trigger, and both stay blocked until a human removes the stage from those lists 
 commits. There is no silent downgrade to plan-only — that would hide the mistake. So: a
 service with `applyAllowedEnvironments` must not list its apply stage in
 `alwaysSkipStages` / `stages.blocked`; a service without it should.
+
+### Waiving the approval gate: `terraform.applyWithoutApprovalEnvironments`
+
+By default every apply run carries `requireManualApproval=True`, so the pipeline's
+ManualValidation stage holds the apply until a human approves it. An environment listed
+in `applyWithoutApprovalEnvironments` (lowercase; matched case-insensitively) gets
+`requireManualApproval=False` from the validator instead, so plan **and** apply run
+unattended — the intended use is SIT, where the agent is trusted to deploy end to end.
+The hook accepts `False` only when **all** of these hold, and keeps today's `True`
+requirement otherwise:
+
+- the environment is in `applyWithoutApprovalEnvironments` **and** in
+  `applyAllowedEnvironments`;
+- the run is an apply run — the apply stage is not in `stagesToSkip` — with
+  `deployToggle=deploy` (exact). A plan-only run of a pipeline that declares
+  `requireManualApproval` in `defaultParameters` (or is the keychain terraform pipeline)
+  still needs `True`;
+- the environment is not a blocked one (`pre`, `prd`, `prod`, `pre-prod`, `production`).
+
+Constraints on the list itself, both enforced by the validator (`REGISTRY_CONTRADICTION`
+/ `REGISTRY_MALFORMED`) and by the hook on **every** run of that pipeline, plan-only
+included, so a mistake surfaces at once instead of when the waiver is first used:
+
+- it must be an array of strings;
+- it must be a subset of `applyAllowedEnvironments` (an environment that may not apply
+  at all cannot apply without approval);
+- it must not name a blocked environment — PRE/PRD can never run via AI, with or without
+  approval, whatever the registry says.
+
+Other environments of the same service are unaffected: an environment only in
+`applyAllowedEnvironments` still applies behind the gate, and one in neither list stays
+plan-only. The AzDO pipeline YAML (`deploy.yml`) additionally forces the ManualValidation
+gate server-side for pre/prd regardless of the `requireManualApproval` parameter, so even
+a registry that somehow named them would not run them unattended — but the guards never
+let such a request reach AzDO in the first place. The audit record
+(`~/.claude/logs/pipeline-triggers.jsonl`) states when the gate was waived and why
+(`approval waived: environment 'sit' is in applyWithoutApprovalEnvironments`).
 
 ## Caveats
 

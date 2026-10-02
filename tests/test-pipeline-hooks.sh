@@ -187,6 +187,55 @@ cat > "$WS/.claude/pipeline-registry.json" << 'EOF'
         "applyAllowedEnvironments": ["dev,sit"]
       },
       "stages": { "all": ["plan_csv", "apply_csv"], "allowed": ["plan_csv"], "blocked": [] }
+    },
+    "iac-nogate": {
+      "project": "Test Project",
+      "ci": null,
+      "cd": null,
+      "terraform": {
+        "id": 818,
+        "name": "Test - Terraform (dev+sit apply allowlisted, sit without approval gate)",
+        "applyAllowedEnvironments": ["dev", "sit"],
+        "applyWithoutApprovalEnvironments": ["sit"],
+        "defaultParameters": { "deployToggle": "deploy", "requireManualApproval": "True" }
+      },
+      "stages": { "all": ["plan_ng", "apply_ng", "destroy_ng"], "allowed": ["plan_ng"], "blocked": ["destroy_ng"] }
+    },
+    "iac-nogate-pre": {
+      "project": "Test Project",
+      "ci": null,
+      "cd": null,
+      "terraform": {
+        "id": 819,
+        "name": "Test - Terraform (waiver list names a blocked environment)",
+        "applyAllowedEnvironments": ["dev", "sit"],
+        "applyWithoutApprovalEnvironments": ["sit", "Pre"]
+      },
+      "stages": { "all": ["plan_np", "apply_np"], "allowed": ["plan_np"], "blocked": [] }
+    },
+    "iac-nogate-notsubset": {
+      "project": "Test Project",
+      "ci": null,
+      "cd": null,
+      "terraform": {
+        "id": 820,
+        "name": "Test - Terraform (waiver list not a subset of applyAllowedEnvironments)",
+        "applyAllowedEnvironments": ["dev"],
+        "applyWithoutApprovalEnvironments": ["sit"]
+      },
+      "stages": { "all": ["plan_ns", "apply_ns"], "allowed": ["plan_ns"], "blocked": [] }
+    },
+    "iac-nogate-string": {
+      "project": "Test Project",
+      "ci": null,
+      "cd": null,
+      "terraform": {
+        "id": 821,
+        "name": "Test - Terraform (malformed: waiver list is a string)",
+        "applyAllowedEnvironments": ["dev", "sit"],
+        "applyWithoutApprovalEnvironments": "sit"
+      },
+      "stages": { "all": ["plan_st", "apply_st"], "allowed": ["plan_st"], "blocked": [] }
     }
   }
 }
@@ -397,6 +446,65 @@ expect block "$PIPELINE_GUARD" "$WS" "registry terraform 813 allowlisted env=dev
 expect allow "$PIPELINE_GUARD" "$WS" "registry terraform 813 plan-only with every blocked/always-skip stage skipped -> allowed" \
     "$(mcp_input '{"pipelineId":813,"project":"P","stagesToSkip":["apply_ct","destroy_ct","cleanup_ct"],"templateParameters":{"environment":"dev","deployToggle":"plan","requireManualApproval":"True"}}')"
 
+echo -e "${BLUE}=== pipeline-guard.sh (approval waiver, registry terraform.applyWithoutApprovalEnvironments) ===${NC}"
+# Pipeline 818 / "iac-nogate": applyAllowedEnvironments ["dev","sit"], waiver
+# list ["sit"], defaultParameters declares requireManualApproval. False is
+# accepted ONLY for a sit APPLY run with deployToggle=deploy; every other
+# combination keeps today's True requirement.
+NOGATE_SIT_FALSE='{"pipelineId":818,"project":"P","stagesToSkip":["destroy_ng"],"templateParameters":{"environment":"sit","deployToggle":"deploy","requireManualApproval":"False"}}'
+expect allow "$PIPELINE_GUARD" "$WS" "sit in waiver list: apply runs, deploy, requireManualApproval=False -> allowed" \
+    "$(mcp_input "$NOGATE_SIT_FALSE")"
+TF_ID=818 TF_APPLY_STAGE=apply_ng expect allow "$PIPELINE_GUARD" "$WS" "same run when 818 is ALSO the keychain terraform id -> allowed (keychain flag does not defeat the waiver)" \
+    "$(mcp_input "$NOGATE_SIT_FALSE")"
+expect allow "$PIPELINE_GUARD" "$WS" "sit in waiver list but requireManualApproval=True -> still allowed (gate kept by choice)" \
+    "$(mcp_input '{"pipelineId":818,"project":"P","stagesToSkip":["destroy_ng"],"templateParameters":{"environment":"sit","deployToggle":"deploy","requireManualApproval":"True"}}')"
+expect allow "$PIPELINE_GUARD" "$WS" "waiver matched case-insensitively (env=SIT, False) -> allowed" \
+    "$(mcp_input '{"pipelineId":818,"project":"P","stagesToSkip":["destroy_ng"],"templateParameters":{"environment":"SIT","deployToggle":"deploy","requireManualApproval":"False"}}')"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "sit in waiver list but plan-only (apply skipped) + False -> blocked (registry declares the param)" \
+    "$(mcp_input '{"pipelineId":818,"project":"P","stagesToSkip":["apply_ng","destroy_ng"],"templateParameters":{"environment":"sit","deployToggle":"plan","requireManualApproval":"False"}}')" \
+    "MUST have requireManualApproval=True.*waiver applies only to an apply run"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "dev NOT in waiver list: apply + deploy + False -> blocked" \
+    "$(mcp_input '{"pipelineId":818,"project":"P","stagesToSkip":["destroy_ng"],"templateParameters":{"environment":"dev","deployToggle":"deploy","requireManualApproval":"False"}}')" \
+    "MUST have requireManualApproval=True"
+expect block "$PIPELINE_GUARD" "$WS" "sit in waiver list but deployToggle=destroy + False -> blocked" \
+    "$(mcp_input '{"pipelineId":818,"project":"P","stagesToSkip":["destroy_ng"],"templateParameters":{"environment":"sit","deployToggle":"destroy","requireManualApproval":"False"}}')"
+expect block "$PIPELINE_GUARD" "$WS" "sit in waiver list but deployToggle=Deploy (exact match) + False -> blocked" \
+    "$(mcp_input '{"pipelineId":818,"project":"P","stagesToSkip":["destroy_ng"],"templateParameters":{"environment":"sit","deployToggle":"Deploy","requireManualApproval":"False"}}')"
+expect block "$PIPELINE_GUARD" "$WS" "sit in waiver list, apply run, requireManualApproval absent -> blocked" \
+    "$(mcp_input '{"pipelineId":818,"project":"P","stagesToSkip":["destroy_ng"],"templateParameters":{"environment":"sit","deployToggle":"deploy"}}')"
+expect block "$PIPELINE_GUARD" "$WS" "sit in waiver list, apply run, requireManualApproval=no (not False) -> blocked" \
+    "$(mcp_input '{"pipelineId":818,"project":"P","stagesToSkip":["destroy_ng"],"templateParameters":{"environment":"sit","deployToggle":"deploy","requireManualApproval":"no"}}')"
+expect block "$PIPELINE_GUARD" "$WS" "sit in waiver list, False, but destroy NOT skipped -> blocked (block overrides allow)" \
+    "$(mcp_input '{"pipelineId":818,"project":"P","stagesToSkip":[],"templateParameters":{"environment":"sit","deployToggle":"deploy","requireManualApproval":"False"}}')"
+expect block "$PIPELINE_GUARD" "$WS" "env=prd with False against the waiver service -> blocked by the hardcoded env blocklist" \
+    "$(mcp_input '{"pipelineId":818,"project":"P","stagesToSkip":["destroy_ng"],"templateParameters":{"environment":"prd","deployToggle":"deploy","requireManualApproval":"False"}}')"
+# Registry contradictions fail closed for EVERY run of that pipeline, even a
+# plan-only run with the gate kept — a human must fix the registry first.
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "registry 819: waiver list names 'Pre' -> fail closed even for a sit apply with True" \
+    "$(mcp_input '{"pipelineId":819,"project":"P","stagesToSkip":[],"templateParameters":{"environment":"sit","deployToggle":"deploy","requireManualApproval":"True"}}')" \
+    "applyWithoutApprovalEnvironments names blocked environment\(s\) 'pre'"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "registry 819: plan-only run also blocked" \
+    "$(mcp_input '{"pipelineId":819,"project":"P","stagesToSkip":["apply_np"],"templateParameters":{"environment":"dev","deployToggle":"plan","requireManualApproval":"True"}}')" \
+    "names blocked environment"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "registry 820: waiver list ['sit'] not a subset of applyAllowedEnvironments ['dev'] -> fail closed" \
+    "$(mcp_input '{"pipelineId":820,"project":"P","stagesToSkip":["apply_ns"],"templateParameters":{"environment":"dev","deployToggle":"plan","requireManualApproval":"True"}}')" \
+    "'sit' are in terraform.applyWithoutApprovalEnvironments but not in terraform.applyAllowedEnvironments"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "registry 821: waiver list is a string -> rc=2 malformed registry" \
+    "$(mcp_input '{"pipelineId":821,"project":"P","stagesToSkip":["apply_st"],"templateParameters":{"environment":"dev","deployToggle":"plan","requireManualApproval":"True"}}')" \
+    "applyWithoutApprovalEnvironments must be an array of strings"
+# Audit trail: the Rule 5 "allowed" record (the one before the final "All
+# safety checks passed" record; records are pretty-printed, so parse the
+# whole file) says WHY the gate was waived.
+run_hook "$PIPELINE_GUARD" "$WS" "$(mcp_input "$NOGATE_SIT_FALSE")"
+if [[ $RC -eq 0 ]] && jq -se '.[-2] | .action == "allowed" and (.reason | test("approval waived: environment .sit. is in applyWithoutApprovalEnvironments"))' \
+     "$FAKE_HOME/.claude/logs/pipeline-triggers.jsonl" >/dev/null; then
+    echo -e "  ${GREEN}PASS${NC} audit JSONL reason records the waiver (approval waived: environment 'sit' ...)"
+    PASS=$((PASS + 1))
+else
+    echo -e "  ${RED}FAIL${NC} audit JSONL reason should record the waiver — rc=$RC record=$(jq -sc '.[-2]' "$FAKE_HOME/.claude/logs/pipeline-triggers.jsonl" 2>/dev/null)"
+    FAIL=$((FAIL + 1))
+fi
+
 echo -e "${BLUE}=== pipeline-guard.sh (fails CLOSED on malformed payloads and registries) ===${NC}"
 # Claude Code blocks ONLY on exit 2 — any other non-zero exit lets the tool
 # call proceed. So a jq crash (rc=5) on a wrong-typed field used to be a
@@ -585,6 +693,35 @@ expect block "$WRITE_GUARD" "$WS_BARE" "Bash sed -i on the registry blocked" \
     "$(bash_input "sed -i '' 's/a/b/' .claude/pipeline-registry.json")"
 expect block "$WRITE_GUARD" "$WS_BARE" "Bash mv over the registry blocked" \
     "$(bash_input 'mv /tmp/new.json .claude/pipeline-registry.json')"
+expect block "$WRITE_GUARD" "$WS_BARE" "Bash jq redirected into another path with the registry basename blocked" \
+    "$(bash_input 'jq . x > /path/pipeline-registry.json')"
+expect block "$WRITE_GUARD" "$WS_BARE" "Bash cp with the registry as destination blocked" \
+    "$(bash_input 'cp /tmp/new.json .claude/pipeline-registry.json')"
+expect block "$WRITE_GUARD" "$WS_BARE" "Bash heredoc redirected INTO the registry blocked" \
+    "$(bash_input $'cat <<EOF > .claude/pipeline-registry.json\n{}\nEOF')"
+expect block "$WRITE_GUARD" "$WS_BARE" "Bash heredoc piped to bash that writes the registry blocked (body kept for interpreters)" \
+    "$(bash_input $'cat <<EOF | bash\necho {} > .claude/pipeline-registry.json\nEOF')"
+expect block "$WRITE_GUARD" "$WS_BARE" "Bash python -c open(...,'w') on the registry blocked" \
+    "$(bash_input "python3 -c \"open('.claude/pipeline-registry.json','w').write('{}')\"")"
+expect block "$WRITE_GUARD" "$WS_BARE" "Bash redirect to an unresolvable \$var while the registry is mentioned blocked" \
+    "$(bash_input 'R=.claude/pipeline-registry.json; echo {} > "$R"')"
+expect block "$WRITE_GUARD" "$WS_BARE" "Bash git rm of the registry blocked" \
+    "$(bash_input 'git rm .claude/pipeline-registry.json')"
+# Mentioning the file is not writing it: a heredoc BODY that names the
+# registry while the heredoc goes to another file, and a redirect of the
+# registry's content into a differently named file, are reads/logs.
+expect allow "$WRITE_GUARD" "$WS_BARE" "Bash heredoc appending to workflow_state.md whose body mentions the registry allowed" \
+    "$(bash_input $'cat >> workflow_state.md <<\'EOF\'\n- read .claude/pipeline-registry.json with jq\n- registry write-guard blocked a false positive\nEOF\necho logged')"
+expect allow "$WRITE_GUARD" "$WS_BARE" "Bash <<- heredoc (tab-indented body) mentioning the registry allowed" \
+    "$(bash_input $'cat <<-EOF >> notes.md\n\tpipeline-registry.json mentioned here\n\tEOF')"
+expect allow "$WRITE_GUARD" "$WS_BARE" "Bash jq read redirected to a different file name allowed" \
+    "$(bash_input 'jq . .claude/pipeline-registry.json > /tmp/registry-copy.json')"
+expect allow "$WRITE_GUARD" "$WS_BARE" "Bash plain jq read allowed" \
+    "$(bash_input 'jq . .claude/pipeline-registry.json')"
+expect allow "$WRITE_GUARD" "$WS_BARE" "Bash sed without -i (print) allowed" \
+    "$(bash_input "sed -n '1,5p' .claude/pipeline-registry.json")"
+expect allow "$WRITE_GUARD" "$WS_BARE" "Bash git status on the registry allowed" \
+    "$(bash_input 'git status --short -- .claude/pipeline-registry.json')"
 expect allow "$WRITE_GUARD" "$WS_BARE" "unrelated Bash command allowed" \
     "$(bash_input 'git status')"
 expect block "$WRITE_GUARD" "$WS_BARE" "payload without tool_name fails closed" \
