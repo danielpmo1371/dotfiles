@@ -123,14 +123,14 @@ Settings symlinked from `config/claude/` to `~/.claude/`:
 - `skills/` - Custom skills
 - `scripts/pipeline-validator.sh` - Hard safety rules for pipeline triggers (blocks PRE/PRD)
 - `scripts/pipeline-registry.sh` - CWD-based service detection and pipeline ID resolution
-- `hooks/pipeline-guard.sh` - PreToolUse hook intercepting direct MCP pipeline calls
+- `hooks/pipeline-guard.sh` - PreToolUse hook intercepting direct MCP pipeline calls; honours the registry's `terraform.applyWithoutApprovalEnvironments` (an apply run for a listed environment, SIT in practice, carries `requireManualApproval=False` and skips the ManualValidation gate; the list must be a subset of `applyAllowedEnvironments` and may never name pre/prd, or the registry fails closed)
 - `hooks/pipeline-trigger-guard.sh` - PreToolUse Bash hook blocking direct curl/az/gh trigger attempts
-- `hooks/pipeline-registry-write-guard.sh` - PreToolUse hook blocking AI mutations of pipeline-registry.json (the stage allow/block authority; humans edit + commit it)
+- `hooks/pipeline-registry-write-guard.sh` - PreToolUse hook blocking AI mutations of pipeline-registry.json (the stage allow/block authority; humans edit + commit it); heredoc bodies and read targets that merely mention the file are not writes
 - `hooks/destructive-ops-guard.sh` - PreToolUse Bash hook enforcing the No-Delete Rule (cloud/infra deletes, `terraform destroy`, `rm` outside a git work tree)
 - `hooks/notification.sh` - Notification hook surfacing Claude Code notifications on the desktop (notify-send / osascript)
 - `commands/pipe-deploy.md` - `/pipe-deploy` command for CI/CD orchestration
 - `commands/wrap-up.md` - `/wrap-up` command: audits the CURRENT session's conversation for unverified claims and abandoned threads, reports, gates on approval, then lands it (verify → commit → handoff block in `workflow_state.md` + a session memory). Distinct from `/recap` (reconstructs tmux *scrollback*) and `/review-before-commit` (reviews the *diff*) — `/wrap-up` reviews the *conversation thread*. `disable-model-invocation: true`, so it is user-invoked only.
-- `agents/pipeline-runner.md` - Autonomous pipeline trigger/monitor/recovery agent
+- `agents/pipeline-runner.md` - Autonomous pipeline trigger/monitor/recovery agent and the single source of the workflow: decision rules (SIT by default, CD stages from the registry allow-list, validator output passed through unchanged, no questions) and a `D<n>` decision line appended to `workflow_state.md` before every trigger; `commands/pipe-deploy.md` and `skills/pipeline-ops/` only dispatch it
 - `skills/pipeline-ops/` - Auto-discoverable skill matching "deploy", "run pipeline" etc.
 - `skills/ntfy-notifications/` - When and how to push to the phone with `ntfy-send` (what not to send, priorities, exit codes, delivery check)
 
@@ -181,7 +181,7 @@ Test scripts in `tests/` that teammates (or manual runs) can use:
 - `tests/test-docker.sh <distro|all>` - Builds Docker image and runs full e2e test
 - `tests/validate-symlinks.sh` - Checks all expected symlinks exist and point correctly
 - `tests/test-pipeline-validator.sh` - Hermetic safety tests for the pipeline validator (blocklist layering, registry stage lists, registry integrity fail-closed, terraform plan-only)
-- `tests/test-pipeline-hooks.sh` - Hermetic safety tests for the three PreToolUse guard hooks (MCP trigger, Bash trigger, registry write protection)
+- `tests/test-pipeline-hooks.sh` - Hermetic safety tests for the three PreToolUse guard hooks (MCP trigger, Bash trigger, registry write protection), the terraform approval-gate waiver and the write guard's heredoc handling
 - `tests/test-memory-hooks-merge.sh` - Hermetic tests for the settings.json hook merge in `installers/memory-hooks.sh` (append-only, order-preserving, idempotent)
 - `tests/test-tmux-claude-relaunch.sh` - Hermetic tests for the crash relaunch (pane registry hook + `tmux-claude-relaunch.sh`) on a private `tmux -L` server
 - `tests/test-rc-start.sh` - Hermetic tests for `rc-start.sh`/`rc-stop.sh` (bridge detection, respawn into restored shells, idle timeout, SIGTERM stop, the tmux post-restore hook) on a private `tmux -L` server
