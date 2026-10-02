@@ -289,7 +289,8 @@ hl.device({
 -- MX Master: 70% slower pointer. Hyprland appends "-1" to a duplicate device
 -- name (e.g. after repeated BT reconnects), so cover both spellings.
 local mx_master_sensitivity = -0.7
-for _, name in ipairs({ "logitech-mx-master-3-for-mac", "logitech-mx-master-3-for-mac-1" }) do
+local mx_master_devices = { "logitech-mx-master-3-for-mac", "logitech-mx-master-3-for-mac-1" }
+for _, name in ipairs(mx_master_devices) do
     hl.device({
         name        = name,
         sensitivity = mx_master_sensitivity,
@@ -445,7 +446,13 @@ end
 -- (cmd-tab feel). "previous" is global; "previous_per_monitor" would scope it
 -- to the active monitor. SUPER is untouched by the ctrl:swap_lalt_lctl option
 -- above, and Tab is otherwise only bound with CTRL (window cycling).
-hl.bind(mainMod .. " + Tab", hl.dsp.focus({ workspace = "previous" }))
+hl.bind(mainMod .. " + Tab", hl.dsp.focus({ workspace = "previous" }),
+    { device = { inclusive = false, list = mx_master_devices } })
+-- The MX Master's gesture button is a keyboard device sending SUPER + Tab;
+-- scoped to that device, it opens the hyprexpo overview instead.
+hl.bind(mainMod .. " + Tab", function()
+    hl.plugin.hyprexpo.expo("toggle")
+end, { device = { inclusive = true, list = mx_master_devices } })
 
 -- Show the current workspace number (no status bar is running).
 -- hyprctl notify args: <icon> <duration_ms> <color> <message>; -1 = no icon, 0 = default color.
