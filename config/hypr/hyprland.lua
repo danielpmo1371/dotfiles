@@ -354,6 +354,9 @@ hl.bind(mainMod .. " + CTRL + SHIFT + N", hl.dsp.exec_cmd(os.getenv("HOME") .. "
 hl.bind(mainMod .. " + CTRL + SHIFT + B", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/wall-next --favorites prev"))
 -- Clipboard history picker (cliphist + wofi); SUPER+V is the float toggle.
 hl.bind(mainMod .. " + SHIFT + V", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/clip-pick"))
+-- Monitor layout editor (monique, writes monitors.lua). D for displays: SHIFT+M
+-- would sit one key away from SUPER+M, which exits Hyprland.
+hl.bind(mainMod .. " + SHIFT + D", hl.dsp.exec_cmd("monique"))
 hl.bind(mainMod .. " + space", function()
     hl.plugin.hyprexpo.expo("toggle")
 end)
