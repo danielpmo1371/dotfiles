@@ -19,6 +19,14 @@ hl.monitor({
     scale    = "auto",
 })
 
+-- Per-setup layouts are made in the monique GUI, which writes monitors.lua
+-- next to this file; its daemon (moniqued) re-applies them on hotplug. The
+-- rule above stays as the fallback. A machine without monique has no
+-- monitors.lua, so only a missing module is tolerated, not errors inside it.
+local monitorsLoaded, monitorsErr = pcall(require, "monitors")
+if not monitorsLoaded and not tostring(monitorsErr):find("module 'monitors' not found", 1, true) then
+    error(monitorsErr)
+end
 
 ---------------------
 ---- MY PROGRAMS ----
