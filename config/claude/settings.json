@@ -1,5 +1,4 @@
 {
-  "tui": "default",
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
@@ -202,15 +201,21 @@
     "cicd-automation@claude-code-workflows": true,
     "cloud-infrastructure@claude-code-workflows": true
   },
+  "feedbackDrafts": "off",
   "alwaysThinkingEnabled": true,
+  "askUserQuestionTimeout": "5m",
+  "dialogExpiry": "5m",
   "autoUpdatesChannel": "latest",
+  "tui": "default",
   "voice": {
     "enabled": true,
     "mode": "hold"
   },
   "skipDangerousModePermissionPrompt": true,
+  "editorMode": "vim",
   "remoteControlAtStartup": true,
   "inputNeededNotifEnabled": true,
   "agentPushNotifEnabled": true,
-  "voiceEnabled": true
+  "voiceEnabled": true,
+  "crossSessionInbound": "hold"
 }
