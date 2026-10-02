@@ -18,8 +18,8 @@ Trigger a deployment for the current service and branch:
 1. Detect service: `~/.claude/scripts/pipeline-registry.sh`
 2. Get branch: `git branch --show-current`
 3. Validate: `echo '{...}' | ~/.claude/scripts/pipeline-validator.sh`
-4. Trigger via MCP: `pipelines_run_pipeline`
-5. Monitor: `get_build_status` polling
+4. Trigger via MCP: `pipelines_write` with `action: "run_pipeline"` (the only permitted write action)
+5. Monitor: `pipelines_build` `action: "get_status"` polling
 6. On failure: delegate to `fetch-azdo-logs` agent
 
 ## Prerequisites
@@ -64,7 +64,7 @@ PROJECT=$(echo "$SERVICE_INFO" | jq -r '.project')
 echo "{\"service\":\"$SERVICE\",\"type\":\"ci\",\"branch\":\"$BRANCH\",\"pipelineId\":\"$CI_ID\",\"project\":\"$PROJECT\"}" | ~/.claude/scripts/pipeline-validator.sh
 
 # 4. If approved, trigger via MCP (use ToolSearch first)
-# 5. Monitor via get_build_status polling
+# 5. Monitor via pipelines_build action=get_status polling
 ```
 
 ### CD (Deploy) Pipeline

@@ -167,6 +167,16 @@ cat > "$WS/.claude/pipeline-registry.json" << 'EOF'
       },
       "stages": { "all": ["plan_bd", "apply_bd"], "allowed": ["plan_bd"], "blocked": [] }
     },
+    "td-apim": {
+      "project": "Test Project",
+      "ci": { "id": 312, "name": "td-apim-ci" },
+      "cd": { "id": 313, "name": "td-apim-cd" },
+      "stages": {
+        "all": ["INZ_PLATFORM_DEVTEST", "INZ_PaaS_SHARED_SIT", "INZ_PaaS_SHARED_UAT", "INZ_PaaS_SHARED_PREPROD", "INZ_PaaS_SHARED"],
+        "allowed": ["INZ_PLATFORM_DEVTEST", "INZ_PaaS_SHARED_SIT", "INZ_PaaS_SHARED_UAT"],
+        "blocked": ["INZ_PaaS_SHARED_PREPROD", "INZ_PaaS_SHARED"]
+      }
+    },
     "iac-csv-allow": {
       "project": "Test Project",
       "ci": null,
@@ -289,6 +299,15 @@ expect_block_stderr() {
 
 mcp_input() {
     printf '{"tool_name":"mcp__azure-devops__pipelines_run_pipeline","tool_input":%s}' "$1"
+}
+# write_input <action> <tool_input-object-json>: @azure-devops/mcp >= 2.10
+# consolidated write tool; the action is merged into tool_input.
+write_input() {
+    jq -nc --arg a "$1" --argjson ti "$2" \
+        '{"tool_name":"mcp__azure-devops__pipelines_write","tool_input":({"action":$a} + $ti)}'
+}
+tool_input_json() {
+    jq -nc --arg t "$1" --argjson ti "$2" '{"tool_name":$t,"tool_input":$ti}'
 }
 bash_input() {
     jq -nc --arg cmd "$1" '{"tool_name":"Bash","tool_input":{"command":$cmd}}'
@@ -420,6 +439,113 @@ expect allow "$PIPELINE_GUARD" "$WS_BARE" "no registry: registry checks skipped 
     "$(mcp_input '{"pipelineId":900,"project":"P","stagesToSkip":[]}')"
 expect_unconfigured block "$PIPELINE_GUARD" "$WS" "unconfigured (no PIPELINE_GUARD_TERRAFORM_ID/STAGE): fails closed, blocks even a harmless CI id" \
     "$(mcp_input '{"pipelineId":100,"project":"P"}')"
+
+echo -e "${BLUE}=== pipeline-guard.sh (@azure-devops/mcp >= 2.10 consolidated tools) ===${NC}"
+# Same policy as the legacy tool, reached via pipelines_write action=run_pipeline.
+# Fixture service "td-apim" mirrors the real td registry entry (CD 313 blocks
+# INZ_PaaS_SHARED_PREPROD and INZ_PaaS_SHARED).
+TD_SKIP_BLOCKED='"stagesToSkip":["INZ_PaaS_SHARED_UAT","INZ_PaaS_SHARED_PREPROD","INZ_PaaS_SHARED"]'
+expect allow "$PIPELINE_GUARD" "$WS" "new: td-apim CD 313 to SIT skipping every blocked stage -> allowed" \
+    "$(write_input run_pipeline "{\"pipelineId\":313,\"project\":\"P\",$TD_SKIP_BLOCKED,\"resources\":{\"repositories\":{\"self\":{\"refName\":\"refs/heads/feature/x\"}}}}")"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: td-apim CD 313 not skipping INZ_PaaS_SHARED -> blocked" \
+    "$(write_input run_pipeline '{"pipelineId":313,"project":"P","stagesToSkip":["INZ_PaaS_SHARED_UAT","INZ_PaaS_SHARED_PREPROD"]}')" \
+    "Blocked stage 'INZ_PaaS_SHARED' is not in stagesToSkip"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: td-apim CD 313 not skipping INZ_PaaS_SHARED_PREPROD -> blocked" \
+    "$(write_input run_pipeline '{"pipelineId":313,"project":"P","stagesToSkip":["INZ_PaaS_SHARED_UAT","INZ_PaaS_SHARED"]}')" \
+    "Blocked stage 'INZ_PaaS_SHARED_PREPROD' is not in stagesToSkip"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: td-apim CD 313 with no stagesToSkip key -> blocked (all stages would run)" \
+    "$(write_input run_pipeline '{"pipelineId":313,"project":"P"}')" \
+    "requires stagesToSkip"
+expect allow "$PIPELINE_GUARD" "$WS" "new: td-apim CI 312 run -> allowed" \
+    "$(write_input run_pipeline '{"pipelineId":312,"project":"P"}')"
+expect block "$PIPELINE_GUARD" "$WS" "new: unregistered pipeline via run_pipeline -> blocked" \
+    "$(write_input run_pipeline '{"pipelineId":555,"project":"P"}')"
+expect block "$PIPELINE_GUARD" "$WS" "new: env=prd templateParameter via run_pipeline -> blocked" \
+    "$(write_input run_pipeline '{"pipelineId":312,"project":"P","templateParameters":{"environment":"prd"}}')"
+expect block "$PIPELINE_GUARD" "$WS" "new: terraform 802 apply not skipped via run_pipeline -> blocked" \
+    "$(write_input run_pipeline '{"pipelineId":802,"project":"P","stagesToSkip":[],"templateParameters":{"requireManualApproval":"True"}}')"
+expect allow "$PIPELINE_GUARD" "$WS" "new: terraform 802 plan-only via run_pipeline -> allowed" \
+    "$(write_input run_pipeline '{"pipelineId":802,"project":"P","stagesToSkip":["apply_infra"],"templateParameters":{"requireManualApproval":"True"}}')"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: run_pipeline previewRun still policy-checked (blocked stage not skipped)" \
+    "$(write_input run_pipeline '{"pipelineId":313,"project":"P","previewRun":true,"stagesToSkip":["INZ_PaaS_SHARED"]}')" \
+    "INZ_PaaS_SHARED_PREPROD"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: run_pipeline with yamlOverride -> blocked" \
+    "$(write_input run_pipeline "{\"pipelineId\":313,\"project\":\"P\",\"previewRun\":true,$TD_SKIP_BLOCKED,\"yamlOverride\":\"stages: []\"}")" \
+    "yamlOverride is not permitted"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "legacy: pipelines_run_pipeline with yamlOverride -> blocked" \
+    "$(mcp_input "{\"pipelineId\":313,\"project\":\"P\",$TD_SKIP_BLOCKED,\"yamlOverride\":\"stages: []\"}")" \
+    "yamlOverride is not permitted"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: run_pipeline stagesToSkip as a string -> rc=2" \
+    "$(write_input run_pipeline '{"pipelineId":313,"project":"P","stagesToSkip":"INZ_PaaS_SHARED"}')" \
+    "stagesToSkip must be an array"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: run_pipeline pipelineId missing -> rc=2" \
+    "$(write_input run_pipeline '{"project":"P","stagesToSkip":[]}')" \
+    "pipelineId missing or not numeric"
+expect_unconfigured block "$PIPELINE_GUARD" "$WS" "new: unconfigured guard blocks run_pipeline" \
+    "$(write_input run_pipeline '{"pipelineId":312,"project":"P"}')"
+# Write actions the policy cannot reason about fail closed, whatever their input.
+for status in Cancel Retry Run; do
+    expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: update_build_stage status=$status -> blocked" \
+        "$(write_input update_build_stage "{\"buildId\":1,\"stageName\":\"INZ_PaaS_SHARED_SIT\",\"status\":\"$status\"}")" \
+        "action 'update_build_stage' is not permitted"
+done
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: create_pipeline -> blocked" \
+    "$(write_input create_pipeline '{"name":"x","yamlPath":"a.yml","repositoryName":"r","repositoryType":"AzureReposGit"}')" \
+    "action 'create_pipeline' is not permitted"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: rename_pipeline -> blocked" \
+    "$(write_input rename_pipeline '{"pipelineId":313,"name":"x"}')" \
+    "action 'rename_pipeline' is not permitted"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: unknown pipelines_write action -> blocked" \
+    "$(write_input queue_build '{"pipelineId":313}')" \
+    "action 'queue_build' is not permitted"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: pipelines_write with no action -> blocked" \
+    "$(tool_input_json mcp__azure-devops__pipelines_write '{"pipelineId":313,"project":"P","stagesToSkip":["INZ_PaaS_SHARED_PREPROD","INZ_PaaS_SHARED"]}')" \
+    "action '<missing>' is not permitted"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: unknown pipelines_* tool -> blocked" \
+    "$(tool_input_json mcp__azure-devops__pipelines_queue '{"pipelineId":313,"project":"P"}')" \
+    "not a known azure-devops pipelines tool"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: read tool with unknown action -> blocked" \
+    "$(tool_input_json mcp__azure-devops__pipelines_build '{"action":"queue","project":"P"}')" \
+    "not a known read-only action"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "legacy: pipelines_update_build_stage -> blocked" \
+    "$(tool_input_json mcp__azure-devops__pipelines_update_build_stage '{"buildId":1,"stageName":"s","status":"Retry"}')" \
+    "not a known azure-devops pipelines tool"
+# Read-only tools/actions pass without policy evaluation.
+expect allow "$PIPELINE_GUARD" "$WS" "new read: pipelines_run action=get" \
+    "$(tool_input_json mcp__azure-devops__pipelines_run '{"action":"get","project":"P","pipelineId":313,"runId":1}')"
+expect allow "$PIPELINE_GUARD" "$WS" "new read: pipelines_run action=list" \
+    "$(tool_input_json mcp__azure-devops__pipelines_run '{"action":"list","project":"P","pipelineId":313}')"
+expect allow "$PIPELINE_GUARD" "$WS" "new read: pipelines_build action=get_status" \
+    "$(tool_input_json mcp__azure-devops__pipelines_build '{"action":"get_status","project":"P","buildId":1}')"
+expect allow "$PIPELINE_GUARD" "$WS" "new read: pipelines_build action=list" \
+    "$(tool_input_json mcp__azure-devops__pipelines_build '{"action":"list","project":"P","definitions":[313],"top":1}')"
+expect allow "$PIPELINE_GUARD" "$WS" "new read: pipelines_build_log action=get_content" \
+    "$(tool_input_json mcp__azure-devops__pipelines_build_log '{"action":"get_content","project":"P","buildId":1,"logId":2}')"
+expect allow "$PIPELINE_GUARD" "$WS" "new read: pipelines_definition action=list" \
+    "$(tool_input_json mcp__azure-devops__pipelines_definition '{"action":"list","project":"P"}')"
+expect allow "$PIPELINE_GUARD" "$WS" "new read: pipelines_artifact action=list" \
+    "$(tool_input_json mcp__azure-devops__pipelines_artifact '{"action":"list","project":"P","buildId":1}')"
+expect allow "$PIPELINE_GUARD" "$WS" "legacy read: pipelines_get_build_status" \
+    "$(tool_input_json mcp__azure-devops__pipelines_get_build_status '{"project":"P","buildId":1}')"
+expect allow "$PIPELINE_GUARD" "$WS" "non-pipelines azure-devops tool passes through" \
+    "$(tool_input_json mcp__azure-devops__wit_work_item '{"action":"get","id":1}')"
+# The legacy name keeps its full policy (old server versions still work).
+expect allow "$PIPELINE_GUARD" "$WS" "legacy: td-apim CD 313 skipping every blocked stage -> allowed" \
+    "$(mcp_input "{\"pipelineId\":313,\"project\":\"P\",$TD_SKIP_BLOCKED}")"
+expect block "$PIPELINE_GUARD" "$WS" "legacy: td-apim CD 313 not skipping INZ_PaaS_SHARED -> blocked" \
+    "$(mcp_input '{"pipelineId":313,"project":"P","stagesToSkip":["INZ_PaaS_SHARED_PREPROD"]}')"
+
+echo -e "${BLUE}=== settings.json routes every pipelines tool to pipeline-guard.sh ===${NC}"
+GUARD_MATCHER=$(jq -r '.hooks.PreToolUse[] | select(any(.hooks[]; .command | test("pipeline-guard\\.sh"))) | .matcher' "$DOTFILES_ROOT/config/claude/settings.json")
+for tool in pipelines_write pipelines_run_pipeline pipelines_run pipelines_build pipelines_build_log pipelines_definition pipelines_artifact; do
+    if [[ "mcp__azure-devops__$tool" =~ ^($GUARD_MATCHER)$ ]]; then
+        echo -e "  ${GREEN}PASS${NC} matcher '$GUARD_MATCHER' covers mcp__azure-devops__$tool"
+        PASS=$((PASS + 1))
+    else
+        echo -e "  ${RED}FAIL${NC} matcher '$GUARD_MATCHER' does not cover mcp__azure-devops__$tool"
+        FAIL=$((FAIL + 1))
+    fi
+done
 
 echo -e "${BLUE}=== pipeline-trigger-guard.sh (Bash trigger chokepoint) ===${NC}"
 expect block "$TRIGGER_GUARD" "$WS_BARE" "az pipelines run blocked" \

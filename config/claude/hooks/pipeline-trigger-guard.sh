@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # ~/.claude/hooks/pipeline-trigger-guard.sh
 # PreToolUse(Bash) hook: blocks attempts to trigger AZDO pipelines outside
-# the documented MCP path (mcp__azure-devops__pipelines_run_pipeline).
+# the documented MCP path (mcp__azure-devops__pipelines_write action=run_pipeline;
+# legacy name pipelines_run_pipeline).
 # Layer 1 — deterministic, fast, free.
 # Pairs with ~/.claude/hooks/pipeline-guard.sh which guards the MCP path itself.
 
@@ -25,7 +26,7 @@ State clearly:
   - the reason: ${reason}
   - the command that was attempted (truncated if long)
   - that the documented path is the MCP tool:
-      mcp__azure-devops__pipelines_run_pipeline
+      mcp__azure-devops__pipelines_write (action: run_pipeline)
 
 Then await user direction.
 ==============================================================================
@@ -101,13 +102,13 @@ fi
 if [[ "$block" -eq 1 ]]; then
   priority_block_message "$reason" \
     "Use the MCP tool instead:
-    mcp__azure-devops__pipelines_run_pipeline
+    mcp__azure-devops__pipelines_write (action: run_pipeline)
 
 That path goes through pipeline-validator.sh (registry-driven stagesToSkip)
 and the audit-logging guard hook. Direct REST / az CLI triggers bypass both.
 
 If this is a read-only op that tripped a false positive, switch to GET or use
-the MCP read tools (pipelines_get_run / pipelines_list_runs / *_get_build_log).
+the MCP read tools (pipelines_run / pipelines_build / pipelines_build_log).
 
 Command attempted (truncated):
 $(printf '%.200s' "$cmd")"

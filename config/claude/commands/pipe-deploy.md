@@ -70,18 +70,19 @@ Run the validator:
 echo '{"service":"SERVICE","type":"ci","branch":"BRANCH","pipelineId":"CI_ID","project":"PROJECT"}' | ~/.claude/scripts/pipeline-validator.sh
 ```
 
-If approved, use `ToolSearch` to load `mcp__azure-devops__pipelines_run_pipeline`, then trigger:
+If approved, use `ToolSearch` to load `mcp__azure-devops__pipelines_write`, then trigger:
+- `action`: `run_pipeline` (the only permitted action — every other `pipelines_write` action is blocked by pipeline-guard.sh)
 - `project`: from registry
 - `pipelineId`: CI pipeline ID
 - `resources.repositories.self.refName`: `refs/heads/BRANCH`
 
 ### Step 4: Monitor CI
 
-Use `ToolSearch` to load `mcp__azure-devops__pipelines_get_build_status`.
+Use `ToolSearch` to load `mcp__azure-devops__pipelines_build`.
 
 Poll every 30 seconds:
-1. Call `mcp__azure-devops__pipelines_get_builds` filtered by the CI definition ID, top 1, to get the latest buildId
-2. Call `mcp__azure-devops__pipelines_get_build_status` with the buildId
+1. Call `mcp__azure-devops__pipelines_build` with `action: "list"`, `definitions: [<CI definition ID>]`, `top: 1`, to get the latest buildId
+2. Call `mcp__azure-devops__pipelines_build` with `action: "get_status"` and the buildId
 3. Report status to user (in progress / succeeded / failed)
 4. Continue until completed
 

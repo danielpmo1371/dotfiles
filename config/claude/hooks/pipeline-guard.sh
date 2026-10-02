@@ -2,7 +2,10 @@
 #
 # Pipeline Guard — PreToolUse Hook
 #
-# Intercepts mcp__azure-devops__pipelines_run_pipeline calls.
+# Intercepts every mcp__azure-devops__pipelines_* call. Run-starting calls —
+# legacy pipelines_run_pipeline and, since @azure-devops/mcp 2.10,
+# pipelines_write action=run_pipeline — get the full policy below; known
+# read-only tools/actions pass; any other pipelines tool/action fails closed.
 # Reads tool input from stdin JSON, validates against hard rules.
 # Exit 0 = allow, exit 2 = block (with reason on stderr).
 #
@@ -94,10 +97,67 @@ INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty')
 TOOL_INPUT=$(echo "$INPUT" | jq -c '.tool_input // {}')
 
-# Only process pipeline run calls
-if [[ "$TOOL_NAME" != *"pipelines_run_pipeline"* ]]; then
+# ============================================================================
+# Tool/action dispatch. settings.json routes EVERY azure-devops pipelines_*
+# tool here (matcher "mcp__azure-devops__pipelines_.*"), covering both the
+# legacy per-operation tools (<= 2.9, e.g. pipelines_run_pipeline) and the
+# consolidated action-based tools (@azure-devops/mcp >= 2.10, e.g.
+# pipelines_write action=run_pipeline). Decision per call:
+#   - a run-starting call (legacy pipelines_run_pipeline, or pipelines_write
+#     action=run_pipeline) -> every policy check below;
+#   - a known read-only tool/action pair -> allowed, unaudited;
+#   - ANYTHING else (other pipelines_write actions such as update_build_stage
+#     Cancel/Retry/Run or create/rename_pipeline, a missing or unknown action,
+#     an unknown pipelines_* tool) -> FAIL CLOSED. A future MCP release that
+#     adds a write action must be reviewed here before it can be used.
+# The short name is matched after the last "__" so a differently-prefixed
+# server exposing the same tool is still covered if the matcher routes it.
+# ============================================================================
+TOOL_SHORT="${TOOL_NAME##*__}"
+if [[ "$TOOL_SHORT" != pipelines_* ]]; then
   exit 0
 fi
+TOOL_ACTION=$(echo "$TOOL_INPUT" | jq -r 'if type == "object" then (.action // "" | tostring) else "" end')
+
+case "$TOOL_SHORT" in
+  pipelines_run_pipeline)
+    ;;
+  pipelines_write)
+    if [[ "$TOOL_ACTION" != "run_pipeline" ]]; then
+      fail_closed "$TOOL_NAME action '${TOOL_ACTION:-<missing>}' is not permitted via AI. Only action=run_pipeline is policy-checked; stage cancel/retry/run (update_build_stage) and pipeline create/rename change runs or definitions outside the stagesToSkip policy and must be done by a HUMAN in the Azure DevOps UI."
+    fi
+    ;;
+  pipelines_run)
+    [[ "$TOOL_ACTION" == "get" || "$TOOL_ACTION" == "list" ]] && exit 0
+    fail_closed "$TOOL_NAME action '${TOOL_ACTION:-<missing>}' is not a known read-only action — failing closed."
+    ;;
+  pipelines_build)
+    [[ "$TOOL_ACTION" == "list" || "$TOOL_ACTION" == "get_status" || "$TOOL_ACTION" == "get_changes" ]] && exit 0
+    fail_closed "$TOOL_NAME action '${TOOL_ACTION:-<missing>}' is not a known read-only action — failing closed."
+    ;;
+  pipelines_build_log)
+    [[ "$TOOL_ACTION" == "list" || "$TOOL_ACTION" == "get_content" ]] && exit 0
+    fail_closed "$TOOL_NAME action '${TOOL_ACTION:-<missing>}' is not a known read-only action — failing closed."
+    ;;
+  pipelines_definition)
+    [[ "$TOOL_ACTION" == "list" || "$TOOL_ACTION" == "list_revisions" ]] && exit 0
+    fail_closed "$TOOL_NAME action '${TOOL_ACTION:-<missing>}' is not a known read-only action — failing closed."
+    ;;
+  pipelines_artifact)
+    [[ "$TOOL_ACTION" == "list" || "$TOOL_ACTION" == "download" ]] && exit 0
+    fail_closed "$TOOL_NAME action '${TOOL_ACTION:-<missing>}' is not a known read-only action — failing closed."
+    ;;
+  pipelines_get_build_status|pipelines_get_builds|pipelines_get_run|pipelines_list_runs|\
+  pipelines_get_build_log|pipelines_get_build_log_by_id|pipelines_get_build_changes|\
+  pipelines_get_build_definitions|pipelines_get_build_definition_revisions|\
+  pipelines_list_artifacts|pipelines_download_artifact)
+    # Legacy (<= 2.9) read-only tools.
+    exit 0
+    ;;
+  *)
+    fail_closed "$TOOL_NAME is not a known azure-devops pipelines tool — it may start or change pipeline runs, so it is blocked until pipeline-guard.sh is updated to reason about it."
+    ;;
+esac
 
 # Payload shape — every rule below indexes these fields; a wrong type would
 # either crash jq (see fail_closed) or, worse, make a check vacuously pass
@@ -112,6 +172,13 @@ INPUT_SHAPE_ERROR=$(echo "$TOOL_INPUT" | jq -r '
   end')
 if [[ -n "$INPUT_SHAPE_ERROR" ]]; then
   fail_closed "malformed tool_input ($INPUT_SHAPE_ERROR) — cannot evaluate policy. Raw tool_input: $TOOL_INPUT"
+fi
+
+# yamlOverride replaces the pipeline YAML, so the stage names this hook checks
+# stagesToSkip against no longer describe what would run. The guard cannot
+# reason about an arbitrary YAML body — fail closed whenever it is supplied.
+if [[ "$(echo "$TOOL_INPUT" | jq -r 'has("yamlOverride") and .yamlOverride != null')" == "true" ]]; then
+  fail_closed "yamlOverride is not permitted via AI — it replaces the pipeline YAML, so stagesToSkip/registry checks cannot be evaluated."
 fi
 
 # Parse the MCP tool input
@@ -158,6 +225,7 @@ log_audit() {
 
 # Log the full raw tool input for forensics
 log_detail "=== PIPELINE TRIGGER ATTEMPT ==="
+log_detail "Tool: $TOOL_NAME${TOOL_ACTION:+ (action=$TOOL_ACTION)}"
 log_detail "Pipeline ID: $PIPELINE_ID"
 log_detail "Project: $PROJECT"
 log_detail "Branch: $BRANCH"
