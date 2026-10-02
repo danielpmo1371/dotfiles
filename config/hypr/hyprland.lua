@@ -148,16 +148,24 @@ hl.config({
 
 -- Plugin keys are unknown until hyprpm loads the plugin; loading it reloads the
 -- config, which applies this block. The guard avoids the startup error bar.
+-- Shared with the 4-finger grid gestures, which move a whole row at a time.
+local expo_columns = 3
+
 if hl.plugin.hyprexpo ~= nil then
     hl.config({
         plugin = {
           hyprexpo = {
-            columns          = 3,
+            columns          = expo_columns,
             rows             = 2,
             gaps_in          = 5,
             gaps_out         = 0,
             workspace_method = "center current",
             fill_gaps        = 0,
+            -- 3-finger swipe up opens the overview, tracking the fingers like
+            -- Mission Control (the plugin's own gesture; 0 disables it).
+            -- 4 fingers are taken by the grid swipes below.
+            gesture_fingers   = 3,
+            gesture_direction = "up",
           },
         },
     })
@@ -273,11 +281,33 @@ hl.config({
     },
 })
 
-hl.gesture({
-    fingers = 4,
-    direction = "horizontal",
-    action = "workspace"
-})
+-- 4-finger swipes walk the hyprexpo grid: inside the overview they move the
+-- selection (hyprexpo has no swipe navigation of its own, and the plugin sits
+-- in its `hyprexpo` submap while open); outside it they switch workspace by
+-- one cell (left/right) or one grid row (up/down). Directional gestures can't
+-- coexist with an axis `workspace` gesture on the same finger count, so this
+-- replaces the live-dragging workspace swipe.
+local function expo_swipe(dir, workspace)
+    return function()
+        if hl.get_current_submap() == "hyprexpo" then
+            hl.plugin.hyprexpo.kb_focus(dir)
+        else
+            hl.dispatch(hl.dsp.focus({ workspace = workspace }))
+        end
+    end
+end
+
+-- Workspace switching is inverted like natural scrolling: the workspaces
+-- move with the fingers, so swiping left brings in the next one. Selection
+-- inside the overview stays direct, since it is a cursor, not content.
+for _, swipe in ipairs({
+    { dir = "left",  workspace = "+1" },
+    { dir = "right", workspace = "-1" },
+    { dir = "up",    workspace = "+" .. expo_columns },
+    { dir = "down",  workspace = "-" .. expo_columns },
+}) do
+    hl.gesture({ fingers = 4, direction = swipe.dir, action = expo_swipe(swipe.dir, swipe.workspace) })
+end
 
 -- Example per-device config
 -- See https://wiki.hypr.land/Configuring/Advanced-and-Cool/Devices/ for more
