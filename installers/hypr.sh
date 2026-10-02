@@ -27,10 +27,10 @@ install_hypr() {
     # is shared with entries other apps install there.
     link_target_files "applications" "$HOME/.local/share/applications" "wayle.desktop"
 
-    # Keybinding dependencies (launcher, screenshots). Config-only installer:
+    # Keybinding dependencies (launcher, screenshots, clipboard history). Config-only installer:
     # warn, don't install — package installation stays in tools.sh territory.
     local dep missing=()
-    for dep in wofi grim slurp wl-copy awww jq notify-send; do
+    for dep in wofi grim slurp wl-copy wl-paste cliphist awww jq notify-send; do
         command -v "$dep" &>/dev/null || missing+=("$dep")
     done
     if [ ${#missing[@]} -gt 0 ]; then
