@@ -295,26 +295,26 @@ hl.config({
 -- one cell (left/right) or one grid row (up/down). Directional gestures can't
 -- coexist with an axis `workspace` gesture on the same finger count, so this
 -- replaces the live-dragging workspace swipe.
-local function expo_swipe(dir, workspace)
+local function expo_swipe(focus, workspace)
     return function()
         if hl.get_current_submap() == "hyprexpo" then
-            hl.plugin.hyprexpo.kb_focus(dir)
+            hl.plugin.hyprexpo.kb_focus(focus)
         else
             hl.dispatch(hl.dsp.focus({ workspace = workspace }))
         end
     end
 end
 
--- Workspace switching is inverted like natural scrolling: the workspaces
--- move with the fingers, so swiping left brings in the next one. Selection
--- inside the overview stays direct, since it is a cursor, not content.
+-- Both are inverted like natural scrolling: the grid moves with the fingers,
+-- so swiping left brings in the next workspace, or selects the cell to the
+-- right inside the overview.
 for _, swipe in ipairs({
-    { dir = "left",  workspace = "+1" },
-    { dir = "right", workspace = "-1" },
-    { dir = "up",    workspace = "+" .. expo_columns },
-    { dir = "down",  workspace = "-" .. expo_columns },
+    { dir = "left",  focus = "right", workspace = "+1" },
+    { dir = "right", focus = "left",  workspace = "-1" },
+    { dir = "up",    focus = "down",  workspace = "+" .. expo_columns },
+    { dir = "down",  focus = "up",    workspace = "-" .. expo_columns },
 }) do
-    hl.gesture({ fingers = 4, direction = swipe.dir, action = expo_swipe(swipe.dir, swipe.workspace) })
+    hl.gesture({ fingers = 4, direction = swipe.dir, action = expo_swipe(swipe.focus, swipe.workspace) })
 end
 
 -- Example per-device config
