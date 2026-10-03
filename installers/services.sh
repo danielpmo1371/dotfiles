@@ -26,6 +26,9 @@ CLAUDE_RC_SESSIONS_UNIT="claude-rc-sessions.service"
 CLAUDE_RC_SESSION_TARGET="hyprland-session.target"
 CLAUDE_RC_SYSTEMD_SOURCE="$DOTFILES_ROOT/config/systemd-services"
 CLAUDE_RC_SYSTEMD_TARGET="$HOME/.config/systemd"
+# Per-file links (the dir may hold other tools' files); systemd reads it on daemon-reload.
+CLAUDE_RC_ENV_SOURCE="$DOTFILES_ROOT/config/environment.d"
+CLAUDE_RC_ENV_TARGET="$HOME/.config/environment.d"
 
 # macOS (launchd LaunchAgent)
 CLAUDE_RC_LABEL="com.nuvemlabs.claude-rc"
@@ -72,6 +75,13 @@ _install_claude_rc_linux() {
         ensure_dir "$(dirname "$CLAUDE_RC_SYSTEMD_TARGET")"
         create_symlink_with_backup "$CLAUDE_RC_SYSTEMD_SOURCE" "$CLAUDE_RC_SYSTEMD_TARGET" || return 1
     fi
+
+    # PATH for the units (and the tmux server they fork), so claude and ~/bin resolve.
+    local env_file
+    ensure_dir "$CLAUDE_RC_ENV_TARGET"
+    for env_file in "$CLAUDE_RC_ENV_SOURCE"/*.conf; do
+        create_symlink_with_backup "$env_file" "$CLAUDE_RC_ENV_TARGET/$(basename "$env_file")" || return 1
+    done
 
     # No user systemd bus (Docker, containers, CI): link only, don't fail.
     if ! command -v systemctl &>/dev/null || ! systemctl --user show-environment &>/dev/null; then
