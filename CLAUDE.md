@@ -21,7 +21,7 @@ Personal dotfiles repository with modular installation system. Supports macOS an
 # Individual components
 ./install.sh --tools        # Dev tools (git, nvim, ripgrep, etc.)
 ./install.sh --casks        # macOS GUI apps from config/brew/Brewfile (macOS only)
-./install.sh --secrets      # Keychain-backed secrets library (migrates ~/.accessTokens; requires ~/repos/secrets clone)
+./install.sh --secrets      # Keychain-backed secrets library + secrets-bridge (migrates ~/.accessTokens; clones ~/repos/secrets and ~/repos/secrets-bridge if missing; accepts brew/AUR packages)
 ./install.sh --tmux         # Tmux + TPM + plugins (requires: git)
 ./install.sh --bash         # Bash configuration
 ./install.sh --zsh          # Zsh configuration (requires: git, zsh, curl)
@@ -232,7 +232,8 @@ readlink -f <file_path>  # Should point to repo directory
 ```
 
 **Common External Dependencies:**
-- `nuvemlabs/secrets` → Source: `~/repos/secrets/` → Installed: `~/.local/lib/secrets/` (library) + `~/.local/bin/secrets-doctor` (CLI)
+- `nuvemlabs/secrets` → Source: `~/repos/secrets/` → Installed: `~/.local/lib/secrets/` (library) + `~/.local/bin/secrets-doctor` (CLI), or packaged: `brew install nuvemlabs/tap/secrets` (tap repo `~/repos/homebrew-tap`) / AUR `nuvemlabs-secrets` (pending)
+- `nuvemlabs/secrets-bridge` → Source: `~/repos/secrets-bridge/` → Installed: `~/.local/lib/secrets-bridge/` + `~/.local/bin/secrets-bridge` (by `--secrets`), or `brew install nuvemlabs/tap/secrets-bridge`
 - System packages (brew, apt, etc.) → Never edit installed files
 - Symlinked configs → Edit source in `config/`, not `~/.config/`
 
