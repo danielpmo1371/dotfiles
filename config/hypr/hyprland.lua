@@ -34,6 +34,7 @@ end
 
 -- Set programs that you use
 local terminal    = "ghostty"
+local terminal_secondary    = "kitty"
 local fileManager = "dolphin"
 local menu        = "wofi --show drun"
 -- Brave renders on the NVIDIA dGPU when present: on Wayland prime-run alone is
@@ -351,6 +352,8 @@ local mainMod = "SUPER" -- Sets "Windows" key as main modifier
 
 -- Example binds, see https://wiki.hypr.land/Configuring/Basics/Binds/ for more
 hl.bind(mainMod .. " + Q", hl.dsp.exec_cmd(terminal))
+hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(terminal_secondary))
+
 local closeWindowBind = hl.bind(mainMod .. " + C", hl.dsp.window.close())
 -- closeWindowBind:set_enabled(false)
 hl.bind(mainMod .. " + M", hl.dsp.exit())
