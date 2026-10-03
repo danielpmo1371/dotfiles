@@ -8,9 +8,21 @@
 #   secret_delete KEY       - Remove a secret
 #   secret_unlock           - Unlock the macOS login keychain when `secret` reports it locked
 
-# Source the secrets library (nuvemlabs/secrets)
-SECRETS_LIB="${HOME}/.local/lib/secrets/secrets.sh"
-if [[ -f "$SECRETS_LIB" ]]; then
+# Source the secrets library (nuvemlabs/secrets): a source install in
+# ~/.local wins, then a package (AUR /usr, Homebrew prefix).
+SECRETS_LIB=""
+for __secrets_candidate in \
+    "${HOME}/.local/lib/secrets/secrets.sh" \
+    "/usr/lib/secrets/secrets.sh" \
+    "${HOMEBREW_PREFIX:-/opt/homebrew}/lib/secrets/secrets.sh" \
+    "/usr/local/lib/secrets/secrets.sh"; do
+    if [[ -f "$__secrets_candidate" ]]; then
+        SECRETS_LIB="$__secrets_candidate"
+        break
+    fi
+done
+unset __secrets_candidate
+if [[ -n "$SECRETS_LIB" ]]; then
     export SECRETS_SERVICE="dotfiles"
     # Self-declaration: tells secrets-doctor (nuvemlabs/secrets CLI) which file
     # maps store keys to env vars, so it works from any child process.

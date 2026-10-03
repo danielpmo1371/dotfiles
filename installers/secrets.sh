@@ -41,8 +41,20 @@ install_secrets() {
     # ── Install nuvemlabs/secrets library + CLI tools ───────────────────────
     # Library AND doctor must both be present, or (re)run the installer —
     # machines that installed before the CLI tools existed pick them up here.
+    # A package (AUR, Homebrew) installs both into one prefix and owns
+    # upgrades, so it counts as installed; config/shell/secrets.sh finds it.
+    local pkg_prefix packaged_prefix=""
+    for pkg_prefix in /usr "${HOMEBREW_PREFIX:-/opt/homebrew}" /usr/local; do
+        if [[ -f "$pkg_prefix/lib/secrets/secrets.sh" && -x "$pkg_prefix/bin/secrets-doctor" ]]; then
+            packaged_prefix="$pkg_prefix"
+            break
+        fi
+    done
+
     if [[ -f "$SECRETS_INSTALL_DIR/secrets.sh" && -x "$HOME/.local/bin/secrets-doctor" ]]; then
         log_success "nuvemlabs/secrets already installed at $SECRETS_INSTALL_DIR"
+    elif [[ -n "$packaged_prefix" ]]; then
+        log_success "nuvemlabs/secrets installed by a package at $packaged_prefix/lib/secrets"
     else
         log_info "Installing nuvemlabs/secrets library..."
 
