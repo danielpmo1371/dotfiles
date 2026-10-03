@@ -36,7 +36,14 @@ end
 local terminal    = "ghostty"
 local fileManager = "dolphin"
 local menu        = "wofi --show drun"
-local browser     = "brave"
+-- Brave renders on the NVIDIA dGPU when present: on Wayland prime-run alone is
+-- not enough, Chromium picks the iGPU unless told which render node to use.
+-- The by-path name is stable across boots (renderD12x numbering is not), but
+-- Chromium ignores a symlink here, so it is resolved at launch.
+local dgpuRenderNode = "/dev/dri/by-path/pci-0000:01:00.0-render"
+local browser     = "if [ -e " .. dgpuRenderNode .. " ] && command -v prime-run >/dev/null; then "
+                 .. "exec prime-run brave --render-node-override=\"$(readlink -f " .. dgpuRenderNode .. ")\"; "
+                 .. "else exec brave; fi"
 
 
 -------------------
