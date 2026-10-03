@@ -106,6 +106,10 @@ for f in "${THEME_FILES[@]}"; do
         *"range=user|datetime"*"%d/%m %a %H:%M"*) pass "$name status-right shows date and 24h time" ;;
         *) fail "$name status-right lost the date/time segment" ;;
     esac
+    case "$(t show -gv status-right)" in
+        *"range=user|power"*"tmux-weather.sh"*"tmux-battery.sh"*) pass "$name status-right toggles battery and weather" ;;
+        *) fail "$name status-right lost the battery/weather toggle" ;;
+    esac
 done
 
 echo -e "${BLUE}list / current${NC}"
