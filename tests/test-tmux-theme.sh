@@ -102,6 +102,10 @@ for f in "${THEME_FILES[@]}"; do
         *"$CONTINUUM_MARKER"*) pass "$name status-right keeps $CONTINUUM_MARKER" ;;
         *) fail "$name status-right lost $CONTINUUM_MARKER" ;;
     esac
+    case "$(t show -gv status-right)" in
+        *"%d/%m %a %H:%M"*) pass "$name status-right shows date and 24h time" ;;
+        *) fail "$name status-right lost the date/time segment" ;;
+    esac
 done
 
 echo -e "${BLUE}list / current${NC}"

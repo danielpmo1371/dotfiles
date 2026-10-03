@@ -188,7 +188,7 @@ Test scripts in `tests/` that teammates (or manual runs) can use:
 - `tests/test-ttalk-serialize.sh` - Hermetic tests for `ttalk`'s speaker lock (no overlap under concurrent calls, timeout drop, stale-lock reclaim; flock and mkdir paths), its `--disable`/`--enable` mute toggle and its `--volume` setting
 - `tests/test-keyring-unlock-wait.sh` - Hermetic tests for `keyring-unlock-wait` (unlocked/empty fast path, bounded wait when the dialog can't show or never answers, no Secret Service) on a private D-Bus session
 - `tests/test-ntfy-send.sh` - Hermetic tests for `ntfy-send` (message and headers verbatim, optional Bearer token, failure exit codes, topic URL never printed)
-- `tests/test-tmux-theme.sh` - Hermetic tests for `tmux-theme.sh` and `config/tmux/themes/` (every theme sources cleanly, sets the same options and keeps continuum in `status-right`; apply/save/default/unknown name; picker Enter and Esc via stub fzf; `tmux.conf` wiring) on a private `tmux -L` server
+- `tests/test-tmux-theme.sh` - Hermetic tests for `tmux-theme.sh` and `config/tmux/themes/` (every theme sources cleanly, sets the same options, keeps continuum and the `%d/%m %a %H:%M` date/time in `status-right`; apply/save/default/unknown name; picker Enter and Esc via stub fzf; `tmux.conf` wiring) on a private `tmux -L` server
 
 ## Learning from Mistakes
 
