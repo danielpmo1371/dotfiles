@@ -7,7 +7,8 @@
 # removed only after a yes, and a "no" leaves it in place; a device that comes
 # back on a new address is paired there and the old entry is kept; a device
 # that never shows up fails with exit 1; unnamed devices are hidden unless -a;
-# the NAME filter picks the device without fzf.
+# the NAME filter picks the device without fzf; BT_FIX_FZF_OPTS is appended to
+# fzf one option per line.
 #
 # Hermetic: bluetoothctl and fzf are stubs backed by a state dir (one file per
 # device), timeout is a pass-through, nothing touches the real adapter.
@@ -225,6 +226,23 @@ add_device AA:AA:AA:AA:AA:01 Midnight yes no -45 1 0
 run FZF_PICK=Midnight -- midnight </dev/null >/dev/null
 contains "query passed"  "--query=midnight" "$(cat "$STATE/fzf-argv")"
 contains "select-1 set"  "--select-1" "$(cat "$STATE/fzf-argv")"
+
+echo "BT_FIX_FZF_OPTS: one fzf option per line, appended after bt-fix's own"
+reset_state
+add_device AA:AA:AA:AA:AA:01 Midnight yes no -45 1 0
+run FZF_PICK=Midnight -- </dev/null >/dev/null
+default_argv="$(cat "$STATE/fzf-argv")"
+reset_state
+add_device AA:AA:AA:AA:AA:01 Midnight yes no -45 1 0
+extra_opts=$'--header=Two words here\n\n--color=bg:#123456,fg:#abcdef'
+run FZF_PICK=Midnight "BT_FIX_FZF_OPTS=$extra_opts" -- </dev/null >/dev/null; rc=$?
+check "exit 0"                    "0" "$rc"
+check "own options come first"    "$default_argv" "$(head -n "$(wc -l <<<"$default_argv")" "$STATE/fzf-argv")"
+check "extras appended verbatim, blank line skipped" \
+    $'--header=Two words here\n--color=bg:#123456,fg:#abcdef' \
+    "$(tail -n +"$(( $(wc -l <<<"$default_argv") + 1 ))" "$STATE/fzf-argv")"
+check "connected"                 "yes" "$(field AA:AA:AA:AA:AA:01 connected)"
+lacks "unset adds nothing"        "Two words" "$default_argv"
 
 echo "without fzf: NAME filter picks the single match"
 reset_state

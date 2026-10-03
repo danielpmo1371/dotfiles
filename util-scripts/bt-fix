@@ -12,6 +12,9 @@
 # another unpaired device with the same name shows up, bt-fix pairs that one
 # and leaves the old entry alone.
 #
+# BT_FIX_FZF_OPTS adds fzf options, one per line, after bt-fix's own, so a
+# caller can restyle the picker (tmux-bt-popup.sh does) or override its prompt.
+#
 # Exit: 0 connected, 1 failed, 2 usage, 130 cancelled.
 
 set -u
@@ -27,7 +30,8 @@ usage: bt-fix [-a] [-y] [NAME]
   NAME   filter the list by name (picks it directly when only one matches)
   -a     also list devices that only show an address, no name
   -y     do not ask before removing a stale pairing
-env: BT_FIX_SCAN (8s), BT_FIX_CONNECT (15s), BT_FIX_WAIT (60s)
+env: BT_FIX_SCAN (8s), BT_FIX_CONNECT (15s), BT_FIX_WAIT (60s),
+     BT_FIX_FZF_OPTS (extra fzf options, one per line, after bt-fix's own)
 EOF
     exit 2
 }
@@ -84,11 +88,16 @@ list_devices() {
 }
 
 pick() {
-    local list="$1" choice
+    local list="$1" choice opt
     if command -v fzf >/dev/null; then
+        # One option per line keeps spaces and escapes inside an option intact.
+        local -a extra_opts=()
+        while IFS= read -r opt; do
+            [[ -n "$opt" ]] && extra_opts+=("$opt")
+        done <<<"${BT_FIX_FZF_OPTS:-}"
         choice=$(printf '%s\n' "$list" | fzf --delimiter=$'\t' --with-nth=1,3 \
             --query="$query" --select-1 --exit-0 --prompt="device> " \
-            --header="Pick the device to fix")
+            --header="Pick the device to fix" "${extra_opts[@]}")
     else
         local -a lines
         mapfile -t lines < <(printf '%s\n' "$list" | grep -i -- "$query")

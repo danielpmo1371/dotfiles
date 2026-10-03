@@ -3,6 +3,7 @@
 # Hermetic tests for the tmux theme switcher:
 #   util-scripts/tmux-theme.sh   (list / current / apply / apply-saved / --pick)
 #   config/tmux/themes/*.conf    (the themes themselves)
+#   the status-right click wiring in tmux.conf (MouseDown1Status ranges)
 #
 # Why this exists: themes replace each other by sourcing a file, so every theme
 # must set the same options or the previous one leaks through. And every
@@ -30,6 +31,8 @@ DEFAULT_THEME="gruvbox-dark"
 OTHER_THEME="nord"
 PROBE_OPTION="status-style"
 CONTINUUM_MARKER="continuum_save.sh"
+# Nerd Font Bluetooth (nf-md-bluetooth, U+F00AF) as UTF-8 bytes; $'\U...' needs bash 4.2+
+BLUETOOTH_GLYPH=$'\xf3\xb0\x82\xaf'
 
 PASS=0
 FAIL=0
@@ -109,6 +112,10 @@ for f in "${THEME_FILES[@]}"; do
     case "$(t show -gv status-right)" in
         *"range=user|power"*"tmux-weather.sh"*"tmux-battery.sh"*) pass "$name status-right toggles battery and weather" ;;
         *) fail "$name status-right lost the battery/weather toggle" ;;
+    esac
+    case "$(t show -gv status-right)" in
+        *"range=user|bluetooth] $BLUETOOTH_GLYPH "*"range=user|datetime"*) pass "$name status-right has the Bluetooth segment before the date/time" ;;
+        *) fail "$name status-right lacks the Bluetooth segment before the date/time" ;;
     esac
 done
 
@@ -203,6 +210,10 @@ theme_line="$(grep -n '^run-shell .*tmux-theme\.sh apply-saved' "$TMUX_CONF" | c
     && pass "apply-saved runs after TPM" || fail "apply-saved must come after the TPM run line"
 grep -q '^set -g status-right' "$TMUX_CONF" && fail "tmux.conf still sets a status-right of its own" \
     || pass "status-right is left to the themes"
+grep -q "mouse_status_range},bluetooth}" "$TMUX_CONF" \
+    && grep -q "run-shell -b '.*tmux-bt-popup\.sh --popup #{q:client_name}'" "$TMUX_CONF" \
+    && pass "a click on the bluetooth range opens tmux-bt-popup.sh on the clicking client" \
+    || fail "MouseDown1Status does not open tmux-bt-popup.sh for the bluetooth range"
 
 echo
 echo "Results: $PASS passed, $FAIL failed"
