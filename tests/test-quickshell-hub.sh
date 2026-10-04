@@ -74,7 +74,7 @@ echo "config layout"
 check "omarchy/shell points back at the config" ".." "$(readlink "$CONFIG/omarchy/shell")"
 [[ -f "$CONFIG/omarchy/shell/shell.qml" ]] && ok "shell.qml reachable through OMARCHY_PATH" \
     || bad "shell.qml reachable through OMARCHY_PATH" "file" "missing"
-if tiles=$(jq -r '.[] | .entry' "$CONFIG/Hub/tiles.json" 2>&1); then
+if tiles=$(jq -r '.[] | select(.entry) | .entry' "$CONFIG/Hub/tiles.json" 2>&1); then
     ok "tiles.json parses"
     missing=""
     for entry in $tiles; do [[ -f "$CONFIG/$entry" ]] || missing+="$entry "; done
@@ -82,6 +82,8 @@ if tiles=$(jq -r '.[] | .entry' "$CONFIG/Hub/tiles.json" 2>&1); then
 else
     bad "tiles.json parses" "valid JSON" "$tiles"
 fi
+check "every tile is a panel or an action" "" \
+    "$(jq -r '.[] | select((.entry // .summon // .exec) == null) | .id' "$CONFIG/Hub/tiles.json")"
 check "tile ids are unique" "" "$(jq -r '.[].id' "$CONFIG/Hub/tiles.json" | sort | uniq -d)"
 for dir in plugins/panels/speedtest plugins/panels/disk-speedtest plugins/panels/wifiqr plugins/image-picker; do
     entry=$(jq -r '.entryPoints.panel // .entryPoints.overlay' "$CONFIG/$dir/manifest.json" 2>/dev/null)
@@ -96,6 +98,17 @@ for name in $(grep -rhE '"omarchy-[a-z0-9-]+"' "$CONFIG/plugins" | grep -v 'name
     [[ -x "$HELPERS/$name" ]] || uncalled+="$name "
 done
 check "every helper the panels exec is shipped" "" "$uncalled"
+
+echo "theme previews"
+stale=""
+for theme_dir in "$CONFIG"/omarchy/themes/*/; do
+    name=$(basename "$theme_dir")
+    env -i PATH="$HELPERS:/usr/bin:/bin" OMARCHY_PATH="$CONFIG/omarchy" \
+        "$HELPERS/omarchy-theme-preview" "$theme_dir" "$ROOT/preview.svg" >/dev/null 2>&1
+    cmp -s "$ROOT/preview.svg" "$theme_dir/preview.svg" || stale+="$name "
+done
+check "every committed preview matches its colors.toml (omarchy-theme-preview --all)" "" "$stale"
+check "no preview has an unresolved colour" "" "$(grep -l '="#\?"' "$CONFIG"/omarchy/themes/*/preview.svg)"
 
 echo "hub-shell"
 run "$HUB_SHELL" toggle >/dev/null

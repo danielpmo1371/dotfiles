@@ -9,5 +9,9 @@
     "settings": { "format": "HH:mm", "formatAlt": "d MMM" } },
   { "id": "omarchy.weather",   "label": "Weather",    "entry": "plugins/panels/weather/BarWidget.qml", "requires": "curl" },
   { "id": "omarchy.elsewhen",  "label": "World time", "entry": "plugins/panels/elsewhen/Panel.qml",  "requires": "" },
-  { "id": "omarchy.dropbox",   "label": "Dropbox",    "entry": "plugins/panels/dropbox/Panel.qml",   "requires": "dropbox-cli" }
+  { "id": "omarchy.dropbox",   "label": "Dropbox",    "entry": "plugins/panels/dropbox/Panel.qml",   "requires": "dropbox-cli" },
+  { "id": "hub.themes",        "label": "Themes",     "glyph": "\udb80\udfd8", "requires": "",
+    "summon": "omarchy.image-picker", "payload": { "source": "themes" } },
+  { "id": "hub.wallpapers",    "label": "Wallpapers", "glyph": "\udb80\udee9", "requires": "awww",
+    "exec": ["wall-pick"] }
 ]

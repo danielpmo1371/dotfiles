@@ -3,6 +3,8 @@ import qs.Commons
 
 // One hub tile: the panel's own bar button, scaled up, over a text label.
 // The button opens the panel; a click anywhere else on the tile does too.
+// A tile with no panel (no `entry`) is an action tile: its glyph stands in for
+// the button and a click runs the action through `activate`.
 Item {
   id: root
 
@@ -11,6 +13,10 @@ Item {
   required property string configDir
   required property real iconScale
   property var settings: ({})
+  // Called with the tile when an action tile is clicked.
+  property var activate: null
+
+  readonly property bool isPanel: !!tile.entry
 
   readonly property var widget: loader.item
   clip: true
@@ -33,7 +39,11 @@ Item {
   MouseArea {
     anchors.fill: parent
     onClicked: {
-      if (root.widget && "toggle" in root.widget) root.widget.toggle()
+      if (!root.isPanel) {
+        if (root.activate) root.activate(root.tile)
+      } else if (root.widget && "toggle" in root.widget) {
+        root.widget.toggle()
+      }
     }
   }
 
@@ -50,12 +60,22 @@ Item {
     scale: root.iconScale
     transformOrigin: Item.Top
 
+    Text {
+      visible: !root.isPanel
+      anchors.centerIn: parent
+      text: root.tile.glyph || ""
+      color: root.bar.foreground
+      font.family: root.bar.fontFamily
+      font.pixelSize: Style.bar.iconFont
+    }
+
     Loader {
       id: loader
       anchors.fill: parent
       asynchronous: false
+      active: root.isPanel
 
-      Component.onCompleted: setSource(Util.fileUrl(root.configDir + "/" + root.tile.entry), {
+      Component.onCompleted: if (root.isPanel) setSource(Util.fileUrl(root.configDir + "/" + root.tile.entry), {
         bar: root.bar,
         moduleName: root.tile.id,
         settings: root.settings

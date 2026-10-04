@@ -42,6 +42,13 @@ PanelWindow {
     return merged
   }
 
+  // Action tiles: hide the hub, then summon a plugin or run a command.
+  function runAction(tile) {
+    hide()
+    if (tile.summon) bar.shell.summon(tile.summon, JSON.stringify(tile.payload || {}))
+    else if (tile.exec) Util.execArgv(tile.exec)
+  }
+
   function show() { visible = true }
   function hide() {
     bar.closeActivePopout()
@@ -144,6 +151,7 @@ PanelWindow {
           configDir: root.configDir
           iconScale: root.tileScale
           settings: root.mergedSettings(modelData)
+          activate: root.runAction
         }
       }
     }
