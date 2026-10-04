@@ -655,6 +655,30 @@ local floatBorderSize     = 3
 local floatBorderActive   = "rgb(FF8800)"
 local floatBorderInactive = "rgb(553300)"
 
+-- Desktop theme (omarchy-theme-set, config/quickshell): once one is chosen, its
+-- generated files in the state dir override the colours above. Absent until then.
+local themeDir = os.getenv("HOME") .. "/.local/state/omarchy/current/theme/"
+local function themeFile(name)
+    local path = themeDir .. name
+    local file = io.open(path, "r")
+    if not file then return nil end
+    file:close()
+    return path
+end
+-- Themes give "#rrggbb"; the window-rule string wants rgb(rrggbb).
+local function hexToRgb(color, fallback)
+    local hex = type(color) == "string" and color:match("^#(%x%x%x%x%x%x)$")
+    return hex and ("rgb(" .. hex .. ")") or fallback
+end
+local themeHub = themeFile("hyprland-hub.lua")
+if themeHub then
+    local ok, theme = pcall(dofile, themeHub)
+    if ok and type(theme) == "table" then
+        floatBorderActive   = hexToRgb(theme.floatBorderActive, floatBorderActive)
+        floatBorderInactive = hexToRgb(theme.floatBorderInactive, floatBorderInactive)
+    end
+end
+
 hl.window_rule({
     name  = "floating-accent-border",
     match = { float = true },
@@ -662,3 +686,8 @@ hl.window_rule({
     border_size  = floatBorderSize,
     border_color = floatBorderActive .. " " .. floatBorderInactive,
 })
+
+-- Tiled and group borders from the desktop theme, last so they win over
+-- general.col above (see themeFile near the floating-border rule).
+local themeHyprland = themeFile("hyprland.lua")
+if themeHyprland then pcall(dofile, themeHyprland) end
