@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+#
+# hub-shell — run and drive the Quickshell control hub (config/quickshell).
+#
+#   hub-shell start            run the shell (Hyprland exec-once); no-op if running
+#   hub-shell restart          stop the running instance and start a new one, detached
+#   hub-shell toggle|show|hide the hub card
+#   hub-shell open <panel-id>  open the hub with one panel, e.g. omarchy.network
+#   hub-shell summon <id> [json]  summon-only panels: omarchy.speedtest,
+#                              omarchy.wifiqr, omarchy.disk-speedtest, omarchy.image-picker
+#
+# The vendored Omarchy panels find their helpers and data through OMARCHY_PATH
+# ($OMARCHY_PATH/bin, $OMARCHY_PATH/shell/plugins/...). OMARCHY_PATH is the
+# config's omarchy/ dir, whose `shell` symlink points back at the config, so
+# Omarchy's own `omarchy-shell` client reaches this instance unchanged.
+
+set -euo pipefail
+
+OMARCHY_PATH="${OMARCHY_PATH:-${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/omarchy}"
+export OMARCHY_PATH
+export PATH="$OMARCHY_PATH/bin:$PATH"
+config="$OMARCHY_PATH/shell"
+
+usage() {
+  sed -n '3,11p' "$0" | sed 's/^# \{0,1\}//'
+  exit 2
+}
+
+ipc() {
+  qs ipc -p "$config" call -- "$@"
+}
+
+[[ -f $config/shell.qml ]] || { echo "hub-shell: no shell.qml at $config" >&2; exit 1; }
+
+case "${1:-}" in
+  start)
+    exec qs --no-duplicate -p "$config"
+    ;;
+  restart)
+    qs kill -p "$config" >/dev/null 2>&1 || true
+    setsid -f qs -p "$config" >/dev/null 2>&1 </dev/null
+    ;;
+  toggle|show|hide)
+    ipc hub "$1"
+    ;;
+  open)
+    [[ -n ${2:-} ]] || usage
+    ipc hub open "$2"
+    ;;
+  summon)
+    [[ -n ${2:-} ]] || usage
+    payload=${3:-'{}'}
+    ipc shell summon "$2" "$payload"
+    ;;
+  *)
+    usage
+    ;;
+esac
