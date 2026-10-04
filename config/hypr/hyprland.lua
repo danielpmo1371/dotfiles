@@ -64,6 +64,8 @@ local browser     = "if [ -e " .. dgpuRenderNode .. " ] && command -v prime-run 
 hl.on("hyprland.start", function ()
     hl.exec_cmd("wayle panel start") -- bare `wayle` only prints help
     hl.exec_cmd("awww-daemon") -- restores the last image per output from its own cache
+    -- Control hub (config/quickshell): Omarchy's panels in a grid; SUPER+A toggles it.
+    hl.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/hub-shell start")
     -- Polkit agent: shows auth prompts (password or fingerprint via fprintd), e.g. Bitwarden "Unlock with system authentication".
     -- hyprpolkitagent, not polkit-kde-agent: the KDE one crashes (KCrash) outside Plasma.
     hl.exec_cmd("systemctl --user start hyprpolkitagent")
@@ -373,6 +375,7 @@ hl.bind(mainMod .. " + F", hl.dsp.exec_cmd(fileManager))
 hl.bind(mainMod .. " + P", hl.dsp.exec_cmd(menu))
 hl.bind(mainMod .. " + W", hl.dsp.exec_cmd(browser))
 hl.bind(mainMod .. " + SHIFT + W", hl.dsp.exec_cmd("wayle panel toggle")) -- show/hide the Wayle bar on all monitors
+hl.bind(mainMod .. " + A", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/hub-shell toggle")) -- control hub
 -- hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(browser))
 -- Cycle the focused monitor's wallpaper (awww); exec env may lack PATH, so absolute path.
 hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/wall-next next"))
@@ -612,6 +615,17 @@ hl.window_rule({
     },
 
     no_focus = true,
+})
+
+hl.window_rule({
+    -- Terminal actions started from the control hub's panels (DNS, speed
+    -- test, ...) run in a small floating window, not a tile.
+    name  = "hub-terminal-float",
+    match = { class = "^org\\.omarchy\\.terminal$" },
+
+    float = true,
+    size  = "900 600",
+    center = true,
 })
 
 -- Layer rules also return a handle.
