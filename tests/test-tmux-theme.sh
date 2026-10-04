@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Hermetic tests for the tmux theme switcher:
-#   util-scripts/tmux-theme.sh   (list / current / apply / apply-saved / --pick)
+#   util-scripts/tmux-theme.sh   (list / current / apply / apply-saved / set / --pick)
 #   config/tmux/themes/*.conf    (the themes themselves)
 #   the status-right click wiring in tmux.conf (MouseDown1Status ranges)
 #
@@ -164,6 +164,17 @@ check "apply-saved applies the saved theme" "$OTHER_PROBE" "$(t show -gv "$PROBE
 rm -f "$TMUX_THEME_STATE"
 theme apply-saved
 check "apply-saved with no state applies the default" "$DEFAULT_PROBE" "$(t show -gv "$PROBE_OPTION")"
+
+echo -e "${BLUE}set${NC}"
+
+theme set "$OTHER_THEME"
+check "set applies the theme" "$OTHER_PROBE" "$(t show -gv "$PROBE_OPTION")"
+check "set saves the theme" "$OTHER_THEME" "$(cat "$TMUX_THEME_STATE" 2>/dev/null)"
+theme set no-such-theme 2>/dev/null
+check "set of an unknown theme exits 1" "1" "$?"
+check "set of an unknown theme keeps the saved one" "$OTHER_THEME" "$(cat "$TMUX_THEME_STATE")"
+rm -f "$TMUX_THEME_STATE"
+theme apply "$DEFAULT_THEME"
 
 echo -e "${BLUE}--pick (stub fzf)${NC}"
 
