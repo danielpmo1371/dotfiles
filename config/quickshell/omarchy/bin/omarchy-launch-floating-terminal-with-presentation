@@ -1,14 +1,12 @@
 #!/bin/bash
 
-# omarchy:summary=Launch a floating terminal with the Omarchy presentation wrapper
-# omarchy:args=<command>
-
-# Export the current theme's gum styling so gum widgets match the active theme
-# even after a theme switch (the inherited environment is captured at login).
-source omarchy-restart-gum
+# Local replacement for Omarchy's presentation terminal (logo, gum styling,
+# Done/Failed prompt): runs <command> in a floating Ghostty window and holds
+# it open on the result until a key is pressed.
+# Usage: omarchy-launch-floating-terminal-with-presentation <command>
 
 cmd="$*"
-# 130 is the user bailing with Ctrl-C; anything else gets the Done/Failed prompt.
-presentation_script="omarchy-show-logo; $cmd; code=\$?; if (( code != 130 )); then omarchy-show-done \$code; fi"
+# 130 is the user bailing with Ctrl-C; anything else waits for a key.
+script="$cmd; code=\$?; if (( code != 130 )); then echo; if (( code == 0 )); then echo Done.; else echo \"Failed (exit \$code).\"; fi; read -rsn1 -p 'Press any key to close'; fi"
 
-exec setsid uwsm-app -- xdg-terminal-exec --app-id=org.omarchy.terminal --title=Omarchy -e bash -c "$presentation_script"
+exec setsid ghostty --class=org.omarchy.terminal --title=Omarchy -e bash -c "$script"

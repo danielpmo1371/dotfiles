@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# Local replacement for Omarchy's omarchy-osd: this setup has no Omarchy OSD
+# surface, so the value goes to the notification daemon (dunst) as a progress
+# notification that replaces itself instead of stacking.
+# Usage: omarchy-osd [-i icon] [-m message] [-p 0-100] [-d duration-ms]
+
+set -euo pipefail
+
+icon=""
+message=""
+progress=""
+duration="1500"
+
+while (($#)); do
+  case $1 in
+    -i|--icon) icon="${2:-}"; shift 2 ;;
+    -m|--message) message="${2:-}"; shift 2 ;;
+    -p|--progress) progress="${2:-}"; shift 2 ;;
+    -d|--duration) duration="${2:-}"; shift 2 ;;
+    *) echo "Unknown OSD option: $1" >&2; exit 1 ;;
+  esac
+done
+
+summary="${message:-${icon:-OSD}}"
+args=(-a omarchy-osd -t "$duration" -h string:x-dunst-stack-tag:omarchy-osd)
+if [[ -n $progress ]]; then
+  args+=(-h "int:value:$progress")
+  summary="${message:-${icon^} ${progress}%}"
+fi
+
+notify-send "${args[@]}" "$summary"

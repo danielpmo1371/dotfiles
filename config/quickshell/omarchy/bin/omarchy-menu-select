@@ -1,0 +1,78 @@
+#!/bin/bash
+
+# Local replacement for Omarchy's omarchy-menu-select, which summons the
+# Omarchy shell's menu plugin. Same contract on wofi --dmenu:
+#   omarchy-menu-select <prompt> [option...] [-- --width N --maxheight N]
+# Options may be "<glyph><TAB><label>[<TAB><subtext>]"; the glyph is shown but
+# never returned, a subtext comes back as "<label><TAB><subtext>". Exit 1 when
+# nothing was picked.
+
+set -euo pipefail
+
+if (( $# < 1 )); then
+  echo "Usage: omarchy-menu-select <prompt> [option...] [-- menu args...]" >&2
+  exit 1
+fi
+
+prompt="$1"
+shift
+
+options=()
+menu_width=""
+menu_height=""
+
+while (( $# > 0 )); do
+  if [[ $1 == "--" ]]; then
+    shift
+    while (( $# > 0 )); do
+      case "$1" in
+        --width) shift; menu_width="${1:-}" ;;
+        --height|--maxheight) shift; menu_height="${1:-}" ;;
+      esac
+      (( $# > 0 )) && shift
+    done
+    break
+  fi
+  options+=("$1")
+  shift
+done
+
+if (( ${#options[@]} == 0 )) && [[ ! -t 0 ]]; then
+  mapfile -t options
+fi
+
+if (( ${#options[@]} == 0 )); then
+  echo "Usage: omarchy-menu-select <prompt> [option...] [-- menu args...]" >&2
+  exit 1
+fi
+
+# One display line per option; the index maps the pick back to its value.
+display=()
+values=()
+for option in "${options[@]}"; do
+  IFS=$'\t' read -r first second third <<<"$option"
+  if [[ $option == *$'\t'* ]]; then
+    label="$second"
+    value="$second${third:+$'\t'$third}"
+    display+=("$first  $label${third:+  ($third)}")
+  else
+    value="$option"
+    display+=("$option")
+  fi
+  values+=("$value")
+done
+
+wofi_args=(--dmenu --prompt "$prompt" --insensitive)
+[[ -n $menu_width ]] && wofi_args+=(--width "$menu_width")
+[[ -n $menu_height ]] && wofi_args+=(--height "$menu_height")
+
+picked=$(printf '%s\n' "${display[@]}" | wofi "${wofi_args[@]}") || exit 1
+[[ -n $picked ]] || exit 1
+
+for i in "${!display[@]}"; do
+  if [[ ${display[$i]} == "$picked" ]]; then
+    printf '%s\n' "${values[$i]}"
+    exit 0
+  fi
+done
+exit 1
