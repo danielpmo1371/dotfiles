@@ -9,7 +9,7 @@
 
 DISPLAY_PROMPT_MARKER="true"
 if [[ -n "${TMUX:-}" && ( "${DISPLAY_PROMPT_MARKER:-}" == "true" || "${DISPLAY_PROMPT_MARKER:-}" == "1" ) ]]; then
-    PROMPT_MARKER='😎💻🧑‍💻🤖'
+    PROMPT_MARKER='📜'
 
     # Zsh uses precmd hook
     if [[ -n "$ZSH_VERSION" ]]; then
