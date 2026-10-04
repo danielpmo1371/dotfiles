@@ -64,7 +64,6 @@ local browser     = "if [ -e " .. dgpuRenderNode .. " ] && command -v prime-run 
 hl.on("hyprland.start", function ()
     hl.exec_cmd("wayle panel start") -- bare `wayle` only prints help
     hl.exec_cmd("awww-daemon") -- restores the last image per output from its own cache
-    hl.exec_cmd("hyprpm reload -n") -- loads enabled hyprpm plugins (hyprexpo); -n adds a success notification
     -- Polkit agent: shows auth prompts (password or fingerprint via fprintd), e.g. Bitwarden "Unlock with system authentication".
     -- hyprpolkitagent, not polkit-kde-agent: the KDE one crashes (KCrash) outside Plasma.
     hl.exec_cmd("systemctl --user start hyprpolkitagent")
@@ -161,6 +160,19 @@ hl.config({
         enabled = true,
     },
 })
+
+-- hyprpm plugins (hyprexpo) are loaded by `hyprpm reload`. It used to run from the
+-- hyprland.start hook, but that hook never fires when the crash watchdog has
+-- relaunched Hyprland in safe mode and "Load Config" is chosen: the user config is
+-- then parsed as a plain reload, the plugin stays unloaded and every
+-- hl.plugin.hyprexpo call fails. Running it from the top level, guarded, covers
+-- both paths: on a parse that finds the plugin missing it is loaded (-n adds a
+-- success notification), loading it re-parses the config, and that parse finds it
+-- present and stops. `hyprpm reload` is idempotent, so a parse that races the
+-- first load is harmless.
+if hl.plugin.hyprexpo == nil then
+    hl.exec_cmd("hyprpm reload -n")
+end
 
 -- Plugin keys are unknown until hyprpm loads the plugin; loading it reloads the
 -- config, which applies this block. The guard avoids the startup error bar.

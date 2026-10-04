@@ -1,5 +1,28 @@
 # Workflow State
 
+## ACTIVE: hyprexpo missing after a safe-mode relaunch (2026-10-05)
+
+### State
+- **Status**: DONE — plugin loaded live; config fixed and verified; crash root cause is upstream (Mesa/aquamarine), see Open.
+
+### Facts established
+- Report "expo failing" = `hl.plugin.hyprexpo` nil: `hyprctl plugin list` empty in the running instance (started 2026-10-04 16:31:55).
+- That instance is `Hyprland --watchdog-fd 4 --safe-mode`, relaunched by `start-hyprland` after the 16:31:13 ABRT. Safe mode parses `<instance>/recoverycfg.lua` (Jeremy.cpp), not the user config; "Load Config" in the dialog clears `m_safeMode` and calls `Config::mgr()->reload()` (Compositor.cpp). A reload never emits `hyprland.start`, so the start hook (hyprpm reload, wayle, awww, cliphist, session target) did not run. wayle/awww were started by hand at 17:08.
+- The three crashes (Oct 3 13:48, Oct 4 16:31 x2) share one stack: `CMonitorFrameScheduler::onFrame` → `CHyprGLRenderer::endRender` → `CEGLSync::create` → Mesa `dri_create_fence_fd` → abort. One crash (pid 49698) had NO plugin loaded; no hyprexpo frame in any of them. Not the plugin. Mesa 26.2.3 + aquamarine 0.15.1 arrived 2026-09-29; first crash 2026-10-03. Matches hyprwm/Hyprland#16287 (fence failure after GPU reset, aquamarine 0.14→0.15, closed not-planned) and omacom/omarchy#10612 (ENOMEM in execbuf, same stack).
+- hyprpm store is `/var/cache/hyprpm/dan/`; hyprexpo.so built 2026-09-24 against the running commit efb50993; `hyprpm reload -n` loads it cleanly.
+
+### Decisions
+- D1 (2026-10-05) hypr: `hyprpm reload -n` moved out of the `hyprland.start` hook to a top-level `if hl.plugin.hyprexpo == nil` guard, so every config parse (including the safe-mode "Load Config" reload) restores the plugin; the plugin-load reparse then finds it and stops — assumptions: `hl.exec_cmd` at top level runs on every parse (verified live: unload → `hyprctl reload` → loaded in 2 s, second reload no-op, no stray hyprpm) — undo: revert the commit.
+- D2 (2026-10-05) hypr: the rest of the start hook (wayle, awww, cliphist, hyprland-session.target) is left as is; it has the same gap after a safe-mode recovery but is out of this task's scope. Reported to Daniel as a follow-up.
+
+### Log
+- Loaded the plugin into the live instance with `hyprpm reload -n`; `plugin:hyprexpo:columns` = 3 applied.
+- Verified the fix on the real failure path: `hyprctl plugin unload …/hyprexpo.so` → `hyprctl reload config-only` → plugin back, `configerrors` empty, `pgrep hyprpm` 0.
+
+### Open
+- Crash itself: upstream. Watch for aquamarine > 0.15.1 / Hyprland 0.56.3 / Mesa 26.2.4; crash reports in `~/.cache/hyprland/`. A pre-crash Hyprland log lives only until the instance dir is reused.
+- Daniel is still on the safe-mode-relaunched instance; a normal login runs the full start hook.
+
 ## ACTIVE: Wallpaper favorites — wall-fav toggle + favorites cycling (2026-09-25)
 
 ### State
