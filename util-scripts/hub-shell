@@ -18,7 +18,10 @@ set -euo pipefail
 
 OMARCHY_PATH="${OMARCHY_PATH:-${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/omarchy}"
 export OMARCHY_PATH
-export PATH="$OMARCHY_PATH/bin:$PATH"
+# util-scripts too: the theme command calls tmux-theme.sh, and Hyprland's exec
+# environment has no shell PATH.
+UTIL_SCRIPTS="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+export PATH="$OMARCHY_PATH/bin:$UTIL_SCRIPTS:$PATH"
 config="$OMARCHY_PATH/shell"
 
 usage() {
