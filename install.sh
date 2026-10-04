@@ -170,6 +170,7 @@ CLI MODE
   ./install.sh --tmux       Install Tmux + plugins
   ./install.sh --terminals  Configure terminal emulators
   ./install.sh --hypr       Configure Hyprland compositor (Linux only)
+  ./install.sh --quickshell Configure the Quickshell control hub (auto-run by --hypr)
   ./install.sh --fonts      Install Nerd Fonts
   ./install.sh --claude     Install Claude Code CLI
   ./install.sh --mcp        Configure MCP servers
@@ -350,6 +351,10 @@ get_component_targets() {
             ;;
         hypr)
             echo "symlink:$root/config/hypr:$HOME/.config/hypr"
+            echo "symlink:$root/config/quickshell:$HOME/.config/quickshell"
+            ;;
+        quickshell)
+            echo "symlink:$root/config/quickshell:$HOME/.config/quickshell"
             ;;
         config-dirs)
             echo "symlink:$root/config/nvim:$HOME/.config/nvim"
@@ -542,6 +547,7 @@ run_dialog_installation() {
             tmux)      run_installer "tmux.sh" "install_tmux" ;;
             terminals) run_installer "terminals.sh" "install_terminals" ;;
             hypr)      run_installer "hypr.sh" "install_hypr" ;;
+            quickshell) run_installer "quickshell.sh" "install_quickshell" ;;
             fonts)     run_installer "fonts.sh" "install_fonts" ;;
             claude)
                 run_installer "claude.sh" "install_claude_code"
@@ -625,6 +631,7 @@ show_help() {
     echo "  --zsh-completions  Install custom zsh completions (auto-run by --zsh)"
     echo "  --terminals    Install terminal emulators config"
     echo "  --hypr         Install Hyprland compositor config (Linux only)"
+    echo "  --quickshell   Install the Quickshell control hub (auto-run by --hypr)"
     echo "  --fonts        Install Nerd Fonts for Powerlevel10k"
     echo "  --config-dirs  Symlink config directories"
     echo "  --claude       Install Claude Code settings"
@@ -872,6 +879,14 @@ main() {
                     log_warn "Hyprland installation failed, continuing..."
                     ((failures++))
                     failed_components+="  - hypr\n"
+                }
+                ;;
+            --quickshell)
+                # Quickshell control hub (Linux only, self-guards on macOS)
+                run_installer "quickshell.sh" "install_quickshell" || {
+                    log_warn "Quickshell installation failed, continuing..."
+                    ((failures++))
+                    failed_components+="  - quickshell\n"
                 }
                 ;;
             --config-dirs)
