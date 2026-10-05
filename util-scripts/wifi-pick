@@ -1,0 +1,227 @@
+#!/usr/bin/env bash
+# wifi-pick — pick a Wi-Fi network by name and get connected (NetworkManager).
+#
+# Lists the networks in range (connected first, then saved, then by signal),
+# and connects the pick: a saved network with its saved profile, an open one
+# directly, a WPA/WPA3 one after asking for the password. When a saved
+# profile's password no longer works (the network's changed), it asks for the
+# new one and retries. Picking the network you are on offers to disconnect.
+# With the Wi-Fi radio off it offers to turn it on first.
+#
+# The password never reaches a command line (where `ps` would show it): it is
+# handed to `nmcli connection up` through a passwd-file on a pipe, and
+# NetworkManager saves it in the profile once the connection works.
+#
+# 802.1X (enterprise) and WEP networks need more than a password; set those up
+# with nmtui.
+#
+# WIFI_PICK_FZF_OPTS adds fzf options, one per line, after wifi-pick's own, so
+# a caller can restyle the picker (tmux-wifi-popup.sh does) or override its prompt.
+#
+# Exit: 0 connected (or disconnected when asked), 1 failed, 2 usage, 130 cancelled.
+
+set -u
+
+CONNECT_SECONDS="${WIFI_PICK_CONNECT:-30}" # one activation attempt
+RESCAN="${WIFI_PICK_RESCAN:-yes}"          # nmcli --rescan: yes | auto | no
+RADIO_SETTLE_SECONDS=3                     # after turning the radio on, before scanning
+
+EXIT_FAILED=1
+EXIT_USAGE=2
+EXIT_CANCELLED=130
+
+usage() {
+    cat >&2 <<'EOF'
+usage: wifi-pick [-y] [NAME]
+  NAME   filter the list by name (picks it directly when only one matches)
+  -y     do not ask before turning the radio on or disconnecting
+env: WIFI_PICK_CONNECT (30s), WIFI_PICK_RESCAN (yes|auto|no),
+     WIFI_PICK_FZF_OPTS (extra fzf options, one per line, after wifi-pick's own)
+EOF
+    exit "$EXIT_USAGE"
+}
+
+assume_yes=0
+while getopts ":yh" opt; do
+    case "$opt" in
+        y) assume_yes=1 ;;
+        *) usage ;;
+    esac
+done
+shift $((OPTIND - 1))
+[[ $# -le 1 ]] || usage
+query="${1:-}"
+
+say()  { printf 'wifi-pick: %s\n' "$*" >&2; }
+fail() { say "$*"; exit "$EXIT_FAILED"; }
+
+command -v nmcli >/dev/null || fail "nmcli not found (install networkmanager)"
+
+# nmcli asks for missing secrets on a tty; it never gets the caller's stdin, so
+# a missing password fails instead of prompting behind the picker.
+nm() { command nmcli "$@" </dev/null; }
+
+# Terse output escapes ':' and '\' inside values.
+unescape() { local v="${1//\\\\/\\}"; printf '%s' "${v//\\:/:}"; }
+
+confirm() {
+    ((assume_yes)) && return 0
+    local answer
+    printf 'wifi-pick: %s [y/N] ' "$1" >&2
+    read -r answer
+    [[ "$answer" == [yY]* ]]
+}
+
+# Saved Wi-Fi profiles, most recently used first: one "UUID <tab> SSID" per line.
+saved_profiles() {
+    local uuid type ssid
+    nm -t -f UUID,TYPE,TIMESTAMP connection show 2>/dev/null \
+        | sort -t: -k3,3nr \
+        | while IFS=: read -r uuid type _; do
+            [[ "$type" == "802-11-wireless" ]] || continue
+            ssid=$(nm -g 802-11-wireless.ssid connection show uuid "$uuid" 2>/dev/null)
+            [[ -n "$ssid" ]] && printf '%s\t%s\n' "$uuid" "$(unescape "$ssid")"
+        done
+}
+
+saved_uuid() { awk -F'\t' -v s="$1" '$2 == s { print $1; exit }' <<<"$SAVED"; }
+
+# The networks in range, one per SSID (the strongest access point), as
+# "SSID <tab> security <tab> status <tab> label", sorted connected, saved, then
+# by signal. Hidden networks (no SSID) are left out.
+wifi_list() { nm -t -f IN-USE,SIGNAL,BARS,SECURITY,SSID device wifi list --rescan "$1" 2>/dev/null; }
+
+list_networks() {
+    local raw line inuse signal bars security ssid status rank
+    raw=$(wifi_list "$RESCAN")
+    # A rescan is refused while one runs or right after the radio comes up; use the cache then.
+    [[ -n "$raw" || "$RESCAN" == "no" ]] || raw=$(wifi_list no)
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        inuse=${line%%:*};    line=${line#*:}
+        signal=${line%%:*};   line=${line#*:}
+        bars=${line%%:*};     line=${line#*:}
+        security=${line%%:*}; ssid=$(unescape "${line#*:}")
+        [[ -n "$ssid" ]] || continue
+        [[ "$security" == "--" ]] && security=""
+        status="" rank=2
+        [[ -n "$(saved_uuid "$ssid")" ]] && { status="saved"; rank=1; }
+        [[ "$inuse" == "*" ]] && { status="connected"; rank=0; }
+        printf '%s\t%03d\t%s\t%s\t%s\t%s\t%s\n' "$rank" "$((100 - signal))" "$ssid" "$security" "$status" "$bars" "$signal"
+    done <<<"$raw" \
+        | sort -t$'\t' -k1,1n -k2,2n \
+        | awk -F'\t' '!seen[$3]++ {
+            printf "%s\t%s\t%s\t%-30s %s %3s%%  %-10s %s\n", $3, $4, $5, $3, $6, $7, ($4 == "" ? "open" : $4), $5
+        }'
+}
+
+pick() {
+    local list="$1" choice opt
+    if command -v fzf >/dev/null; then
+        # One option per line keeps spaces and escapes inside an option intact.
+        local -a extra_opts=()
+        while IFS= read -r opt; do
+            [[ -n "$opt" ]] && extra_opts+=("$opt")
+        done <<<"${WIFI_PICK_FZF_OPTS:-}"
+        choice=$(printf '%s\n' "$list" | fzf --delimiter=$'\t' --with-nth=4 \
+            --query="$query" --select-1 --exit-0 --prompt="network> " \
+            --header="Pick the network to connect" "${extra_opts[@]}")
+    else
+        local -a lines
+        mapfile -t lines < <(printf '%s\n' "$list" | grep -i -- "$query")
+        ((${#lines[@]})) || return 1
+        if ((${#lines[@]} == 1)); then
+            choice="${lines[0]}"
+        else
+            PS3="network number> "
+            select choice in "${lines[@]}"; do [[ -n "$choice" ]] && break; done
+        fi
+    fi
+    [[ -n "${choice:-}" ]] || return 1
+    printf '%s\n' "$choice"
+}
+
+ask_password() {
+    local password
+    printf 'wifi-pick: password for %s> ' "$1" >&2
+    IFS= read -r -s password
+    printf '\n' >&2
+    [[ -n "$password" ]] || return 1
+    printf '%s' "$password"
+}
+
+# connection up for <uuid>, with [password] from a passwd-file on a pipe.
+activate() {
+    local uuid="$1" password="${2:-}"
+    if [[ -n "$password" ]]; then
+        nm --wait "$CONNECT_SECONDS" connection up uuid "$uuid" \
+            passwd-file <(printf '802-11-wireless-security.psk:%s\n' "$password") >/dev/null 2>&1
+    else
+        nm --wait "$CONNECT_SECONDS" connection up uuid "$uuid" >/dev/null 2>&1
+    fi
+}
+
+active_wifi_uuid() {
+    nm -t -f UUID,TYPE connection show --active 2>/dev/null \
+        | awk -F: '$2 == "802-11-wireless" { print $1; exit }'
+}
+
+if [[ "$(nm radio wifi 2>/dev/null)" != "enabled" ]]; then
+    confirm "Wi-Fi is off; turn it on?" || { say "left Wi-Fi off"; exit "$EXIT_CANCELLED"; }
+    nm radio wifi on || fail "could not turn Wi-Fi on (rfkill? check: rfkill list wifi)"
+    sleep "$RADIO_SETTLE_SECONDS"
+fi
+
+say "scanning…"
+SAVED=$(saved_profiles)
+networks=$(list_networks)
+[[ -n "$networks" ]] || fail "no networks in range"
+
+choice=$(pick "$networks") || { say "nothing picked"; exit "$EXIT_CANCELLED"; }
+# cut, not read: a tab IFS would collapse the empty security of an open network.
+ssid=$(cut -f1 <<<"$choice")
+security=$(cut -f2 <<<"$choice")
+status=$(cut -f3 <<<"$choice")
+
+if [[ "$status" == "connected" ]]; then
+    say "already connected to $ssid"
+    confirm "disconnect from $ssid?" || exit 0
+    nm connection down uuid "$(active_wifi_uuid)" >/dev/null 2>&1 || fail "could not disconnect from $ssid"
+    say "disconnected from $ssid"
+    exit 0
+fi
+
+uuid=$(saved_uuid "$ssid")
+
+if [[ -n "$uuid" ]]; then
+    say "connecting to $ssid with its saved profile…"
+    activate "$uuid" && { say "connected to $ssid"; exit 0; }
+    [[ -n "$security" ]] || fail "$ssid did not connect; is it still in range?"
+    say "the saved password did not work; enter the current one"
+    password=$(ask_password "$ssid") || fail "no password given"
+    activate "$uuid" "$password" && { say "connected to $ssid"; exit 0; }
+    fail "$ssid did not connect; check the password"
+fi
+
+case "$security" in
+    "")
+        say "connecting to $ssid (open network)…"
+        nm --wait "$CONNECT_SECONDS" device wifi connect "$ssid" >/dev/null 2>&1 \
+            || fail "$ssid did not connect"
+        say "connected to $ssid"
+        exit 0 ;;
+    *802.1X*|*WEP*)
+        fail "$ssid uses $security, which needs more than a password; set it up with nmtui" ;;
+    WPA3)     key_mgmt="sae" ;;
+    *)        key_mgmt="wpa-psk" ;;
+esac
+
+password=$(ask_password "$ssid") || fail "no password given"
+added=$(nm connection add type wifi con-name "$ssid" ssid "$ssid" wifi-sec.key-mgmt "$key_mgmt" 2>&1) \
+    || fail "could not create a profile for $ssid: $added"
+# "Connection '<name>' (<uuid>) successfully added."
+uuid=$(sed -n 's/.*(\([0-9a-f-]\{36\}\)).*/\1/p' <<<"$added")
+[[ -n "$uuid" ]] || fail "could not read the new profile's id from: $added"
+say "connecting to $ssid…"
+activate "$uuid" "$password" && { say "connected to $ssid"; exit 0; }
+fail "$ssid did not connect; check the password (pick it again to retry)"
