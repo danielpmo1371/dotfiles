@@ -11,6 +11,7 @@
 #   tmux-theme.sh current         # saved theme (default when unset or unknown)
 #   tmux-theme.sh apply <name>    # apply a theme now (not saved)
 #   tmux-theme.sh apply-saved     # apply the saved theme (run by tmux.conf)
+#   tmux-theme.sh set <name>      # apply a theme now and save it (desktop themes)
 #   tmux-theme.sh --pick          # fzf picker: live preview on focus, Enter saves,
 #                                 #   Esc restores the saved theme (needs a tty)
 #   tmux-theme.sh --popup         # open the picker in a tmux popup (prefix + C-t)
@@ -48,7 +49,7 @@ die() { echo "tmux-theme: $*" >&2; exit 1; }
 
 usage() {
     cat >&2 <<'EOF'
-Usage: tmux-theme.sh list | current | apply <name> | apply-saved | --pick | --popup
+Usage: tmux-theme.sh list | current | apply <name> | apply-saved | set <name> | --pick | --popup
 EOF
 }
 
@@ -143,6 +144,8 @@ case "${1:-}" in
     current)     current_theme ;;
     apply)       [ -n "${2:-}" ] || die "usage: tmux-theme.sh apply <name>"; apply_theme "$2" ;;
     apply-saved) restore_saved ;;
+    set)         [ -n "${2:-}" ] || die "usage: tmux-theme.sh set <name>"
+                 save_theme "$2"; apply_theme "$2" ;;
     --pick)      pick_theme ;;
     --popup)     tmux display-popup -E -w "$POPUP_WIDTH" -h "$POPUP_HEIGHT" -T "$POPUP_TITLE" \
                      "$(printf %q "$SCRIPT_PATH") --pick" ;;

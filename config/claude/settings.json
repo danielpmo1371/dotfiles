@@ -1,5 +1,4 @@
 {
-  "tui": "default",
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
@@ -20,14 +19,25 @@
       "Bash(which:*)",
       "Bash(whoami:*)",
       "Bash(jq:*)",
-      "Bash(ttalk:*)"
+      "Bash(ttalk:*)",
+      "mcp__azure-devops__pipelines_write",
+      "mcp__azure-devops__pipelines_build",
+      "mcp__azure-devops__pipelines_run",
+      "mcp__azure-devops__pipelines_build_log"
     ],
-    "deny": [],
-    "defaultMode": "acceptEdits",
-    "additionalDirectories": [],
-    "autoApprove": [
-      "git"
-    ]
+    "deny": [
+      "Bash(az * delete*)",
+      "Bash(kubectl delete*)",
+      "Bash(helm uninstall*)",
+      "Bash(helm delete*)",
+      "Bash(terraform destroy*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git push * --force)",
+      "Bash(git push * -f)"
+    ],
+    "defaultMode": "auto",
+    "additionalDirectories": []
   },
   "model": "opus[1m]",
   "hooks": {
@@ -191,15 +201,21 @@
     "cicd-automation@claude-code-workflows": true,
     "cloud-infrastructure@claude-code-workflows": true
   },
+  "feedbackDrafts": "off",
   "alwaysThinkingEnabled": true,
+  "askUserQuestionTimeout": "5m",
+  "dialogExpiry": "5m",
   "autoUpdatesChannel": "latest",
+  "tui": "default",
   "voice": {
     "enabled": true,
     "mode": "hold"
   },
   "skipDangerousModePermissionPrompt": true,
+  "editorMode": "vim",
   "remoteControlAtStartup": true,
   "inputNeededNotifEnabled": true,
   "agentPushNotifEnabled": true,
-  "voiceEnabled": true
+  "voiceEnabled": true,
+  "crossSessionInbound": "hold"
 }

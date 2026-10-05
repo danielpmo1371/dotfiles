@@ -51,10 +51,10 @@ else
 
     # --- Tmux: restore appearance ---
     tmux set-option -g status on
-    tmux set-option -g pane-border-status top
-    tmux set-option -g pane-border-lines double
-    tmux set-option -g pane-border-format \
-        " #[bold]#{pane_index}#[nobold] #{pane_current_path} | #{pane_title} "
+    # Divider shape back to tmux defaults (tmux.conf leaves them unset)
+    tmux set-option -gu pane-border-status
+    tmux set-option -gu pane-border-lines
+    tmux set-option -gu pane-border-format
     # Border colours come from the active theme (config/tmux/themes)
     "$(dirname "$0")/tmux-theme.sh" apply-saved
     tmux set-option -g window-style "default"

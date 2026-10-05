@@ -85,8 +85,17 @@ update_settings() {
   local hooks_path="\$HOME/.claude/hooks/logging"
 
   # Add logging hooks if not already present
+  #
+  # Dedupe is by .command and keeps the FIRST occurrence, same as
+  # memory-hooks.sh. `unique_by` is deliberately avoided because it sorts,
+  # and hook execution order must stay stable across installs.
   local updated
   updated=$(jq '
+    def dedupe_by_command:
+      reduce .[] as $h ([];
+        if any(.[]; .command == $h.command) then . else . + [$h] end
+      );
+
     # Add UserPromptSubmit hooks if not present
     if .hooks.UserPromptSubmit == null then
       .hooks.UserPromptSubmit = [
@@ -130,7 +139,7 @@ update_settings() {
           "command": "'"$hooks_path"'/session-goal-tracker.sh",
           "timeout": 5
         }
-      ] | .hooks.SessionStart[0].hooks |= unique_by(.command)
+      ] | .hooks.SessionStart[0].hooks |= dedupe_by_command
     else
       .hooks.SessionStart = [
         {
@@ -153,7 +162,7 @@ update_settings() {
           "command": "'"$hooks_path"'/session-goal-tracker.sh",
           "timeout": 5
         }
-      ] | .hooks.SessionEnd[0].hooks |= unique_by(.command)
+      ] | .hooks.SessionEnd[0].hooks |= dedupe_by_command
     else
       .hooks.SessionEnd = [
         {

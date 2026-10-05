@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Secrets management installer
-# Installs nuvemlabs/secrets library and sets up native OS secret store
+# Installs the nuvemlabs/secrets library and secrets-bridge, and sets up the native OS secret store
 # (macOS Keychain / Linux libsecret)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,9 +12,53 @@ source "$DOTFILES_ROOT/lib/install-packages.sh"
 
 SECRETS_INSTALL_DIR="${HOME}/.local/lib/secrets"
 
-# TODO: Update to GitHub URL when nuvemlabs/secrets is published
-# SECRETS_REPO="https://github.com/nuvemlabs/secrets.git"
+SECRETS_REPO_URL="https://github.com/nuvemlabs/secrets.git"
 SECRETS_LOCAL_REPO="${HOME}/repos/secrets"
+SECRETS_BRIDGE_REPO_URL="https://github.com/nuvemlabs/secrets-bridge.git"
+SECRETS_BRIDGE_LOCAL_REPO="${HOME}/repos/secrets-bridge"
+# Package prefixes checked for an AUR / Homebrew install
+SECRETS_PACKAGE_PREFIXES=(/usr "${HOMEBREW_PREFIX:-/opt/homebrew}" /usr/local)
+
+# Clone <url> into <dir> unless a checkout with an install.sh is already there.
+# The clone stays in ~/repos as the working copy later installs update from.
+_secrets_ensure_clone() {
+    local url="$1" dir="$2"
+    [[ -f "$dir/install.sh" ]] && return 0
+    if ! command -v git &>/dev/null; then
+        log_error "git not found: cannot clone $url"
+        return 1
+    fi
+    if [[ -e "$dir" ]]; then
+        log_error "$dir exists but has no install.sh; not touching it"
+        return 1
+    fi
+    log_info "Cloning $url into $dir"
+    mkdir -p "$(dirname "$dir")"
+    git clone --quiet "$url" "$dir"
+}
+
+# secrets-bridge: fetches cloud and wallet secrets into .env, Postman and
+# Bruno files on top of the secrets library. Optional: a failure warns.
+install_secrets_bridge() {
+    local prefix
+    if [[ -x "$HOME/.local/bin/secrets-bridge" ]]; then
+        log_success "secrets-bridge already installed at $HOME/.local/lib/secrets-bridge"
+        return 0
+    fi
+    for prefix in "${SECRETS_PACKAGE_PREFIXES[@]}"; do
+        if [[ -x "$prefix/bin/secrets-bridge" ]]; then
+            log_success "secrets-bridge installed by a package at $prefix"
+            return 0
+        fi
+    done
+    command -v python3 &>/dev/null || log_warn "secrets-bridge needs python3 at runtime"
+    if _secrets_ensure_clone "$SECRETS_BRIDGE_REPO_URL" "$SECRETS_BRIDGE_LOCAL_REPO" &&
+       bash "$SECRETS_BRIDGE_LOCAL_REPO/install.sh"; then
+        log_success "Installed secrets-bridge from $SECRETS_BRIDGE_LOCAL_REPO"
+    else
+        log_warn "secrets-bridge not installed (optional); see $SECRETS_BRIDGE_REPO_URL"
+    fi
+}
 
 install_secrets() {
     log_header "Secrets Management"
@@ -41,29 +85,33 @@ install_secrets() {
     # ── Install nuvemlabs/secrets library + CLI tools ───────────────────────
     # Library AND doctor must both be present, or (re)run the installer —
     # machines that installed before the CLI tools existed pick them up here.
+    # A package (AUR, Homebrew) installs both into one prefix and owns
+    # upgrades, so it counts as installed; config/shell/secrets.sh finds it.
+    local pkg_prefix packaged_prefix=""
+    for pkg_prefix in "${SECRETS_PACKAGE_PREFIXES[@]}"; do
+        if [[ -f "$pkg_prefix/lib/secrets/secrets.sh" && -x "$pkg_prefix/bin/secrets-doctor" ]]; then
+            packaged_prefix="$pkg_prefix"
+            break
+        fi
+    done
+
     if [[ -f "$SECRETS_INSTALL_DIR/secrets.sh" && -x "$HOME/.local/bin/secrets-doctor" ]]; then
         log_success "nuvemlabs/secrets already installed at $SECRETS_INSTALL_DIR"
+    elif [[ -n "$packaged_prefix" ]]; then
+        log_success "nuvemlabs/secrets installed by a package at $packaged_prefix/lib/secrets"
     else
         log_info "Installing nuvemlabs/secrets library..."
 
-        if [[ -f "$SECRETS_LOCAL_REPO/install.sh" ]]; then
-            # Install from local clone
-            SECRETS_INSTALL_DIR="$SECRETS_INSTALL_DIR" bash "$SECRETS_LOCAL_REPO/install.sh"
-            log_success "Installed nuvemlabs/secrets from local repo"
-        # TODO: Uncomment when nuvemlabs/secrets is published to GitHub
-        # elif command -v git &>/dev/null; then
-        #     local tmpdir
-        #     tmpdir=$(mktemp -d)
-        #     git clone --depth 1 "$SECRETS_REPO" "$tmpdir" && \
-        #         SECRETS_INSTALL_DIR="$SECRETS_INSTALL_DIR" bash "$tmpdir/install.sh"
-        #     rm -rf "$tmpdir"
-        #     log_success "Installed nuvemlabs/secrets from GitHub"
+        if _secrets_ensure_clone "$SECRETS_REPO_URL" "$SECRETS_LOCAL_REPO" &&
+           SECRETS_INSTALL_DIR="$SECRETS_INSTALL_DIR" bash "$SECRETS_LOCAL_REPO/install.sh"; then
+            log_success "Installed nuvemlabs/secrets from $SECRETS_LOCAL_REPO"
         else
-            log_error "Cannot install nuvemlabs/secrets: local repo not found at $SECRETS_LOCAL_REPO"
-            log_info "Clone it first: git clone https://github.com/nuvemlabs/secrets.git $SECRETS_LOCAL_REPO"
+            log_error "Cannot install nuvemlabs/secrets (clone $SECRETS_REPO_URL into $SECRETS_LOCAL_REPO, or: brew install nuvemlabs/tap/secrets)"
             return 1
         fi
     fi
+
+    install_secrets_bridge
 
     # ── Migration check ─────────────────────────────────────────────────────
     if [[ -f "$HOME/.accessTokens" ]]; then

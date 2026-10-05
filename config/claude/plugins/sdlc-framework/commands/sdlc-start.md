@@ -6,7 +6,7 @@ arguments:
     description: "Work item ID, reference (US#12345), or Azure DevOps URL"
     required: true
   - name: mode
-    description: "Workflow mode: autonomous or guided (default: ask user)"
+    description: "Workflow mode: autonomous or guided (default: autonomous)"
     required: false
 ---
 
@@ -25,15 +25,9 @@ Store the extracted ID as `WORK_ITEM_ID`.
 
 ### Step 2: Choose Workflow Mode
 
-Check if `mode` argument was provided:
-- If `autonomous` → set `WORKFLOW_MODE=autonomous`
-- If `guided` → set `WORKFLOW_MODE=guided`
-- If not provided, ask the user:
-
-Use AskUserQuestion:
-- **Question:** "Which workflow mode should the SDLC framework use?"
-- **Option 1:** "Autonomous (Recommended)" — Team Lead advances phases automatically, stops only on critical decisions or ambiguity
-- **Option 2:** "Guided" — Team Lead pauses at every phase boundary for your review and approval
+Never ask. Resolve the mode from the input:
+- `mode` argument `guided`, or the user's prompt says "interactive", "ask me" or "step by step" → set `WORKFLOW_MODE=guided` (Team Lead pauses at every phase boundary for review and approval)
+- Otherwise → set `WORKFLOW_MODE=autonomous` (Team Lead advances phases automatically, stops only on critical decisions or ambiguity)
 
 ### Step 3: Check for Existing Workflow
 
@@ -67,7 +61,7 @@ If not found:
 
 ### Step 5: Spawn Team Lead
 
-Use the Task tool to spawn the `sdlc-team-lead` agent (subagent_type from the plugin's agents) with the following context:
+Use the Agent tool to spawn the `sdlc-team-lead` agent (subagent_type from the plugin's agents) with the following context:
 
 ```
 SDLC Workflow Initialization

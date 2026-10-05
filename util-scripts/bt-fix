@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+# bt-fix — pick a Bluetooth device by name and get it connected.
+#
+# A plain "connect" (bluetoothctl, or the bar's Bluetooth menu) reuses the
+# saved pairing. When either side has forgotten it, the connect just times
+# out. bt-fix tries the saved pairing first and, only if that fails, makes a
+# fresh one: put the device in pairing mode, remove the stale pairing (asked
+# first), then pair, trust and connect.
+#
+# A device in pairing mode may come back on a new address (Logitech mice move
+# to a new one per Easy-Switch channel). If the old address stays silent but
+# another unpaired device with the same name shows up, bt-fix pairs that one
+# and leaves the old entry alone.
+#
+# BT_FIX_FZF_OPTS adds fzf options, one per line, after bt-fix's own, so a
+# caller can restyle the picker (tmux-bt-popup.sh does) or override its prompt.
+#
+# Exit: 0 connected, 1 failed, 2 usage, 130 cancelled.
+
+set -u
+
+SCAN_SECONDS="${BT_FIX_SCAN:-8}"        # discovery before showing the list
+CONNECT_SECONDS="${BT_FIX_CONNECT:-15}" # one connect attempt
+PAIRING_WAIT="${BT_FIX_WAIT:-60}"       # how long to wait for pairing mode
+POLL_SECONDS="${BT_FIX_POLL:-2}"
+
+usage() {
+    cat >&2 <<'EOF'
+usage: bt-fix [-a] [-y] [NAME]
+  NAME   filter the list by name (picks it directly when only one matches)
+  -a     also list devices that only show an address, no name
+  -y     do not ask before removing a stale pairing
+env: BT_FIX_SCAN (8s), BT_FIX_CONNECT (15s), BT_FIX_WAIT (60s),
+     BT_FIX_FZF_OPTS (extra fzf options, one per line, after bt-fix's own)
+EOF
+    exit 2
+}
+
+show_unnamed=0 assume_yes=0
+while getopts ":ayh" opt; do
+    case "$opt" in
+        a) show_unnamed=1 ;;
+        y) assume_yes=1 ;;
+        *) usage ;;
+    esac
+done
+shift $((OPTIND - 1))
+[[ $# -le 1 ]] || usage
+query="${1:-}"
+
+say()  { printf 'bt-fix: %s\n' "$*" >&2; }
+fail() { say "$*"; exit 1; }
+
+command -v bluetoothctl >/dev/null || fail "bluetoothctl not found (install bluez-utils)"
+
+# bluetoothctl reads stdin; inside a `while read` loop it would swallow the
+# loop's input and hang, so it never gets the caller's stdin.
+bt() { command bluetoothctl "$@" </dev/null; }
+
+# bluetoothctl colours some lines even when piped.
+strip_ansi() { sed 's/\x1b\[[0-9;]*m//g'; }
+
+info()      { bt info "$1" 2>/dev/null | strip_ansi; }
+field()     { info "$1" | sed -n "s/^[[:space:]]*$2: //p" | head -n1; }
+is_yes()    { [[ "$(field "$1" "$2")" == "yes" ]]; }
+in_range()  { info "$1" | grep -q '^[[:space:]]*RSSI:'; }
+name_of()   { bt devices 2>/dev/null | strip_ansi | awk -v m="$1" '$2 == m { $1 = ""; $2 = ""; sub(/^  /, ""); print; exit }'; }
+
+scan() { bt --timeout "$1" scan on >/dev/null 2>&1; }
+
+# One line per device: NAME <tab> MAC <tab> status.
+list_devices() {
+    local mac name status rank
+    bt devices 2>/dev/null | strip_ansi | while read -r _ mac name; do
+        [[ -n "$mac" ]] || continue
+        # Unnamed devices are listed under their address with dashes.
+        if [[ -z "$name" || "$name" == "${mac//:/-}" ]]; then
+            ((show_unnamed)) || continue
+            name="(no name)"
+        fi
+        # Rank: connected, then nearby, then the rest; alphabetical within.
+        status="" rank=2
+        is_yes "$mac" Connected && { status+="connected "; rank=0; }
+        is_yes "$mac" Paired    && status+="paired "
+        in_range "$mac"         && { status+="nearby"; ((rank > 1)) && rank=1; }
+        printf '%s\t%s\t%s\t%s\n' "$rank" "$name" "$mac" "${status:-not seen}"
+    done | sort -t$'\t' -k1,1n -k2,2f | cut -f2-
+}
+
+pick() {
+    local list="$1" choice opt
+    if command -v fzf >/dev/null; then
+        # One option per line keeps spaces and escapes inside an option intact.
+        local -a extra_opts=()
+        while IFS= read -r opt; do
+            [[ -n "$opt" ]] && extra_opts+=("$opt")
+        done <<<"${BT_FIX_FZF_OPTS:-}"
+        choice=$(printf '%s\n' "$list" | fzf --delimiter=$'\t' --with-nth=1,3 \
+            --query="$query" --select-1 --exit-0 --prompt="device> " \
+            --header="Pick the device to fix" "${extra_opts[@]}")
+    else
+        local -a lines
+        mapfile -t lines < <(printf '%s\n' "$list" | grep -i -- "$query")
+        ((${#lines[@]})) || return 1
+        if ((${#lines[@]} == 1)); then
+            choice="${lines[0]}"
+        else
+            PS3="device number> "
+            select choice in "${lines[@]}"; do [[ -n "$choice" ]] && break; done
+        fi
+    fi
+    [[ -n "${choice:-}" ]] || return 1
+    printf '%s\n' "$choice" | cut -f2
+}
+
+try_connect() {
+    timeout "$CONNECT_SECONDS" bluetoothctl connect "$1" </dev/null >/dev/null 2>&1
+    is_yes "$1" Connected
+}
+
+confirm() {
+    ((assume_yes)) && return 0
+    local answer
+    printf 'bt-fix: %s [y/N] ' "$1" >&2
+    read -r answer
+    [[ "$answer" == [yY]* ]]
+}
+
+# Waits for pairing mode: the address itself advertising, or an unpaired
+# twin with the same name (new address). Prints the address to pair.
+wait_for_pairing_mode() {
+    local mac="$1" name="$2" waited=0 twin
+    while ((waited < PAIRING_WAIT)); do
+        scan "$POLL_SECONDS"
+        waited=$((waited + POLL_SECONDS))
+        twin=$(bt devices 2>/dev/null | strip_ansi | while read -r _ m n; do
+            [[ "$m" != "$mac" && "$n" == "$name" ]] || continue
+            is_yes "$m" Paired && continue
+            in_range "$m" && { echo "$m"; break; }
+        done)
+        if [[ -n "$twin" ]]; then
+            say "$name came back on a new address ($twin); pairing that one"
+            echo "$twin"; return 0
+        fi
+        in_range "$mac" && { echo "$mac"; return 0; }
+    done
+    return 1
+}
+
+say "scanning for ${SCAN_SECONDS}s…"
+scan "$SCAN_SECONDS"
+devices=$(list_devices)
+[[ -n "$devices" ]] || fail "no devices found (try -a, or put the device in pairing mode)"
+
+mac=$(pick "$devices") || { say "nothing picked"; exit 130; }
+name=$(name_of "$mac")
+name="${name:-$mac}"
+
+if is_yes "$mac" Connected; then
+    say "$name ($mac) is already connected"
+    exit 0
+fi
+
+if is_yes "$mac" Paired; then
+    say "connecting to $name using the saved pairing…"
+    if try_connect "$mac"; then
+        say "$name connected"
+        exit 0
+    fi
+    say "the saved pairing did not work; it needs a fresh one"
+fi
+
+say "put $name in pairing mode now (waiting up to ${PAIRING_WAIT}s)"
+target=$(wait_for_pairing_mode "$mac" "$name") \
+    || fail "$name never showed up in pairing mode; check it is on, charged and not connected to another device"
+
+if [[ "$target" == "$mac" ]] && is_yes "$mac" Paired; then
+    confirm "remove the saved pairing for $name ($mac) and pair again?" \
+        || { say "left the saved pairing in place"; exit 130; }
+    bt remove "$mac" >/dev/null 2>&1 || fail "could not remove the saved pairing for $mac"
+    # remove forgets the device; wait for it to be seen again.
+    target=$(wait_for_pairing_mode "$mac" "$name") || fail "$name disappeared after removing its pairing"
+fi
+
+say "pairing $name ($target)…"
+timeout 30 bluetoothctl pair "$target" </dev/null >/dev/null 2>&1
+is_yes "$target" Paired || fail "pairing $name failed; is it still in pairing mode?"
+bt trust "$target" >/dev/null 2>&1 || say "warning: could not mark $name trusted; it may not reconnect by itself"
+try_connect "$target" || fail "$name is paired but did not connect; run bt-fix again"
+say "$name connected ($target)"

@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# Local replacement for Omarchy's speaker tuning: this setup ships no tuning
+# filter, so there is never a fronted sink. Callers treat exit 1 as
+# "no tuning in place".
+exit 1

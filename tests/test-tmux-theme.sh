@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
 # Hermetic tests for the tmux theme switcher:
-#   util-scripts/tmux-theme.sh   (list / current / apply / apply-saved / --pick)
+#   util-scripts/tmux-theme.sh   (list / current / apply / apply-saved / set / --pick)
 #   config/tmux/themes/*.conf    (the themes themselves)
+#   the status-right click wiring in tmux.conf (MouseDown1Status ranges)
 #
 # Why this exists: themes replace each other by sourcing a file, so every theme
 # must set the same options or the previous one leaks through. And every
@@ -30,6 +31,8 @@ DEFAULT_THEME="gruvbox-dark"
 OTHER_THEME="nord"
 PROBE_OPTION="status-style"
 CONTINUUM_MARKER="continuum_save.sh"
+# Nerd Font Bluetooth (nf-md-bluetooth, U+F00AF) as UTF-8 bytes; $'\U...' needs bash 4.2+
+BLUETOOTH_GLYPH=$'\xf3\xb0\x82\xaf'
 
 PASS=0
 FAIL=0
@@ -102,6 +105,18 @@ for f in "${THEME_FILES[@]}"; do
         *"$CONTINUUM_MARKER"*) pass "$name status-right keeps $CONTINUUM_MARKER" ;;
         *) fail "$name status-right lost $CONTINUUM_MARKER" ;;
     esac
+    case "$(t show -gv status-right)" in
+        *"range=user|datetime"*"%d/%m %a %H:%M"*) pass "$name status-right shows date and 24h time" ;;
+        *) fail "$name status-right lost the date/time segment" ;;
+    esac
+    case "$(t show -gv status-right)" in
+        *"range=user|power"*"tmux-weather.sh"*"tmux-battery.sh"*) pass "$name status-right toggles battery and weather" ;;
+        *) fail "$name status-right lost the battery/weather toggle" ;;
+    esac
+    case "$(t show -gv status-right)" in
+        *"range=user|bluetooth] $BLUETOOTH_GLYPH "*"range=user|datetime"*) pass "$name status-right has the Bluetooth segment before the date/time" ;;
+        *) fail "$name status-right lacks the Bluetooth segment before the date/time" ;;
+    esac
 done
 
 echo -e "${BLUE}list / current${NC}"
@@ -150,6 +165,17 @@ rm -f "$TMUX_THEME_STATE"
 theme apply-saved
 check "apply-saved with no state applies the default" "$DEFAULT_PROBE" "$(t show -gv "$PROBE_OPTION")"
 
+echo -e "${BLUE}set${NC}"
+
+theme set "$OTHER_THEME"
+check "set applies the theme" "$OTHER_PROBE" "$(t show -gv "$PROBE_OPTION")"
+check "set saves the theme" "$OTHER_THEME" "$(cat "$TMUX_THEME_STATE" 2>/dev/null)"
+theme set no-such-theme 2>/dev/null
+check "set of an unknown theme exits 1" "1" "$?"
+check "set of an unknown theme keeps the saved one" "$OTHER_THEME" "$(cat "$TMUX_THEME_STATE")"
+rm -f "$TMUX_THEME_STATE"
+theme apply "$DEFAULT_THEME"
+
 echo -e "${BLUE}--pick (stub fzf)${NC}"
 
 # Stub fzf: records its stdin and the --bind it got, then behaves as
@@ -195,6 +221,10 @@ theme_line="$(grep -n '^run-shell .*tmux-theme\.sh apply-saved' "$TMUX_CONF" | c
     && pass "apply-saved runs after TPM" || fail "apply-saved must come after the TPM run line"
 grep -q '^set -g status-right' "$TMUX_CONF" && fail "tmux.conf still sets a status-right of its own" \
     || pass "status-right is left to the themes"
+grep -q "mouse_status_range},bluetooth}" "$TMUX_CONF" \
+    && grep -q "run-shell -b '.*tmux-bt-popup\.sh --popup #{q:client_name}'" "$TMUX_CONF" \
+    && pass "a click on the bluetooth range opens tmux-bt-popup.sh on the clicking client" \
+    || fail "MouseDown1Status does not open tmux-bt-popup.sh for the bluetooth range"
 
 echo
 echo "Results: $PASS passed, $FAIL failed"

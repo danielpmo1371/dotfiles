@@ -19,6 +19,14 @@ hl.monitor({
     scale    = "auto",
 })
 
+-- Per-setup layouts are made in the monique GUI, which writes monitors.lua
+-- next to this file; its daemon (moniqued) re-applies them on hotplug. The
+-- rule above stays as the fallback. A machine without monique has no
+-- monitors.lua, so only a missing module is tolerated, not errors inside it.
+local monitorsLoaded, monitorsErr = pcall(require, "monitors")
+if not monitorsLoaded and not tostring(monitorsErr):find("module 'monitors' not found", 1, true) then
+    error(monitorsErr)
+end
 
 ---------------------
 ---- MY PROGRAMS ----
@@ -26,9 +34,17 @@ hl.monitor({
 
 -- Set programs that you use
 local terminal    = "ghostty"
+local terminal_secondary    = "kitty"
 local fileManager = "dolphin"
 local menu        = "wofi --show drun"
-local browser     = "brave"
+-- Brave renders on the NVIDIA dGPU when present: on Wayland prime-run alone is
+-- not enough, Chromium picks the iGPU unless told which render node to use.
+-- The by-path name is stable across boots (renderD12x numbering is not), but
+-- Chromium ignores a symlink here, so it is resolved at launch.
+local dgpuRenderNode = "/dev/dri/by-path/pci-0000:01:00.0-render"
+local browser     = "if [ -e " .. dgpuRenderNode .. " ] && command -v prime-run >/dev/null; then "
+                 .. "exec prime-run brave --render-node-override=\"$(readlink -f " .. dgpuRenderNode .. ")\"; "
+                 .. "else exec brave; fi"
 
 
 -------------------
@@ -48,7 +64,8 @@ local browser     = "brave"
 hl.on("hyprland.start", function ()
     hl.exec_cmd("wayle panel start") -- bare `wayle` only prints help
     hl.exec_cmd("awww-daemon") -- restores the last image per output from its own cache
-    hl.exec_cmd("hyprpm reload -n") -- loads enabled hyprpm plugins (hyprexpo); -n adds a success notification
+    -- Control hub (config/quickshell): Omarchy's panels in a grid; SUPER+A toggles it.
+    hl.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/hub-shell start")
     -- Polkit agent: shows auth prompts (password or fingerprint via fprintd), e.g. Bitwarden "Unlock with system authentication".
     -- hyprpolkitagent, not polkit-kde-agent: the KDE one crashes (KCrash) outside Plasma.
     hl.exec_cmd("systemctl --user start hyprpolkitagent")
@@ -146,18 +163,39 @@ hl.config({
     },
 })
 
+-- hyprpm plugins (hyprexpo) are loaded by `hyprpm reload`. It used to run from the
+-- hyprland.start hook, but that hook never fires when the crash watchdog has
+-- relaunched Hyprland in safe mode and "Load Config" is chosen: the user config is
+-- then parsed as a plain reload, the plugin stays unloaded and every
+-- hl.plugin.hyprexpo call fails. Running it from the top level, guarded, covers
+-- both paths: on a parse that finds the plugin missing it is loaded (-n adds a
+-- success notification), loading it re-parses the config, and that parse finds it
+-- present and stops. `hyprpm reload` is idempotent, so a parse that races the
+-- first load is harmless.
+if hl.plugin.hyprexpo == nil then
+    hl.exec_cmd("hyprpm reload -n")
+end
+
 -- Plugin keys are unknown until hyprpm loads the plugin; loading it reloads the
 -- config, which applies this block. The guard avoids the startup error bar.
+-- Shared with the 4-finger grid gestures, which move a whole row at a time.
+local expo_columns = 3
+
 if hl.plugin.hyprexpo ~= nil then
     hl.config({
         plugin = {
           hyprexpo = {
-            columns          = 3,
+            columns          = expo_columns,
             rows             = 2,
             gaps_in          = 5,
             gaps_out         = 0,
             workspace_method = "center current",
             fill_gaps        = 0,
+            -- 3-finger swipe up opens the overview, tracking the fingers like
+            -- Mission Control (the plugin's own gesture; 0 disables it).
+            -- 4 fingers are taken by the grid swipes below.
+            gesture_fingers   = 3,
+            gesture_direction = "up",
           },
         },
     })
@@ -273,11 +311,33 @@ hl.config({
     },
 })
 
-hl.gesture({
-    fingers = 4,
-    direction = "horizontal",
-    action = "workspace"
-})
+-- 4-finger swipes walk the hyprexpo grid: inside the overview they move the
+-- selection (hyprexpo has no swipe navigation of its own, and the plugin sits
+-- in its `hyprexpo` submap while open); outside it they switch workspace by
+-- one cell (left/right) or one grid row (up/down). Directional gestures can't
+-- coexist with an axis `workspace` gesture on the same finger count, so this
+-- replaces the live-dragging workspace swipe.
+local function expo_swipe(focus, workspace)
+    return function()
+        if hl.get_current_submap() == "hyprexpo" then
+            hl.plugin.hyprexpo.kb_focus(focus)
+        else
+            hl.dispatch(hl.dsp.focus({ workspace = workspace }))
+        end
+    end
+end
+
+-- Both are inverted like natural scrolling: the grid moves with the fingers,
+-- so swiping left brings in the next workspace, or selects the cell to the
+-- right inside the overview.
+for _, swipe in ipairs({
+    { dir = "left",  focus = "right", workspace = "+1" },
+    { dir = "right", focus = "left",  workspace = "-1" },
+    { dir = "up",    focus = "down",  workspace = "+" .. expo_columns },
+    { dir = "down",  focus = "up",    workspace = "-" .. expo_columns },
+}) do
+    hl.gesture({ fingers = 4, direction = swipe.dir, action = expo_swipe(swipe.focus, swipe.workspace) })
+end
 
 -- Example per-device config
 -- See https://wiki.hypr.land/Configuring/Advanced-and-Cool/Devices/ for more
@@ -306,6 +366,8 @@ local mainMod = "SUPER" -- Sets "Windows" key as main modifier
 
 -- Example binds, see https://wiki.hypr.land/Configuring/Basics/Binds/ for more
 hl.bind(mainMod .. " + Q", hl.dsp.exec_cmd(terminal))
+hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(terminal_secondary))
+
 local closeWindowBind = hl.bind(mainMod .. " + C", hl.dsp.window.close())
 -- closeWindowBind:set_enabled(false)
 hl.bind(mainMod .. " + M", hl.dsp.exit())
@@ -313,6 +375,7 @@ hl.bind(mainMod .. " + F", hl.dsp.exec_cmd(fileManager))
 hl.bind(mainMod .. " + P", hl.dsp.exec_cmd(menu))
 hl.bind(mainMod .. " + W", hl.dsp.exec_cmd(browser))
 hl.bind(mainMod .. " + SHIFT + W", hl.dsp.exec_cmd("wayle panel toggle")) -- show/hide the Wayle bar on all monitors
+hl.bind(mainMod .. " + A", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/hub-shell toggle")) -- control hub
 -- hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(browser))
 -- Cycle the focused monitor's wallpaper (awww); exec env may lack PATH, so absolute path.
 hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/wall-next next"))
@@ -324,6 +387,9 @@ hl.bind(mainMod .. " + CTRL + SHIFT + N", hl.dsp.exec_cmd(os.getenv("HOME") .. "
 hl.bind(mainMod .. " + CTRL + SHIFT + B", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/wall-next --favorites prev"))
 -- Clipboard history picker (cliphist + wofi); SUPER+V is the float toggle.
 hl.bind(mainMod .. " + SHIFT + V", hl.dsp.exec_cmd(os.getenv("HOME") .. "/repos/dotfiles/util-scripts/clip-pick"))
+-- Monitor layout editor (monique, writes monitors.lua). D for displays: SHIFT+M
+-- would sit one key away from SUPER+M, which exits Hyprland.
+hl.bind(mainMod .. " + SHIFT + D", hl.dsp.exec_cmd("monique"))
 hl.bind(mainMod .. " + space", function()
     hl.plugin.hyprexpo.expo("toggle")
 end)
@@ -551,6 +617,17 @@ hl.window_rule({
     no_focus = true,
 })
 
+hl.window_rule({
+    -- Terminal actions started from the control hub's panels (DNS, speed
+    -- test, ...) run in a small floating window, not a tile.
+    name  = "hub-terminal-float",
+    match = { class = "^org\\.omarchy\\.terminal$" },
+
+    float = true,
+    size  = "900 600",
+    center = true,
+})
+
 -- Layer rules also return a handle.
 -- local overlayLayerRule = hl.layer_rule({
 --     name  = "no-anim-overlay",
@@ -578,6 +655,30 @@ local floatBorderSize     = 3
 local floatBorderActive   = "rgb(FF8800)"
 local floatBorderInactive = "rgb(553300)"
 
+-- Desktop theme (omarchy-theme-set, config/quickshell): once one is chosen, its
+-- generated files in the state dir override the colours above. Absent until then.
+local themeDir = os.getenv("HOME") .. "/.local/state/omarchy/current/theme/"
+local function themeFile(name)
+    local path = themeDir .. name
+    local file = io.open(path, "r")
+    if not file then return nil end
+    file:close()
+    return path
+end
+-- Themes give "#rrggbb"; the window-rule string wants rgb(rrggbb).
+local function hexToRgb(color, fallback)
+    local hex = type(color) == "string" and color:match("^#(%x%x%x%x%x%x)$")
+    return hex and ("rgb(" .. hex .. ")") or fallback
+end
+local themeHub = themeFile("hyprland-hub.lua")
+if themeHub then
+    local ok, theme = pcall(dofile, themeHub)
+    if ok and type(theme) == "table" then
+        floatBorderActive   = hexToRgb(theme.floatBorderActive, floatBorderActive)
+        floatBorderInactive = hexToRgb(theme.floatBorderInactive, floatBorderInactive)
+    end
+end
+
 hl.window_rule({
     name  = "floating-accent-border",
     match = { float = true },
@@ -585,3 +686,8 @@ hl.window_rule({
     border_size  = floatBorderSize,
     border_color = floatBorderActive .. " " .. floatBorderInactive,
 })
+
+-- Tiled and group borders from the desktop theme, last so they win over
+-- general.col above (see themeFile near the floating-border rule).
+local themeHyprland = themeFile("hyprland.lua")
+if themeHyprland then pcall(dofile, themeHyprland) end

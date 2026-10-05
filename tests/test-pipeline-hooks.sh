@@ -167,6 +167,16 @@ cat > "$WS/.claude/pipeline-registry.json" << 'EOF'
       },
       "stages": { "all": ["plan_bd", "apply_bd"], "allowed": ["plan_bd"], "blocked": [] }
     },
+    "td-apim": {
+      "project": "Test Project",
+      "ci": { "id": 312, "name": "td-apim-ci" },
+      "cd": { "id": 313, "name": "td-apim-cd" },
+      "stages": {
+        "all": ["INZ_PLATFORM_DEVTEST", "INZ_PaaS_SHARED_SIT", "INZ_PaaS_SHARED_UAT", "INZ_PaaS_SHARED_PREPROD", "INZ_PaaS_SHARED"],
+        "allowed": ["INZ_PLATFORM_DEVTEST", "INZ_PaaS_SHARED_SIT", "INZ_PaaS_SHARED_UAT"],
+        "blocked": ["INZ_PaaS_SHARED_PREPROD", "INZ_PaaS_SHARED"]
+      }
+    },
     "iac-csv-allow": {
       "project": "Test Project",
       "ci": null,
@@ -177,6 +187,55 @@ cat > "$WS/.claude/pipeline-registry.json" << 'EOF'
         "applyAllowedEnvironments": ["dev,sit"]
       },
       "stages": { "all": ["plan_csv", "apply_csv"], "allowed": ["plan_csv"], "blocked": [] }
+    },
+    "iac-nogate": {
+      "project": "Test Project",
+      "ci": null,
+      "cd": null,
+      "terraform": {
+        "id": 818,
+        "name": "Test - Terraform (dev+sit apply allowlisted, sit without approval gate)",
+        "applyAllowedEnvironments": ["dev", "sit"],
+        "applyWithoutApprovalEnvironments": ["sit"],
+        "defaultParameters": { "deployToggle": "deploy", "requireManualApproval": "True" }
+      },
+      "stages": { "all": ["plan_ng", "apply_ng", "destroy_ng"], "allowed": ["plan_ng"], "blocked": ["destroy_ng"] }
+    },
+    "iac-nogate-pre": {
+      "project": "Test Project",
+      "ci": null,
+      "cd": null,
+      "terraform": {
+        "id": 819,
+        "name": "Test - Terraform (waiver list names a blocked environment)",
+        "applyAllowedEnvironments": ["dev", "sit"],
+        "applyWithoutApprovalEnvironments": ["sit", "Pre"]
+      },
+      "stages": { "all": ["plan_np", "apply_np"], "allowed": ["plan_np"], "blocked": [] }
+    },
+    "iac-nogate-notsubset": {
+      "project": "Test Project",
+      "ci": null,
+      "cd": null,
+      "terraform": {
+        "id": 820,
+        "name": "Test - Terraform (waiver list not a subset of applyAllowedEnvironments)",
+        "applyAllowedEnvironments": ["dev"],
+        "applyWithoutApprovalEnvironments": ["sit"]
+      },
+      "stages": { "all": ["plan_ns", "apply_ns"], "allowed": ["plan_ns"], "blocked": [] }
+    },
+    "iac-nogate-string": {
+      "project": "Test Project",
+      "ci": null,
+      "cd": null,
+      "terraform": {
+        "id": 821,
+        "name": "Test - Terraform (malformed: waiver list is a string)",
+        "applyAllowedEnvironments": ["dev", "sit"],
+        "applyWithoutApprovalEnvironments": "sit"
+      },
+      "stages": { "all": ["plan_st", "apply_st"], "allowed": ["plan_st"], "blocked": [] }
     }
   }
 }
@@ -290,6 +349,15 @@ expect_block_stderr() {
 mcp_input() {
     printf '{"tool_name":"mcp__azure-devops__pipelines_run_pipeline","tool_input":%s}' "$1"
 }
+# write_input <action> <tool_input-object-json>: @azure-devops/mcp >= 2.10
+# consolidated write tool; the action is merged into tool_input.
+write_input() {
+    jq -nc --arg a "$1" --argjson ti "$2" \
+        '{"tool_name":"mcp__azure-devops__pipelines_write","tool_input":({"action":$a} + $ti)}'
+}
+tool_input_json() {
+    jq -nc --arg t "$1" --argjson ti "$2" '{"tool_name":$t,"tool_input":$ti}'
+}
 bash_input() {
     jq -nc --arg cmd "$1" '{"tool_name":"Bash","tool_input":{"command":$cmd}}'
 }
@@ -378,6 +446,65 @@ expect block "$PIPELINE_GUARD" "$WS" "registry terraform 813 allowlisted env=dev
 expect allow "$PIPELINE_GUARD" "$WS" "registry terraform 813 plan-only with every blocked/always-skip stage skipped -> allowed" \
     "$(mcp_input '{"pipelineId":813,"project":"P","stagesToSkip":["apply_ct","destroy_ct","cleanup_ct"],"templateParameters":{"environment":"dev","deployToggle":"plan","requireManualApproval":"True"}}')"
 
+echo -e "${BLUE}=== pipeline-guard.sh (approval waiver, registry terraform.applyWithoutApprovalEnvironments) ===${NC}"
+# Pipeline 818 / "iac-nogate": applyAllowedEnvironments ["dev","sit"], waiver
+# list ["sit"], defaultParameters declares requireManualApproval. False is
+# accepted ONLY for a sit APPLY run with deployToggle=deploy; every other
+# combination keeps today's True requirement.
+NOGATE_SIT_FALSE='{"pipelineId":818,"project":"P","stagesToSkip":["destroy_ng"],"templateParameters":{"environment":"sit","deployToggle":"deploy","requireManualApproval":"False"}}'
+expect allow "$PIPELINE_GUARD" "$WS" "sit in waiver list: apply runs, deploy, requireManualApproval=False -> allowed" \
+    "$(mcp_input "$NOGATE_SIT_FALSE")"
+TF_ID=818 TF_APPLY_STAGE=apply_ng expect allow "$PIPELINE_GUARD" "$WS" "same run when 818 is ALSO the keychain terraform id -> allowed (keychain flag does not defeat the waiver)" \
+    "$(mcp_input "$NOGATE_SIT_FALSE")"
+expect allow "$PIPELINE_GUARD" "$WS" "sit in waiver list but requireManualApproval=True -> still allowed (gate kept by choice)" \
+    "$(mcp_input '{"pipelineId":818,"project":"P","stagesToSkip":["destroy_ng"],"templateParameters":{"environment":"sit","deployToggle":"deploy","requireManualApproval":"True"}}')"
+expect allow "$PIPELINE_GUARD" "$WS" "waiver matched case-insensitively (env=SIT, False) -> allowed" \
+    "$(mcp_input '{"pipelineId":818,"project":"P","stagesToSkip":["destroy_ng"],"templateParameters":{"environment":"SIT","deployToggle":"deploy","requireManualApproval":"False"}}')"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "sit in waiver list but plan-only (apply skipped) + False -> blocked (registry declares the param)" \
+    "$(mcp_input '{"pipelineId":818,"project":"P","stagesToSkip":["apply_ng","destroy_ng"],"templateParameters":{"environment":"sit","deployToggle":"plan","requireManualApproval":"False"}}')" \
+    "MUST have requireManualApproval=True.*waiver applies only to an apply run"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "dev NOT in waiver list: apply + deploy + False -> blocked" \
+    "$(mcp_input '{"pipelineId":818,"project":"P","stagesToSkip":["destroy_ng"],"templateParameters":{"environment":"dev","deployToggle":"deploy","requireManualApproval":"False"}}')" \
+    "MUST have requireManualApproval=True"
+expect block "$PIPELINE_GUARD" "$WS" "sit in waiver list but deployToggle=destroy + False -> blocked" \
+    "$(mcp_input '{"pipelineId":818,"project":"P","stagesToSkip":["destroy_ng"],"templateParameters":{"environment":"sit","deployToggle":"destroy","requireManualApproval":"False"}}')"
+expect block "$PIPELINE_GUARD" "$WS" "sit in waiver list but deployToggle=Deploy (exact match) + False -> blocked" \
+    "$(mcp_input '{"pipelineId":818,"project":"P","stagesToSkip":["destroy_ng"],"templateParameters":{"environment":"sit","deployToggle":"Deploy","requireManualApproval":"False"}}')"
+expect block "$PIPELINE_GUARD" "$WS" "sit in waiver list, apply run, requireManualApproval absent -> blocked" \
+    "$(mcp_input '{"pipelineId":818,"project":"P","stagesToSkip":["destroy_ng"],"templateParameters":{"environment":"sit","deployToggle":"deploy"}}')"
+expect block "$PIPELINE_GUARD" "$WS" "sit in waiver list, apply run, requireManualApproval=no (not False) -> blocked" \
+    "$(mcp_input '{"pipelineId":818,"project":"P","stagesToSkip":["destroy_ng"],"templateParameters":{"environment":"sit","deployToggle":"deploy","requireManualApproval":"no"}}')"
+expect block "$PIPELINE_GUARD" "$WS" "sit in waiver list, False, but destroy NOT skipped -> blocked (block overrides allow)" \
+    "$(mcp_input '{"pipelineId":818,"project":"P","stagesToSkip":[],"templateParameters":{"environment":"sit","deployToggle":"deploy","requireManualApproval":"False"}}')"
+expect block "$PIPELINE_GUARD" "$WS" "env=prd with False against the waiver service -> blocked by the hardcoded env blocklist" \
+    "$(mcp_input '{"pipelineId":818,"project":"P","stagesToSkip":["destroy_ng"],"templateParameters":{"environment":"prd","deployToggle":"deploy","requireManualApproval":"False"}}')"
+# Registry contradictions fail closed for EVERY run of that pipeline, even a
+# plan-only run with the gate kept — a human must fix the registry first.
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "registry 819: waiver list names 'Pre' -> fail closed even for a sit apply with True" \
+    "$(mcp_input '{"pipelineId":819,"project":"P","stagesToSkip":[],"templateParameters":{"environment":"sit","deployToggle":"deploy","requireManualApproval":"True"}}')" \
+    "applyWithoutApprovalEnvironments names blocked environment\(s\) 'pre'"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "registry 819: plan-only run also blocked" \
+    "$(mcp_input '{"pipelineId":819,"project":"P","stagesToSkip":["apply_np"],"templateParameters":{"environment":"dev","deployToggle":"plan","requireManualApproval":"True"}}')" \
+    "names blocked environment"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "registry 820: waiver list ['sit'] not a subset of applyAllowedEnvironments ['dev'] -> fail closed" \
+    "$(mcp_input '{"pipelineId":820,"project":"P","stagesToSkip":["apply_ns"],"templateParameters":{"environment":"dev","deployToggle":"plan","requireManualApproval":"True"}}')" \
+    "'sit' are in terraform.applyWithoutApprovalEnvironments but not in terraform.applyAllowedEnvironments"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "registry 821: waiver list is a string -> rc=2 malformed registry" \
+    "$(mcp_input '{"pipelineId":821,"project":"P","stagesToSkip":["apply_st"],"templateParameters":{"environment":"dev","deployToggle":"plan","requireManualApproval":"True"}}')" \
+    "applyWithoutApprovalEnvironments must be an array of strings"
+# Audit trail: the Rule 5 "allowed" record (the one before the final "All
+# safety checks passed" record; records are pretty-printed, so parse the
+# whole file) says WHY the gate was waived.
+run_hook "$PIPELINE_GUARD" "$WS" "$(mcp_input "$NOGATE_SIT_FALSE")"
+if [[ $RC -eq 0 ]] && jq -se '.[-2] | .action == "allowed" and (.reason | test("approval waived: environment .sit. is in applyWithoutApprovalEnvironments"))' \
+     "$FAKE_HOME/.claude/logs/pipeline-triggers.jsonl" >/dev/null; then
+    echo -e "  ${GREEN}PASS${NC} audit JSONL reason records the waiver (approval waived: environment 'sit' ...)"
+    PASS=$((PASS + 1))
+else
+    echo -e "  ${RED}FAIL${NC} audit JSONL reason should record the waiver — rc=$RC record=$(jq -sc '.[-2]' "$FAKE_HOME/.claude/logs/pipeline-triggers.jsonl" 2>/dev/null)"
+    FAIL=$((FAIL + 1))
+fi
+
 echo -e "${BLUE}=== pipeline-guard.sh (fails CLOSED on malformed payloads and registries) ===${NC}"
 # Claude Code blocks ONLY on exit 2 — any other non-zero exit lets the tool
 # call proceed. So a jq crash (rc=5) on a wrong-typed field used to be a
@@ -421,6 +548,113 @@ expect allow "$PIPELINE_GUARD" "$WS_BARE" "no registry: registry checks skipped 
 expect_unconfigured block "$PIPELINE_GUARD" "$WS" "unconfigured (no PIPELINE_GUARD_TERRAFORM_ID/STAGE): fails closed, blocks even a harmless CI id" \
     "$(mcp_input '{"pipelineId":100,"project":"P"}')"
 
+echo -e "${BLUE}=== pipeline-guard.sh (@azure-devops/mcp >= 2.10 consolidated tools) ===${NC}"
+# Same policy as the legacy tool, reached via pipelines_write action=run_pipeline.
+# Fixture service "td-apim" mirrors the real td registry entry (CD 313 blocks
+# INZ_PaaS_SHARED_PREPROD and INZ_PaaS_SHARED).
+TD_SKIP_BLOCKED='"stagesToSkip":["INZ_PaaS_SHARED_UAT","INZ_PaaS_SHARED_PREPROD","INZ_PaaS_SHARED"]'
+expect allow "$PIPELINE_GUARD" "$WS" "new: td-apim CD 313 to SIT skipping every blocked stage -> allowed" \
+    "$(write_input run_pipeline "{\"pipelineId\":313,\"project\":\"P\",$TD_SKIP_BLOCKED,\"resources\":{\"repositories\":{\"self\":{\"refName\":\"refs/heads/feature/x\"}}}}")"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: td-apim CD 313 not skipping INZ_PaaS_SHARED -> blocked" \
+    "$(write_input run_pipeline '{"pipelineId":313,"project":"P","stagesToSkip":["INZ_PaaS_SHARED_UAT","INZ_PaaS_SHARED_PREPROD"]}')" \
+    "Blocked stage 'INZ_PaaS_SHARED' is not in stagesToSkip"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: td-apim CD 313 not skipping INZ_PaaS_SHARED_PREPROD -> blocked" \
+    "$(write_input run_pipeline '{"pipelineId":313,"project":"P","stagesToSkip":["INZ_PaaS_SHARED_UAT","INZ_PaaS_SHARED"]}')" \
+    "Blocked stage 'INZ_PaaS_SHARED_PREPROD' is not in stagesToSkip"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: td-apim CD 313 with no stagesToSkip key -> blocked (all stages would run)" \
+    "$(write_input run_pipeline '{"pipelineId":313,"project":"P"}')" \
+    "requires stagesToSkip"
+expect allow "$PIPELINE_GUARD" "$WS" "new: td-apim CI 312 run -> allowed" \
+    "$(write_input run_pipeline '{"pipelineId":312,"project":"P"}')"
+expect block "$PIPELINE_GUARD" "$WS" "new: unregistered pipeline via run_pipeline -> blocked" \
+    "$(write_input run_pipeline '{"pipelineId":555,"project":"P"}')"
+expect block "$PIPELINE_GUARD" "$WS" "new: env=prd templateParameter via run_pipeline -> blocked" \
+    "$(write_input run_pipeline '{"pipelineId":312,"project":"P","templateParameters":{"environment":"prd"}}')"
+expect block "$PIPELINE_GUARD" "$WS" "new: terraform 802 apply not skipped via run_pipeline -> blocked" \
+    "$(write_input run_pipeline '{"pipelineId":802,"project":"P","stagesToSkip":[],"templateParameters":{"requireManualApproval":"True"}}')"
+expect allow "$PIPELINE_GUARD" "$WS" "new: terraform 802 plan-only via run_pipeline -> allowed" \
+    "$(write_input run_pipeline '{"pipelineId":802,"project":"P","stagesToSkip":["apply_infra"],"templateParameters":{"requireManualApproval":"True"}}')"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: run_pipeline previewRun still policy-checked (blocked stage not skipped)" \
+    "$(write_input run_pipeline '{"pipelineId":313,"project":"P","previewRun":true,"stagesToSkip":["INZ_PaaS_SHARED"]}')" \
+    "INZ_PaaS_SHARED_PREPROD"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: run_pipeline with yamlOverride -> blocked" \
+    "$(write_input run_pipeline "{\"pipelineId\":313,\"project\":\"P\",\"previewRun\":true,$TD_SKIP_BLOCKED,\"yamlOverride\":\"stages: []\"}")" \
+    "yamlOverride is not permitted"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "legacy: pipelines_run_pipeline with yamlOverride -> blocked" \
+    "$(mcp_input "{\"pipelineId\":313,\"project\":\"P\",$TD_SKIP_BLOCKED,\"yamlOverride\":\"stages: []\"}")" \
+    "yamlOverride is not permitted"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: run_pipeline stagesToSkip as a string -> rc=2" \
+    "$(write_input run_pipeline '{"pipelineId":313,"project":"P","stagesToSkip":"INZ_PaaS_SHARED"}')" \
+    "stagesToSkip must be an array"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: run_pipeline pipelineId missing -> rc=2" \
+    "$(write_input run_pipeline '{"project":"P","stagesToSkip":[]}')" \
+    "pipelineId missing or not numeric"
+expect_unconfigured block "$PIPELINE_GUARD" "$WS" "new: unconfigured guard blocks run_pipeline" \
+    "$(write_input run_pipeline '{"pipelineId":312,"project":"P"}')"
+# Write actions the policy cannot reason about fail closed, whatever their input.
+for status in Cancel Retry Run; do
+    expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: update_build_stage status=$status -> blocked" \
+        "$(write_input update_build_stage "{\"buildId\":1,\"stageName\":\"INZ_PaaS_SHARED_SIT\",\"status\":\"$status\"}")" \
+        "action 'update_build_stage' is not permitted"
+done
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: create_pipeline -> blocked" \
+    "$(write_input create_pipeline '{"name":"x","yamlPath":"a.yml","repositoryName":"r","repositoryType":"AzureReposGit"}')" \
+    "action 'create_pipeline' is not permitted"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: rename_pipeline -> blocked" \
+    "$(write_input rename_pipeline '{"pipelineId":313,"name":"x"}')" \
+    "action 'rename_pipeline' is not permitted"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: unknown pipelines_write action -> blocked" \
+    "$(write_input queue_build '{"pipelineId":313}')" \
+    "action 'queue_build' is not permitted"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: pipelines_write with no action -> blocked" \
+    "$(tool_input_json mcp__azure-devops__pipelines_write '{"pipelineId":313,"project":"P","stagesToSkip":["INZ_PaaS_SHARED_PREPROD","INZ_PaaS_SHARED"]}')" \
+    "action '<missing>' is not permitted"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: unknown pipelines_* tool -> blocked" \
+    "$(tool_input_json mcp__azure-devops__pipelines_queue '{"pipelineId":313,"project":"P"}')" \
+    "not a known azure-devops pipelines tool"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "new: read tool with unknown action -> blocked" \
+    "$(tool_input_json mcp__azure-devops__pipelines_build '{"action":"queue","project":"P"}')" \
+    "not a known read-only action"
+expect_block_stderr "$PIPELINE_GUARD" "$WS" "legacy: pipelines_update_build_stage -> blocked" \
+    "$(tool_input_json mcp__azure-devops__pipelines_update_build_stage '{"buildId":1,"stageName":"s","status":"Retry"}')" \
+    "not a known azure-devops pipelines tool"
+# Read-only tools/actions pass without policy evaluation.
+expect allow "$PIPELINE_GUARD" "$WS" "new read: pipelines_run action=get" \
+    "$(tool_input_json mcp__azure-devops__pipelines_run '{"action":"get","project":"P","pipelineId":313,"runId":1}')"
+expect allow "$PIPELINE_GUARD" "$WS" "new read: pipelines_run action=list" \
+    "$(tool_input_json mcp__azure-devops__pipelines_run '{"action":"list","project":"P","pipelineId":313}')"
+expect allow "$PIPELINE_GUARD" "$WS" "new read: pipelines_build action=get_status" \
+    "$(tool_input_json mcp__azure-devops__pipelines_build '{"action":"get_status","project":"P","buildId":1}')"
+expect allow "$PIPELINE_GUARD" "$WS" "new read: pipelines_build action=list" \
+    "$(tool_input_json mcp__azure-devops__pipelines_build '{"action":"list","project":"P","definitions":[313],"top":1}')"
+expect allow "$PIPELINE_GUARD" "$WS" "new read: pipelines_build_log action=get_content" \
+    "$(tool_input_json mcp__azure-devops__pipelines_build_log '{"action":"get_content","project":"P","buildId":1,"logId":2}')"
+expect allow "$PIPELINE_GUARD" "$WS" "new read: pipelines_definition action=list" \
+    "$(tool_input_json mcp__azure-devops__pipelines_definition '{"action":"list","project":"P"}')"
+expect allow "$PIPELINE_GUARD" "$WS" "new read: pipelines_artifact action=list" \
+    "$(tool_input_json mcp__azure-devops__pipelines_artifact '{"action":"list","project":"P","buildId":1}')"
+expect allow "$PIPELINE_GUARD" "$WS" "legacy read: pipelines_get_build_status" \
+    "$(tool_input_json mcp__azure-devops__pipelines_get_build_status '{"project":"P","buildId":1}')"
+expect allow "$PIPELINE_GUARD" "$WS" "non-pipelines azure-devops tool passes through" \
+    "$(tool_input_json mcp__azure-devops__wit_work_item '{"action":"get","id":1}')"
+# The legacy name keeps its full policy (old server versions still work).
+expect allow "$PIPELINE_GUARD" "$WS" "legacy: td-apim CD 313 skipping every blocked stage -> allowed" \
+    "$(mcp_input "{\"pipelineId\":313,\"project\":\"P\",$TD_SKIP_BLOCKED}")"
+expect block "$PIPELINE_GUARD" "$WS" "legacy: td-apim CD 313 not skipping INZ_PaaS_SHARED -> blocked" \
+    "$(mcp_input '{"pipelineId":313,"project":"P","stagesToSkip":["INZ_PaaS_SHARED_PREPROD"]}')"
+
+echo -e "${BLUE}=== settings.json routes every pipelines tool to pipeline-guard.sh ===${NC}"
+GUARD_MATCHER=$(jq -r '.hooks.PreToolUse[] | select(any(.hooks[]; .command | test("pipeline-guard\\.sh"))) | .matcher' "$DOTFILES_ROOT/config/claude/settings.json")
+for tool in pipelines_write pipelines_run_pipeline pipelines_run pipelines_build pipelines_build_log pipelines_definition pipelines_artifact; do
+    if [[ "mcp__azure-devops__$tool" =~ ^($GUARD_MATCHER)$ ]]; then
+        echo -e "  ${GREEN}PASS${NC} matcher '$GUARD_MATCHER' covers mcp__azure-devops__$tool"
+        PASS=$((PASS + 1))
+    else
+        echo -e "  ${RED}FAIL${NC} matcher '$GUARD_MATCHER' does not cover mcp__azure-devops__$tool"
+        FAIL=$((FAIL + 1))
+    fi
+done
+
 echo -e "${BLUE}=== pipeline-trigger-guard.sh (Bash trigger chokepoint) ===${NC}"
 expect block "$TRIGGER_GUARD" "$WS_BARE" "az pipelines run blocked" \
     "$(bash_input 'az pipelines run --id 5 --org https://dev.azure.com/o')"
@@ -459,6 +693,35 @@ expect block "$WRITE_GUARD" "$WS_BARE" "Bash sed -i on the registry blocked" \
     "$(bash_input "sed -i '' 's/a/b/' .claude/pipeline-registry.json")"
 expect block "$WRITE_GUARD" "$WS_BARE" "Bash mv over the registry blocked" \
     "$(bash_input 'mv /tmp/new.json .claude/pipeline-registry.json')"
+expect block "$WRITE_GUARD" "$WS_BARE" "Bash jq redirected into another path with the registry basename blocked" \
+    "$(bash_input 'jq . x > /path/pipeline-registry.json')"
+expect block "$WRITE_GUARD" "$WS_BARE" "Bash cp with the registry as destination blocked" \
+    "$(bash_input 'cp /tmp/new.json .claude/pipeline-registry.json')"
+expect block "$WRITE_GUARD" "$WS_BARE" "Bash heredoc redirected INTO the registry blocked" \
+    "$(bash_input $'cat <<EOF > .claude/pipeline-registry.json\n{}\nEOF')"
+expect block "$WRITE_GUARD" "$WS_BARE" "Bash heredoc piped to bash that writes the registry blocked (body kept for interpreters)" \
+    "$(bash_input $'cat <<EOF | bash\necho {} > .claude/pipeline-registry.json\nEOF')"
+expect block "$WRITE_GUARD" "$WS_BARE" "Bash python -c open(...,'w') on the registry blocked" \
+    "$(bash_input "python3 -c \"open('.claude/pipeline-registry.json','w').write('{}')\"")"
+expect block "$WRITE_GUARD" "$WS_BARE" "Bash redirect to an unresolvable \$var while the registry is mentioned blocked" \
+    "$(bash_input 'R=.claude/pipeline-registry.json; echo {} > "$R"')"
+expect block "$WRITE_GUARD" "$WS_BARE" "Bash git rm of the registry blocked" \
+    "$(bash_input 'git rm .claude/pipeline-registry.json')"
+# Mentioning the file is not writing it: a heredoc BODY that names the
+# registry while the heredoc goes to another file, and a redirect of the
+# registry's content into a differently named file, are reads/logs.
+expect allow "$WRITE_GUARD" "$WS_BARE" "Bash heredoc appending to workflow_state.md whose body mentions the registry allowed" \
+    "$(bash_input $'cat >> workflow_state.md <<\'EOF\'\n- read .claude/pipeline-registry.json with jq\n- registry write-guard blocked a false positive\nEOF\necho logged')"
+expect allow "$WRITE_GUARD" "$WS_BARE" "Bash <<- heredoc (tab-indented body) mentioning the registry allowed" \
+    "$(bash_input $'cat <<-EOF >> notes.md\n\tpipeline-registry.json mentioned here\n\tEOF')"
+expect allow "$WRITE_GUARD" "$WS_BARE" "Bash jq read redirected to a different file name allowed" \
+    "$(bash_input 'jq . .claude/pipeline-registry.json > /tmp/registry-copy.json')"
+expect allow "$WRITE_GUARD" "$WS_BARE" "Bash plain jq read allowed" \
+    "$(bash_input 'jq . .claude/pipeline-registry.json')"
+expect allow "$WRITE_GUARD" "$WS_BARE" "Bash sed without -i (print) allowed" \
+    "$(bash_input "sed -n '1,5p' .claude/pipeline-registry.json")"
+expect allow "$WRITE_GUARD" "$WS_BARE" "Bash git status on the registry allowed" \
+    "$(bash_input 'git status --short -- .claude/pipeline-registry.json')"
 expect allow "$WRITE_GUARD" "$WS_BARE" "unrelated Bash command allowed" \
     "$(bash_input 'git status')"
 expect block "$WRITE_GUARD" "$WS_BARE" "payload without tool_name fails closed" \

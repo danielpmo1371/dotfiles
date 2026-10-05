@@ -196,3 +196,8 @@ keybind = super+shift+l=text:\x1b[1;2C
 keybind = super+shift+j=text:\x1b[1;2B
 # Shift+Up
 keybind = super+shift+k=text:\x1b[1;2A
+
+# Desktop theme (omarchy-theme-set, config/quickshell): colours of the chosen
+# theme, reloaded live with SIGUSR2. Optional (?), so nothing changes until a
+# theme is picked. Included files load after this one, so the theme wins.
+config-file = ?~/.local/state/omarchy/current/theme/ghostty.conf

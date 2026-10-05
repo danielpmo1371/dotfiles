@@ -22,3 +22,7 @@ config/nushell/history.txt
 
 # Rollback copy rewritten by installers/memory-hooks.sh on every run
 config/claude/settings.json.bak
+
+# Harness-written runtime state under the ~/.claude symlinks
+config/claude/skills/synced/
+config/claude/hooks/utilities/session-cache.json
