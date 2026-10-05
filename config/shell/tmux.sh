@@ -6,8 +6,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Prints a unique marker line each time a prompt is shown
 # Useful for tools that need to parse terminal output
+# Off by default; export DISPLAY_PROMPT_MARKER=1 before this file is sourced to enable
 
-DISPLAY_PROMPT_MARKER="true"
+DISPLAY_PROMPT_MARKER="${DISPLAY_PROMPT_MARKER:-false}"
 if [[ -n "${TMUX:-}" && ( "${DISPLAY_PROMPT_MARKER:-}" == "true" || "${DISPLAY_PROMPT_MARKER:-}" == "1" ) ]]; then
     PROMPT_MARKER='😎💻🧑‍💻🤖'
 
