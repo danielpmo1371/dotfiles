@@ -10,6 +10,10 @@ import qs.Ui
 // tiles, one per panel in tiles.json. Each tile hosts the panel's own bar
 // button, scaled up, with a label under it; the panel's popup opens to the
 // left of the card. Esc or a click outside closes the open popup, then the hub.
+//
+// Keys: h/j/k/l or the arrows move the cursor, Enter/Space/o opens the tile,
+// q or Esc closes. Inside a panel its own keys apply (j/k/h/l too); Tab and
+// Shift+Tab there move to the next or previous panel tile.
 PanelWindow {
   id: root
 
@@ -24,6 +28,8 @@ PanelWindow {
   readonly property int cardPadding: Style.space(14)
 
   property var tiles: []
+  // Index into visibleTiles of the tile the keyboard cursor is on.
+  property int cursor: 0
   property var availableCommands: ({})
   property bool commandsChecked: false
   // Empty until the command check is back, so each tile is built once: a
@@ -47,6 +53,45 @@ PanelWindow {
     hide()
     if (tile.summon) bar.shell.summon(tile.summon, JSON.stringify(tile.payload || {}))
     else if (tile.exec) Util.execArgv(tile.exec)
+  }
+
+  // h/l walk the tiles in reading order; j/k move a row and stay put when
+  // no tile is there.
+  function moveCursor(dx, dy) {
+    var count = visibleTiles.length
+    if (count === 0) return
+    if (dx !== 0) {
+      cursor = Math.max(0, Math.min(count - 1, cursor + dx))
+    } else {
+      var next = cursor + dy * columns
+      if (next >= 0 && next < count) cursor = next
+    }
+  }
+
+  function activateCursor() {
+    var item = tileRepeater.itemAt(cursor)
+    if (item) item.trigger()
+  }
+
+  // Tab inside a panel: open the next panel tile in grid order, wrapping
+  // past the end and skipping action tiles.
+  function switchPanelFrom(owner, direction) {
+    var count = visibleTiles.length
+    var from = -1
+    for (var i = 0; i < count; i++) {
+      if (bar.widgets[visibleTiles[i].id] === owner) { from = i; break }
+    }
+    if (from === -1) return false
+    for (var step = 1; step < count; step++) {
+      var index = ((from + step * direction) % count + count) % count
+      var widget = bar.widgets[visibleTiles[index].id]
+      if (visibleTiles[index].entry && widget && "open" in widget) {
+        cursor = index
+        widget.open()
+        return true
+      }
+    }
+    return false
   }
 
   function show() { visible = true }
@@ -113,8 +158,27 @@ PanelWindow {
     radius: Style.cornerRadius
 
     focus: true
-    Keys.onEscapePressed: {
-      if (!root.bar.closeActivePopout()) root.hide()
+    Keys.onPressed: function(event) {
+      if (event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)) return
+      if (event.key === Qt.Key_Escape) {
+        if (!root.bar.closeActivePopout()) root.hide()
+      } else if (event.text === "q") {
+        root.hide()
+      } else if (event.key === Qt.Key_Left || event.text === "h") {
+        root.moveCursor(-1, 0)
+      } else if (event.key === Qt.Key_Right || event.text === "l") {
+        root.moveCursor(1, 0)
+      } else if (event.key === Qt.Key_Up || event.text === "k") {
+        root.moveCursor(0, -1)
+      } else if (event.key === Qt.Key_Down || event.text === "j") {
+        root.moveCursor(0, 1)
+      } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter
+                 || event.key === Qt.Key_Space || event.text === "o") {
+        root.activateCursor()
+      } else {
+        return
+      }
+      event.accepted = true
     }
 
     Text {
@@ -130,6 +194,17 @@ PanelWindow {
       font.bold: true
     }
 
+    Text {
+      anchors.verticalCenter: title.verticalCenter
+      anchors.right: parent.right
+      anchors.rightMargin: root.cardPadding
+      text: "hjkl  ⏎ open  q close"
+      color: Color.popups.text
+      opacity: 0.55
+      font.family: Style.font.family
+      font.pixelSize: Style.font.body
+    }
+
     Grid {
       id: grid
       anchors.top: title.bottom
@@ -140,10 +215,12 @@ PanelWindow {
       spacing: Style.space(6)
 
       Repeater {
+        id: tileRepeater
         model: root.visibleTiles
 
         delegate: HubTile {
           required property var modelData
+          required property int index
           width: root.tileWidth
           height: root.tileHeight
           tile: modelData
@@ -152,6 +229,8 @@ PanelWindow {
           iconScale: root.tileScale
           settings: root.mergedSettings(modelData)
           activate: root.runAction
+          selected: root.cursor === index
+          onHoverEntered: root.cursor = index
         }
       }
     }

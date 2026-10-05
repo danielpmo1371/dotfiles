@@ -97,6 +97,7 @@ ShellRoot {
   HubBar {
     id: hubBar
     shell: shellApi
+    switchPanelHandler: hub.switchPanelFrom
   }
 
   HubWindow {

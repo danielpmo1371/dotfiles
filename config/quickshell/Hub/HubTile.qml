@@ -15,6 +15,10 @@ Item {
   property var settings: ({})
   // Called with the tile when an action tile is clicked.
   property var activate: null
+  // The hub's keyboard cursor is on this tile.
+  property bool selected: false
+
+  signal hoverEntered()
 
   readonly property bool isPanel: !!tile.entry
 
@@ -22,6 +26,15 @@ Item {
   clip: true
 
   readonly property bool opened: !!widget && widget.opened === true
+
+  // Open the panel, or run the action; what a click (or Enter in the hub) does.
+  function trigger() {
+    if (!isPanel) {
+      if (activate) activate(tile)
+    } else if (widget && "toggle" in widget) {
+      widget.toggle()
+    }
+  }
 
   Rectangle {
     anchors.fill: parent
@@ -34,17 +47,23 @@ Item {
     }
   }
 
-  HoverHandler { id: tileHover }
+  Rectangle {
+    anchors.fill: parent
+    radius: Style.cornerRadius
+    color: "transparent"
+    border.color: Color.popups.border
+    border.width: Math.max(1, Style.space(2))
+    visible: root.selected
+  }
+
+  HoverHandler {
+    id: tileHover
+    onHoveredChanged: if (hovered) root.hoverEntered()
+  }
 
   MouseArea {
     anchors.fill: parent
-    onClicked: {
-      if (!root.isPanel) {
-        if (root.activate) root.activate(root.tile)
-      } else if (root.widget && "toggle" in root.widget) {
-        root.widget.toggle()
-      }
-    }
+    onClicked: root.trigger()
   }
 
   // The widget lays itself out for a bar slot; the slot keeps that size and

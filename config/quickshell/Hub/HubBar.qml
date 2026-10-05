@@ -81,10 +81,12 @@ Item {
     return widget ? [widget] : []
   }
 
-  // Panels call this for their left/right arrow keys. The hub has no bar
-  // order to walk, so the key is left to the panel.
+  // Panels call this for Tab / Shift+Tab. The hub sets the handler, since it
+  // owns the tile order; without one the key is left to the panel.
+  property var switchPanelHandler: null
+
   function switchPanelFrom(owner, direction) {
-    return false
+    return switchPanelHandler ? switchPanelHandler(owner, direction) : false
   }
 
   function setCenterHoverRevealSuppressed(value) {
