@@ -1,0 +1,20 @@
+[Unit]
+Description=Memory pressure watcher (logs the culprit, warns before a freeze)
+Documentation=file://%h/repos/dotfiles/util-scripts/mem-pressure-watch
+# Desktop notifications need the session's display and D-Bus.
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=%h/repos/dotfiles/util-scripts/mem-pressure-watch
+# ntfy-send and notify-send live in ~/bin and ~/.local/bin (environment.d puts
+# them on PATH for user units).
+Restart=on-failure
+RestartSec=5
+# systemd-oomd must never pick the watcher that is reporting the pressure.
+ManagedOOMPreference=omit
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical-session.target

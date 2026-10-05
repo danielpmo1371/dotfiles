@@ -19,6 +19,9 @@ TimeoutStartSec=330
 ExecStartPre=-%h/repos/dotfiles/util-scripts/keyring-unlock-wait
 ExecStart=%h/bin/rc-start.sh
 ExecStop=%h/bin/rc-stop.sh
+# The tmux server lives in this cgroup (each pane gets its own scope), so
+# systemd-oomd must pick a runaway pane before it ever picks the server.
+ManagedOOMPreference=avoid
 StandardOutput=journal
 StandardError=journal
 

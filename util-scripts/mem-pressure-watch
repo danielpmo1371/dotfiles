@@ -1,0 +1,264 @@
+#!/usr/bin/env python3
+"""mem-pressure-watch — warn before memory exhaustion freezes the desktop.
+
+When RAM and swap fill up, every process (the compositor and the mouse cursor
+included) stalls on reclaim until the kernel OOM killer finally fires, which
+can take minutes. The kernel's pressure stall information (PSI) shows that
+stall building up long before, so this watcher registers a PSI trigger on
+/proc/pressure/memory and, each time it fires:
+
+  1. appends a snapshot (PSI averages, MemAvailable, swap, the top processes
+     by resident memory with command line, cwd and cgroup) to the event log,
+     so the culprit is on record even if the machine has to be reset;
+  2. raises a desktop notification and a phone push (ntfy-send) once the
+     stall share crosses the notify threshold, each with its own cooldown.
+
+It only reports. Killing is systemd-oomd's job (see installers/memwatch.sh).
+
+Without trigger support (old kernel, or a plain file in tests) it falls back
+to polling the avg10 figure every --interval seconds.
+
+usage: mem-pressure-watch [--once] [--poll] [--max-events N]
+  --once          print one snapshot to stdout and exit
+  --poll          poll avg10 instead of registering a PSI trigger
+  --max-events N  exit after N logged events (tests)
+
+env (defaults in brackets):
+  MEMWATCH_STALL_MS [200]      trigger: stalled ms ("some") per window ...
+  MEMWATCH_WINDOW_MS [2000]    ... of this many ms (unprivileged: multiple of 2000)
+  MEMWATCH_NOTIFY_PCT [20]     notify when "some" avg10 reaches this percent
+  MEMWATCH_LOG_INTERVAL [10]   min seconds between logged snapshots
+  MEMWATCH_DESKTOP_COOLDOWN [120] / MEMWATCH_PHONE_COOLDOWN [900]  seconds
+  MEMWATCH_TOP [5]             processes listed per snapshot
+  MEMWATCH_INTERVAL [2]        poll period in seconds (poll mode)
+  MEMWATCH_NOTIFY_CMD [notify-send]  MEMWATCH_PHONE_CMD [ntfy-send]  ("" = off)
+  MEMWATCH_PSI_FILE [/proc/pressure/memory]  MEMWATCH_PROC [/proc]
+  MEMWATCH_STATE_DIR [${XDG_STATE_HOME:-~/.local/state}/mem-pressure]
+"""
+
+import argparse
+import datetime
+import os
+import select
+import shutil
+import subprocess
+import sys
+import time
+
+PROG = "mem-pressure-watch"
+# A notification command must never hold up the next snapshot.
+COMMAND_TIMEOUT_S = 15
+CMDLINE_MAX_CHARS = 160
+
+
+def env_int(name, default):
+    raw = os.environ.get(name, "")
+    try:
+        return int(raw) if raw else default
+    except ValueError:
+        print(f"{PROG}: ignoring non-integer {name}={raw!r}", file=sys.stderr)
+        return default
+
+
+class Config:
+    def __init__(self):
+        self.stall_ms = env_int("MEMWATCH_STALL_MS", 200)
+        self.window_ms = env_int("MEMWATCH_WINDOW_MS", 2000)
+        self.notify_pct = env_int("MEMWATCH_NOTIFY_PCT", 20)
+        self.log_interval = env_int("MEMWATCH_LOG_INTERVAL", 10)
+        self.desktop_cooldown = env_int("MEMWATCH_DESKTOP_COOLDOWN", 120)
+        self.phone_cooldown = env_int("MEMWATCH_PHONE_COOLDOWN", 900)
+        self.top = env_int("MEMWATCH_TOP", 5)
+        self.interval = env_int("MEMWATCH_INTERVAL", 2)
+        self.notify_cmd = os.environ.get("MEMWATCH_NOTIFY_CMD", "notify-send")
+        self.phone_cmd = os.environ.get("MEMWATCH_PHONE_CMD", "ntfy-send")
+        self.psi_file = os.environ.get("MEMWATCH_PSI_FILE", "/proc/pressure/memory")
+        self.proc = os.environ.get("MEMWATCH_PROC", "/proc")
+        state_home = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
+        self.state_dir = os.environ.get("MEMWATCH_STATE_DIR") or os.path.join(state_home, "mem-pressure")
+        self.log_file = os.path.join(self.state_dir, "events.log")
+
+
+def read_psi(path):
+    """{'some': {'avg10': 1.2, ...}, 'full': {...}} from a PSI file."""
+    psi = {}
+    with open(path) as f:
+        for line in f:
+            kind, *fields = line.split()
+            psi[kind] = {k: float(v) for k, v in (field.split("=") for field in fields)}
+    return psi
+
+
+def read_meminfo(proc):
+    info = {}
+    with open(os.path.join(proc, "meminfo")) as f:
+        for line in f:
+            key, value = line.split(":", 1)
+            info[key] = int(value.split()[0])  # kB
+    return info
+
+
+def read_text(path):
+    try:
+        with open(path, "rb") as f:
+            return f.read().decode(errors="replace")
+    except OSError:
+        return ""
+
+
+def top_processes(proc, count):
+    """The `count` processes with the largest RSS, biggest first."""
+    rows = []
+    for pid in filter(str.isdigit, os.listdir(proc)):
+        base = os.path.join(proc, pid)
+        rss_kb = 0
+        for line in read_text(os.path.join(base, "status")).splitlines():
+            if line.startswith("VmRSS:"):
+                rss_kb = int(line.split()[1])
+                break
+        if not rss_kb:
+            continue  # kernel thread or already gone
+        cmdline = read_text(os.path.join(base, "cmdline")).replace("\0", " ").strip()
+        if not cmdline:
+            cmdline = read_text(os.path.join(base, "comm")).strip()
+        try:
+            cwd = os.readlink(os.path.join(base, "cwd"))
+        except OSError:
+            cwd = "?"
+        cgroup = read_text(os.path.join(base, "cgroup")).strip().rsplit("/", 1)[-1] or "?"
+        rows.append({"pid": int(pid), "rss_kb": rss_kb, "cmd": cmdline[:CMDLINE_MAX_CHARS],
+                     "cwd": cwd, "cgroup": cgroup})
+    rows.sort(key=lambda row: row["rss_kb"], reverse=True)
+    return rows[:count]
+
+
+def human(kb):
+    gib = kb / (1024 * 1024)
+    return f"{gib:.1f}G" if gib >= 1 else f"{kb / 1024:.0f}M"
+
+
+def snapshot(cfg):
+    psi = read_psi(cfg.psi_file)
+    mem = read_meminfo(cfg.proc)
+    procs = top_processes(cfg.proc, cfg.top)
+    swap_used = mem.get("SwapTotal", 0) - mem.get("SwapFree", 0)
+    stamp = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+    lines = [
+        f"{stamp} memory pressure: some={psi['some']['avg10']:.1f}% "
+        f"full={psi.get('full', {}).get('avg10', 0.0):.1f}% (avg10) "
+        f"available={human(mem.get('MemAvailable', 0))}/{human(mem.get('MemTotal', 0))} "
+        f"swap={human(swap_used)}/{human(mem.get('SwapTotal', 0))}"
+    ]
+    for p in procs:
+        lines.append(f"  {human(p['rss_kb']):>6} pid {p['pid']} {p['cmd']} [cwd {p['cwd']}] [{p['cgroup']}]")
+    return psi, procs, "\n".join(lines)
+
+
+def run_quietly(argv):
+    """Best effort: a missing or failing notifier must not stop the watcher."""
+    if not argv[0] or not shutil.which(argv[0]):
+        return
+    try:
+        subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, timeout=COMMAND_TIMEOUT_S, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
+class Reporter:
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.last_log = self.last_desktop = self.last_phone = float("-inf")
+        self.logged = 0
+        os.makedirs(cfg.state_dir, exist_ok=True)
+
+    def on_pressure(self):
+        now = time.monotonic()
+        if now - self.last_log < self.cfg.log_interval:
+            return
+        self.last_log = now
+        psi, procs, text = snapshot(self.cfg)
+        with open(self.cfg.log_file, "a") as f:
+            f.write(text + "\n")
+        self.logged += 1
+
+        some = psi["some"]["avg10"]
+        if some < self.cfg.notify_pct:
+            return
+        culprit = f"{procs[0]['cmd'].split()[0].rsplit('/', 1)[-1]} {human(procs[0]['rss_kb'])}" if procs else "?"
+        title = f"Memory pressure {some:.0f}%"
+        body = f"Top: {culprit} (pid {procs[0]['pid']})" if procs else "No process data"
+        if now - self.last_desktop >= self.cfg.desktop_cooldown:
+            self.last_desktop = now
+            run_quietly([self.cfg.notify_cmd, "-u", "critical", "-a", PROG, title, body])
+        if now - self.last_phone >= self.cfg.phone_cooldown:
+            self.last_phone = now
+            run_quietly([self.cfg.phone_cmd, "-t", title, "-p", "high", "-g", "warning", body])
+
+
+def register_trigger(cfg):
+    """An fd that polls POLLPRI when the stall threshold is crossed, or None."""
+    # Only procfs PSI files take triggers; writing to any other file would
+    # overwrite it and never report POLLPRI.
+    if not os.path.realpath(cfg.psi_file).startswith("/proc/pressure/"):
+        return None
+    try:
+        fd = os.open(cfg.psi_file, os.O_RDWR | os.O_NONBLOCK)
+    except OSError:
+        return None
+    try:
+        os.write(fd, f"some {cfg.stall_ms * 1000} {cfg.window_ms * 1000}\0".encode())
+    except OSError:
+        os.close(fd)
+        return None
+    return fd
+
+
+def watch_trigger(fd, reporter, max_events):
+    poller = select.poll()
+    poller.register(fd, select.POLLPRI)
+    while max_events is None or reporter.logged < max_events:
+        for _, events in poller.poll():
+            if events & select.POLLERR:
+                raise SystemExit(f"{PROG}: PSI trigger lost (POLLERR)")
+            if events & select.POLLPRI:
+                reporter.on_pressure()
+
+
+def watch_poll(cfg, reporter, max_events):
+    threshold = 100.0 * cfg.stall_ms / cfg.window_ms
+    while max_events is None or reporter.logged < max_events:
+        if read_psi(cfg.psi_file)["some"]["avg10"] >= threshold:
+            reporter.on_pressure()
+        time.sleep(cfg.interval)
+
+
+def main():
+    parser = argparse.ArgumentParser(prog=PROG, description="Warn before memory exhaustion freezes the desktop.")
+    parser.add_argument("--once", action="store_true", help="print one snapshot and exit")
+    parser.add_argument("--poll", action="store_true", help="poll avg10 instead of a PSI trigger")
+    parser.add_argument("--max-events", type=int, default=None, help="exit after N logged events")
+    args = parser.parse_args()
+    cfg = Config()
+
+    if args.once:
+        print(snapshot(cfg)[2])
+        return
+
+    reporter = Reporter(cfg)
+    fd = None if args.poll else register_trigger(cfg)
+    if fd is None:
+        print(f"{PROG}: polling {cfg.psi_file} every {cfg.interval}s "
+              f"(threshold {100.0 * cfg.stall_ms / cfg.window_ms:.1f}%)", file=sys.stderr)
+        watch_poll(cfg, reporter, args.max_events)
+    else:
+        print(f"{PROG}: PSI trigger some {cfg.stall_ms}ms/{cfg.window_ms}ms on {cfg.psi_file}; "
+              f"log {cfg.log_file}", file=sys.stderr)
+        watch_trigger(fd, reporter, args.max_events)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass

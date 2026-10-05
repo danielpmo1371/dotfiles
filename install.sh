@@ -175,6 +175,7 @@ CLI MODE
   ./install.sh --claude     Install Claude Code CLI
   ./install.sh --mcp        Configure MCP servers
   ./install.sh --llm        Install llm CLI + Groq plugin (fast `q` query)
+  ./install.sh --memwatch   Memory pressure watcher + systemd-oomd (Linux, sudo)
   ./install.sh --services   Install claude-rc Remote Control service
 
 OPTIONS
@@ -637,6 +638,7 @@ show_help() {
     echo "  --claude       Install Claude Code settings"
     echo "  --mcp          Install MCP configuration"
     echo "  --llm          Install llm CLI + Groq plugin (powers the 'q' quick-query)"
+    echo "  --memwatch     Memory pressure watcher + systemd-oomd kill policy (Linux, sudo)"
     echo "  --memory-hooks Install MCP memory hooks"
     echo "  --logging-hooks Install session logging hooks"
     echo "  --claude-azdo-pipeline-hooks  Install Claude AZDO pipeline guard hooks"
@@ -918,6 +920,14 @@ main() {
                     log_warn "LLM CLI installation failed, continuing..."
                     ((failures++))
                     failed_components+="  - llm\n"
+                }
+                ;;
+            --memwatch)
+                # PSI watcher (logs/warns) + systemd-oomd kill policy against memory freezes
+                run_installer "memwatch.sh" "install_memwatch" || {
+                    log_warn "memwatch installation failed, continuing..."
+                    ((failures++))
+                    failed_components+="  - memwatch\n"
                 }
                 ;;
             --memory-hooks)
