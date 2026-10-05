@@ -2,7 +2,8 @@
 #
 # tmux-palette-style.sh - the tmux-palette (Ctrl+P menu) look for fzf popups. Sourced, not run.
 #
-# Shared by tmux-claude-picker.sh and tmux-bt-popup.sh so every popup looks like
+# Shared by tmux-claude-picker.sh, tmux-bt-popup.sh, tmux-wifi-popup.sh and
+# tmux-control-panel.sh so every popup looks like
 # the palette: borderless centred popup whose body is the theme's panel colour,
 # fzf coloured with the palette's roles, a bold title row with a muted "esc".
 # Colours are read at runtime from the palette's active theme (so a theme switch
@@ -19,6 +20,14 @@
 #                                       <height> is lines or "<n>%" of the client height,
 #                                       both are capped by the client size; <command> is
 #                                       passed to display-popup as is (quote it yourself)
+#   palette_picker_fzf_opts <title> <hints> <ghost>
+#                                       print fzf options (one per line) for a picker in the
+#                                       palette look: title row, hints label, no header
+#   palette_stream_indent               copy stdin to stdout indented to the body and muted
+#   palette_tool_popup <title> <ok text> <fail text> <command...>
+#                                       run a picker tool (bt-fix, wifi-pick) under the title
+#                                       row, then show its outcome until a key is pressed;
+#                                       exit 130 from the tool (Esc) closes straight away
 #
 # Must stay bash 3.2 compatible (macOS): no mapfile, no $'\U...', no empty-array expansion.
 
@@ -55,6 +64,8 @@ DEFAULT_THEME_ANSI_MUTED=$'\e[38;2;165;153;233m'
 DEFAULT_THEME_ANSI_ACCENT=$'\e[38;2;250;208;0m'
 DEFAULT_THEME_ANSI_TITLE_FG=$'\e[38;2;255;255;255m'
 ANSI_RESET=$'\e[0m'
+PALETTE_CLOSE_HINT='press any key to close'
+PALETTE_EXIT_CANCELLED=130   # fzf's Esc, passed through by bt-fix and wifi-pick
 ANSI_BOLD=$'\e[1m'
 
 PALETTE_FIELD_SEPARATOR=$'\t'
@@ -168,4 +179,94 @@ palette_popup() {
     max_height=$(( client_height - PALETTE_CLIENT_MARGIN_Y ))
     (( height > max_height )) && height=$max_height
     tmux display-popup "$@" -B -s "$THEME_TMUX_BODY_STYLE" -w "$width" -h "$height" -E "$command"
+}
+
+# fzf options for a tool's picker, one per line (the format BT_FIX_FZF_OPTS and
+# WIFI_PICK_FZF_OPTS take): the Claude picker's layout and colour roles (muted
+# rows, bold current row on the selected bg, accent prompt and pointer, panel
+# bg) with the palette title row and hints. --header= drops the tool's own
+# header; the title row says what this is.
+palette_picker_fzf_opts() {
+    local title="$1" hints="$2" ghost="$3"
+    printf '%s\n' \
+        '--ansi' \
+        '--layout=reverse' \
+        "--margin=1,$PALETTE_PAD_X" \
+        '--border=bottom' \
+        '--padding=0,0,1,0' \
+        "--border-label=$hints" \
+        '--border-label-pos=1:bottom' \
+        '--input-border=horizontal' \
+        "--input-label=$(palette_title "$title" "$(palette_body_width)")" \
+        '--input-label-pos=1' \
+        '--info=hidden' \
+        '--no-scrollbar' \
+        '--highlight-line' \
+        "--pointer=$PALETTE_MARKER_GLYPH" \
+        '--gutter= ' \
+        "--prompt=${THEME_ANSI_ACCENT}${PALETTE_MARKER_GLYPH} ${ANSI_RESET}" \
+        "--ghost=$ghost" \
+        '--header=' \
+        "--color=$(palette_fzf_colors)"
+}
+
+# Copy a tool's output through character by character (a question has no
+# newline yet and must show at once), indented to the body and muted like the
+# palette's descriptions. A line ending in "] " or "> " is a question waiting
+# for input ("[y/N] ", select's "device number> ", wifi-pick's "password> "):
+# the terminal echoes the answer's Enter, so the next output starts a new line
+# and gets indented.
+palette_stream_indent() {
+    local char line='' indent
+    indent="$(printf '%*s' "$PALETTE_PAD_X" '')"
+    while IFS= read -r -n 1 -d '' char; do
+        [ -z "$line" ] && printf '%s%s' "$indent" "$THEME_ANSI_MUTED"
+        if [ "$char" = $'\n' ]; then
+            printf '%s\n' "$ANSI_RESET"
+            line=''
+            continue
+        fi
+        printf '%s' "$char"
+        line="$line$char"
+        case "$line" in
+            *"] "|*"> ") printf '%s' "$ANSI_RESET"; line='' ;;
+        esac
+    done
+    [ -n "$line" ] && printf '%s\n' "$ANSI_RESET"
+    return 0
+}
+
+# Run <command...> (a tool that takes its picker options from the caller's env)
+# below the title row, with its stdout and stderr through palette_stream_indent.
+# Exit 0 shows <ok text>, anything but Esc (130) shows <fail text>; both wait
+# for a key so the outcome can be read before the popup closes.
+palette_tool_popup() {
+    local title="$1" ok_text="$2" fail_text="$3" status outcome indent errexit=''
+    shift 3
+    indent="$(printf '%*s' "$PALETTE_PAD_X" '')"
+
+    # The shell env may carry FZF_DEFAULT_OPTS like "--tmux center,75%", which makes
+    # fzf open a nested popup and deadlock inside display-popup (see the Claude picker).
+    unset FZF_DEFAULT_OPTS FZF_DEFAULT_OPTS_FILE FZF_DEFAULT_COMMAND
+
+    # Same spot as fzf's title row, so it stays put while the tool works after the pick.
+    printf '\n%s%s\n\n' "$indent" "$(palette_title "$title" "$(palette_body_width)")"
+
+    # The tool's failure is an outcome to show, not a reason for the caller's set -e to exit.
+    case "$-" in *e*) errexit=1 ;; esac
+    set +e
+    "$@" 2>&1 | palette_stream_indent
+    status="${PIPESTATUS[0]}"
+    [ -n "$errexit" ] && set -e
+
+    [ "$status" -eq "$PALETTE_EXIT_CANCELLED" ] && return 0
+
+    if [ "$status" -eq 0 ]; then
+        outcome="${ANSI_BOLD}${THEME_ANSI_ACCENT}${ok_text}${ANSI_RESET}"
+    else
+        outcome="${ANSI_BOLD}${THEME_ANSI_TITLE_FG}${fail_text}${ANSI_RESET}"
+    fi
+    printf '\n%s%s   %s%s%s' "$indent" "$outcome" "$THEME_ANSI_MUTED" "$PALETTE_CLOSE_HINT" "$ANSI_RESET"
+    IFS= read -r -s -n 1 _ || true
+    printf '\n'
 }
