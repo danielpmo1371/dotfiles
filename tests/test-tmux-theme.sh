@@ -33,6 +33,8 @@ PROBE_OPTION="status-style"
 CONTINUUM_MARKER="continuum_save.sh"
 # Nerd Font Bluetooth (nf-md-bluetooth, U+F00AF) as UTF-8 bytes; $'\U...' needs bash 4.2+
 BLUETOOTH_GLYPH=$'\xf3\xb0\x82\xaf'
+# Nerd Font Wi-Fi (nf-md-wifi, U+F05A9)
+WIFI_GLYPH=$'\xf3\xb0\x96\xa9'
 
 PASS=0
 FAIL=0
@@ -116,6 +118,10 @@ for f in "${THEME_FILES[@]}"; do
     case "$(t show -gv status-right)" in
         *"range=user|bluetooth] $BLUETOOTH_GLYPH "*"range=user|datetime"*) pass "$name status-right has the Bluetooth segment before the date/time" ;;
         *) fail "$name status-right lacks the Bluetooth segment before the date/time" ;;
+    esac
+    case "$(t show -gv status-right)" in
+        *"range=user|wifi] $WIFI_GLYPH "*"range=user|bluetooth"*) pass "$name status-right has the Wi-Fi segment before Bluetooth" ;;
+        *) fail "$name status-right lacks the Wi-Fi segment before Bluetooth" ;;
     esac
 done
 
@@ -225,6 +231,13 @@ grep -q "mouse_status_range},bluetooth}" "$TMUX_CONF" \
     && grep -q "run-shell -b '.*tmux-bt-popup\.sh --popup #{q:client_name}'" "$TMUX_CONF" \
     && pass "a click on the bluetooth range opens tmux-bt-popup.sh on the clicking client" \
     || fail "MouseDown1Status does not open tmux-bt-popup.sh for the bluetooth range"
+grep -q "mouse_status_range},wifi}" "$TMUX_CONF" \
+    && grep -q "run-shell -b '.*tmux-wifi-popup\.sh --popup #{q:client_name}'" "$TMUX_CONF" \
+    && pass "a click on the wifi range opens tmux-wifi-popup.sh on the clicking client" \
+    || fail "MouseDown1Status does not open tmux-wifi-popup.sh for the wifi range"
+grep -q "^bind C-c run-shell -b .*tmux-control-panel\.sh --popup #{q:client_name}" "$TMUX_CONF" \
+    && pass "prefix + C-c opens the control panel" \
+    || fail "prefix + C-c does not open tmux-control-panel.sh"
 
 echo
 echo "Results: $PASS passed, $FAIL failed"
