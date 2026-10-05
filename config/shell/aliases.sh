@@ -223,6 +223,23 @@ _cres_session_from_transcripts() {
     echo "${newest%.jsonl}"
 }
 
+# Print what a fallback candidate is, so the user can tell whether it is the
+# session they want: its id, when it was last written and its first prompt.
+# Best effort: `date -r <file>` and jq are optional, missing ones are skipped.
+_cres_describe_session() {
+    local file="$HOME/.claude/projects/${PWD//\//-}/$1.jsonl"
+    echo "  id:      $1"
+    local when
+    when=$(date -r "$file" '+%Y-%m-%d %H:%M' 2>/dev/null) && echo "  updated: $when"
+    if command -v jq >/dev/null 2>&1; then
+        local first
+        first=$(jq -r 'select(.type == "user" and (.message.content | type) == "string")
+                       | .message.content' "$file" 2>/dev/null | head -1 | cut -c1-100)
+        [ -n "$first" ] && echo "  prompt:  $first"
+    fi
+    return 0
+}
+
 # Re-run the exact `claude --resume <session>` hint claude prints on quit, with
 # cdang's flags. Scrapes THIS pane's scrollback for the last such line, so it
 # resumes this pane's session even if newer sessions were started in other tabs
@@ -230,7 +247,9 @@ _cres_session_from_transcripts() {
 # (older CLIs) and bare UUIDs (current).
 #
 # Falls back to the transcript directory when the scrollback has no hint, which
-# is the normal case after a reboot rather than an edge case. Measured: claude
+# is the normal case after a reboot rather than an edge case. That session is
+# only the directory's newest, maybe another pane's, so it is shown and resumed
+# only after a y/N confirmation. Measured: claude
 # prints the hint on /exit, SIGTERM and SIGHUP alike, but at shutdown systemd
 # stops each pane's tmux-spawn-*.scope with KillMode=control-group, which
 # signals the pane's SHELL too -- the shell exits, tmux stops rendering, and
@@ -258,9 +277,20 @@ cres() {
             echo "cres: no resume hint in this pane and no recorded session for $PWD" >&2
             return 1
         }
-        # Say so: this one is the newest session for the directory, which is not
-        # necessarily the one that ran in this pane.
-        echo "cres: no hint in scrollback — resuming newest session for $PWD" >&2
+        # The newest session for the directory is not necessarily the one that
+        # ran in this pane, so it is only a guess: show it and resume it only on
+        # an explicit yes. EOF or anything else (no tty, Enter) resumes nothing.
+        echo "cres: no hint in scrollback — newest session for $PWD:" >&2
+        _cres_describe_session "$session" >&2
+        printf 'cres: resume it? [y/N] ' >&2
+        local reply=""
+        read -r reply || true
+        # A terminal echoes the user's Enter; piped or absent input does not.
+        [ -t 0 ] || echo >&2
+        case "$reply" in
+            [yY]|[yY][eE][sS]) ;;
+            *) echo "cres: not resuming (run: cdang --resume $session)" >&2; return 1 ;;
+        esac
     fi
 
     cdang --resume "$session"

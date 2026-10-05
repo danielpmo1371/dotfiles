@@ -71,14 +71,52 @@ for SHELL_BIN in bash zsh; do
         "$NEW_ID" \
         "$(run_in "$SHELL_BIN" "$FAKE_HOME" "$WORK" '_cres_session_from_transcripts')"
 
-    check "cres falls back when not in tmux and no hint exists" \
+    # The fallback is a guess (the directory's newest session may be another
+    # pane's), so it must never resume without an explicit yes.
+    check "fallback resumes the newest session after a yes" \
         "RESUME:$NEW_ID" \
-        "$(run_in "$SHELL_BIN" "$FAKE_HOME" "$WORK" 'unset TMUX; cres' | grep '^RESUME:')"
+        "$(run_in "$SHELL_BIN" "$FAKE_HOME" "$WORK" 'unset TMUX; echo y | cres' | grep '^RESUME:')"
 
-    check "fallback announces itself on stderr" \
+    check "fallback does not resume on a no" \
+        "" \
+        "$(run_in "$SHELL_BIN" "$FAKE_HOME" "$WORK" 'unset TMUX; echo n | cres' | grep '^RESUME:')"
+
+    check "fallback does not resume on a bare Enter" \
+        "" \
+        "$(run_in "$SHELL_BIN" "$FAKE_HOME" "$WORK" 'unset TMUX; echo | cres' | grep '^RESUME:')"
+
+    check "fallback does not resume without any answer (EOF)" \
+        "" \
+        "$(run_in "$SHELL_BIN" "$FAKE_HOME" "$WORK" 'unset TMUX; cres </dev/null; true' | grep '^RESUME:')"
+
+    check "declined fallback exits non-zero" \
+        "1" \
+        "$(run_in "$SHELL_BIN" "$FAKE_HOME" "$WORK" 'unset TMUX; echo n | cres >/dev/null 2>&1; echo $?')"
+
+    check "fallback announces itself and asks" \
         "yes" \
-        "$(run_in "$SHELL_BIN" "$FAKE_HOME" "$WORK" 'unset TMUX; cres' \
-            | grep -q 'no hint in scrollback' && echo yes || echo no)"
+        "$(run_in "$SHELL_BIN" "$FAKE_HOME" "$WORK" 'unset TMUX; cres </dev/null; true' \
+            | grep 'no hint in scrollback' | grep -q . \
+            && run_in "$SHELL_BIN" "$FAKE_HOME" "$WORK" 'unset TMUX; cres </dev/null; true' \
+            | grep -q 'resume it? \[y/N\]' && echo yes || echo no)"
+
+    check "fallback shows the candidate's id" \
+        "yes" \
+        "$(run_in "$SHELL_BIN" "$FAKE_HOME" "$WORK" 'unset TMUX; cres </dev/null; true' \
+            | grep "id: *$NEW_ID" >/dev/null && echo yes || echo no)"
+
+    if command -v jq >/dev/null; then
+        PROMPT_ID="33333333-3333-3333-3333-333333333333"
+        PROMPTDIR="$TMP/work/withprompt"
+        mkdir -p "$PROMPTDIR" "$FAKE_HOME/.claude/projects/${PROMPTDIR//\//-}"
+        printf '%s\n' '{"type":"summary","summary":"x"}' \
+            '{"type":"user","message":{"role":"user","content":"fix the wifi tile"}}' \
+            > "$FAKE_HOME/.claude/projects/${PROMPTDIR//\//-}/$PROMPT_ID.jsonl"
+        check "fallback shows the candidate's first prompt" \
+            "yes" \
+            "$(run_in "$SHELL_BIN" "$FAKE_HOME" "$PROMPTDIR" 'unset TMUX; cres </dev/null; true' \
+                | grep -q 'prompt: *fix the wifi tile' && echo yes || echo no)"
+    fi
 
     # A directory claude has never run in has no project dir at all.
     EMPTY="$TMP/work/untouched"
@@ -89,7 +127,7 @@ for SHELL_BIN in bash zsh; do
 
     check "cres errors, does not resume, when nothing is recorded" \
         "" \
-        "$(run_in "$SHELL_BIN" "$FAKE_HOME" "$EMPTY" 'unset TMUX; cres' | grep '^RESUME:')"
+        "$(run_in "$SHELL_BIN" "$FAKE_HOME" "$EMPTY" 'unset TMUX; echo y | cres' | grep '^RESUME:')"
 
     # An existing but empty project dir must not yield an empty session id.
     EMPTYPROJ="$TMP/work/emptyproj"
